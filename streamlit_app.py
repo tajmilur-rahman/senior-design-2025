@@ -1,15 +1,23 @@
+# streamlit_app.py
 import streamlit as st
-import json
 import psycopg2
 import pandas as pd
-from bugbug import bugzilla, db
+import json
+import joblib
+import os
+import bcrypt
+import numpy as np
+from dotenv import load_dotenv
 
-st.set_page_config(
-    page_title="BugBug PostgreSQL Loader",
-    page_icon="🪲",
-    layout="wide"
-)
+# -----------------------------
+# CONFIG & ENV SETUP
+# -----------------------------
+st.set_page_config(page_title="Bug severity analysis", layout="wide")
+load_dotenv()  # Reads credentials from .env
 
+# -----------------------------
+# DATABASE CONFIG
+# -----------------------------
 DB = {
     "dbname": "bugbug_data",
     "user": "postgres",
@@ -18,108 +26,171 @@ DB = {
     "port": "5432"
 }
 
-def connect_db():
-    return psycopg2.connect(**DB)
+# -----------------------------
+# SESSION STATE
+# -----------------------------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = None
 
+# -----------------------------
+# HELPER: LOAD HASHED CREDS
+# -----------------------------
+USERS = {
+    os.getenv("ADMIN_USER"): os.getenv("ADMIN_PASS_HASH"),
+    os.getenv("STUDENT_USER"): os.getenv("STUDENT_PASS_HASH")
+}
 
-def sanitize_json(bug):
-    text = json.dumps(bug, ensure_ascii=False)
-    clean_text = text.replace("\u0000", "").replace("\x00", "")
-    return clean_text.encode("utf-8", "ignore").decode("utf-8", "ignore")
+def check_credentials(username, password):
+    if username not in USERS or USERS[username] is None:
+        return False
+    stored_hash = USERS[username].encode("utf-8")
+    return bcrypt.checkpw(password.encode("utf-8"), stored_hash)
 
-st.sidebar.title("Mozilla Bug Data Importer")
-page = st.sidebar.radio("Navigate", ["Overview", "Data Fields", "Database Import"])
+# -----------------------------
+# LOGIN PAGE
+# -----------------------------
+def login_page():
+    st.markdown("<h2 style='text-align:center;'>🔐 Secure login</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#aaa;'>Login authentication for bug severity dashboard</p>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-if page == "Overview":
-    st.title("🪲 BugBug → PostgreSQL Data Loader")
-    st.markdown("""
-    This interface downloads bug data from **Mozilla Bugzilla** using the `bugbug` library  
-    and stores it into **PostgreSQL** in **JSONB format**.
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        username = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
 
-    Each record contains:
-    - `bug_id`: unique ID of the bug  
-    - `data`: full JSON bug object (nested info: description, severity, component, etc.)
-    """)
-    st.info("Use the sidebar to preview available fields or insert bugs into the database.")
+        if st.button("Login", use_container_width=True):
+            if check_credentials(username, password):
+                st.session_state.authenticated = True
+                st.session_state.username = username
+                st.success(f"Welcome, {username}! Redirecting...")
+                st.rerun()
+            else:
+                st.error("❌ Invalid username or password")
 
-elif page == "Data Fields":
-    st.title("🔍 Explore Available Bug Fields")
-    if st.button("Load Sample from BugBug"):
-        with st.spinner("Downloading BugBug dataset..."):
-            db.download(bugzilla.BUGS_DB)
-            bugs = list(bugzilla.get_bugs())
-        st.success(f"Loaded {len(bugs)} bugs")
+    st.markdown("<p style='text-align:center;font-size:12px;color:#777;'>Bug severity analysis © 2025</p>", unsafe_allow_html=True)
 
-        field_types = {}
-        for i, bug in enumerate(bugs):
-            for key, value in bug.items():
-                if key not in field_types:
-                    field_types[key] = type(value).__name__
-            if i >= 99:
-                break
+# -----------------------------
+# LOAD BUG DATA FROM DB
+# -----------------------------
+@st.cache_data
+def load_bugs(limit):
+    conn = psycopg2.connect(**DB)
+    df = pd.read_sql(f"SELECT bug_id, data FROM bugs LIMIT {limit}", conn)
+    conn.close()
+    def parse(x, k):
+        if isinstance(x, dict): return x.get(k, "N/A")
+        try: return json.loads(x).get(k, "N/A")
+        except: return "N/A"
+    df["summary"] = df["data"].apply(lambda x: parse(x, "summary"))
+    df["component"] = df["data"].apply(lambda x: parse(x, "component"))
+    df["priority"] = df["data"].apply(lambda x: parse(x, "priority"))
+    df["severity"] = df["data"].apply(lambda x: parse(x, "severity"))
+    df["status"] = df["data"].apply(lambda x: parse(x, "status"))
+    return df[["bug_id", "summary", "component", "priority", "severity", "status"]]
 
-        field_df = pd.DataFrame(list(field_types.items()), columns=["Field Name", "Type"])
-        st.dataframe(field_df, use_container_width=True)
+# -----------------------------
+# LOAD TRAINED MODEL ARTIFACTS
+# -----------------------------
+@st.cache_resource
+def load_rf_model():
+    model = joblib.load("severity_model.pkl")
+    vectorizer = joblib.load("summary_vectorizer.pkl")
+    label_encoders = joblib.load("label_encoders.pkl")
+    return model, vectorizer, label_encoders
 
-        st.subheader("Sample Bug Data")
-        st.json(bugs[0])
+# -----------------------------
+# MAIN APP
+# -----------------------------
+def main_app():
+    st.sidebar.title(f"Welcome, {st.session_state.username}")
+    page = st.sidebar.radio("Select Page", ["Bug data explorer", "Severity prediction demo", "Logout"])
 
-elif page == "Database Import":
-    st.title("💾 Insert Bugs into PostgreSQL")
+    # PAGE 1
+    if page == "Bug data explorer":
+        st.header("📊 Bug data explorer")
+        limit = st.slider("Number of bugs to load", 10, 1000, 200)
+        df = load_bugs(limit)
 
-    st.markdown("Creates table **`bugs`** with columns `(id, bug_id, data)` using JSONB for full bug storage.")
-    if st.button("Create Table"):
-        try:
-            with connect_db() as conn:
-                cur = conn.cursor()
-                cur.execute("""
-                            CREATE TABLE IF NOT EXISTS bugs
-                            (
-                                id     SERIAL PRIMARY KEY,
-                                bug_id BIGINT UNIQUE,
-                                data   JSONB
-                            );
-                            """)
-                conn.commit()
-            st.success("✅ Table 'bugs' verified or created successfully.")
-        except Exception as e:
-            st.error(f"Error creating table: {e}")
+        with st.expander("🔍 Filters", expanded=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                sev = st.multiselect("Severity", sorted(df["severity"].unique()))
+            with c2:
+                stat = st.multiselect("Status", sorted(df["status"].unique()))
+            with c3:
+                key = st.text_input("Keyword in summary")
 
-    if st.button("Download + Insert Bugs"):
-        with st.spinner("Downloading and inserting bug data... (may take several minutes)"):
-            db.download(bugzilla.BUGS_DB)
-            bugs = list(bugzilla.get_bugs())
-            conn = connect_db()
-            cur = conn.cursor()
-            count, errors = 0, 0
+        if sev: df = df[df["severity"].isin(sev)]
+        if stat: df = df[df["status"].isin(stat)]
+        if key: df = df[df["summary"].str.contains(key, case=False, na=False)]
 
-            progress = st.progress(0, text="Inserting bugs.")
-            for i, bug in enumerate(bugs):
-                try:
-                    cur.execute("""
-                                INSERT INTO bugs (bug_id, data)
-                                VALUES (%s, %s)
-                                ON CONFLICT (bug_id) DO UPDATE SET data = EXCLUDED.data;
-                                """, (bug["id"], sanitize_json(bug)))
-                    count += 1
-                    if count % 500 == 0:
-                        conn.commit()
-                    if i % 1000 == 0:
-                        progress.progress(min(1.0, i / len(bugs)))
-                except Exception:
-                    conn.rollback()
-                    errors += 1
+        st.dataframe(df, use_container_width=True, height=400)
+        st.download_button("⬇️ Download filtered CSV", df.to_csv(index=False), "filtered_bugs.csv")
 
-            conn.commit()
-            cur.close()
-            conn.close()
-            progress.progress(1.0)
-            st.success(f"✅ Import done — Inserted {count} bugs, skipped {errors} bad records.")
+    # PAGE 2
+    elif page == "Severity prediction demo":
+        st.header("🤖 Severity prediction demo")
 
-    if st.button("View Sample from DB"):
-        try:
-            with connect_db() as conn:
-                df = pd.read_sql("SELECT bug_id, data->>'summary' AS summary FROM bugs LIMIT 10;", conn)
-            st.dataframe(df, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error reading database: {e}")
+        df = load_bugs(500)
+        model, vectorizer, label_encoders = load_rf_model()
+
+        # Select a bug to predict
+        bid = st.selectbox("Select bug ID", df["bug_id"].tolist())
+        if bid:
+            bug_row = df[df["bug_id"] == bid].iloc[0]
+            summary_text = bug_row["summary"]
+            component = bug_row["component"] or "UNKNOWN"
+            priority = bug_row["priority"] or "UNKNOWN"
+
+            st.text_area("Bug summary", summary_text, height=100)
+
+            if st.button("Predict severity", use_container_width=True):
+                # Prepare feature vector same way as training
+                le_comp = label_encoders["component"]
+                le_prio = label_encoders["priority"]
+                le_sev  = label_encoders["severity"]
+
+                comp_enc = le_comp.transform([component]) if component in le_comp.classes_ else [0]
+                prio_enc = le_prio.transform([priority]) if priority in le_prio.classes_ else [0]
+
+                X_meta = np.vstack([comp_enc, prio_enc]).T
+                X_text = vectorizer.transform([summary_text]).toarray()
+                X_input = np.hstack([X_meta, X_text])
+
+                pred_label_idx = model.predict(X_input)[0]
+                pred_label = le_sev.inverse_transform([pred_label_idx])[0].lower()
+
+                color_map = {"critical": "#ff4b4b", "major": "#ffb400", "normal": "#33cc33"}
+                color = color_map.get(pred_label, "#cccccc")
+
+                st.markdown(
+                    f"<div style='text-align:center; font-size:22px; font-weight:700; "
+                    f"color:{color}; padding:10px;'>Predicted Severity: {pred_label.upper()}</div>",
+                    unsafe_allow_html=True
+                )
+
+                with st.expander("Technical Explanation"):
+                    st.markdown("""
+                    - Uses trained **Random Forest** model with TF-IDF vectorization.  
+                    - Inputs: `component`, `priority`, and `summary` text.  
+                    - Outputs: Predicted severity class.  
+                    - Model and preprocessing pipelines loaded from local artifacts.
+                    """)
+
+    # LOGOUT
+    elif page == "Logout":
+        st.session_state.authenticated = False
+        st.session_state.username = None
+        st.success("Logged out successfully.")
+        st.rerun()
+
+# -----------------------------
+# ROUTING
+# -----------------------------
+if not st.session_state.authenticated:
+    login_page()
+else:
+    main_app()
