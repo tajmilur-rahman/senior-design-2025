@@ -1,14 +1,46 @@
 import os, json, joblib, psycopg2, numpy as np, pandas as pd, bcrypt
-import streamlit as st, plotly.express as px
+import streamlit as st, plotly.express as px, plotly.graph_objects as go
 
+# --- config / constants
 st.set_page_config(page_title="Bug prioritization", layout="wide")
+DB = {"dbname": "bugbug_data", "user": "postgres", "password": "2331", "host": "localhost", "port": "5432"}
+ART_RF = {"model": "rf_model.pkl", "vec": "tfidf_vectorizer.pkl", "enc": "label_encoders.pkl", "met": "rf_metrics.json"}
+META = ["component", "product", "priority", "platform", "op_sys", "type", "resolution", "status"]
+FLAGS = ["has_crash", "is_accessibility", "is_regression", "is_intermittent", "has_patch"]
+TOP_SEV = ["S1", "S2", "S3", "S4"]
+CATEGORY_TABLE = {
+    "Networking & Security": ["network", "connect", "ssl", "tls", "certificate", "security", "vulnerability", "auth",
+                              "breach"],
+    "Performance & Resource Management": ["slow", "lag", "freeze", "hang", "resource", "memory", "cpu", "performance"],
+    "UI/UX & Accessibility": ["ui", "interface", "button", "navigation", "layout", "ux", "accessibility", "a11y"],
+    "Compatibility & Web Standards": ["compat", "standard", "render", "html", "css", "js", "cross-platform"],
+    "Privacy & User Data": ["privacy", "data", "tracking", "storage", "personal"],
+    "Media, Extensions, & Plugins": ["audio", "video", "media", "extension", "plugin"],
+    "Installation, Updates, & User Preferences": ["install", "update", "patch", "preference", "settings"],
+    "Developer Tools & Debugging": ["devtools", "debug", "javascript", "console", "inspector"],
+    "File Handling & System Interaction": ["file", "download", "upload", "filesystem"],
+    "Session Management & Synchronization": ["session", "sync", "account", "login", "state"], }
+COMPONENT_CATEGORY_MAP = {"Networking": "Networking & Security", "Necko": "Networking & Security",
+                          "Security: PSM": "Networking & Security", "Performance": "Performance & Resource Management",
+                          "DOM: Performance": "Performance & Resource Management",
+                          "JavaScript Engine": "Performance & Resource Management",
+                          "UI Widgets": "UI/UX & Accessibility", "Theme": "UI/UX & Accessibility",
+                          "Accessibility": "UI/UX & Accessibility", "Layout": "Compatibility & Web Standards",
+                          "DOM": "Compatibility & Web Standards", "CSS Parsing": "Compatibility & Web Standards",
+                          "Storage": "Privacy & User Data", "Permissions": "Privacy & User Data",
+                          "Audio/Video": "Media, Extensions, & Plugins", "WebRTC": "Media, Extensions, & Plugins",
+                          "Add-ons Manager": "Media, Extensions, & Plugins",
+                          "Installer": "Installation, Updates, & User Preferences",
+                          "Application Update": "Installation, Updates, & User Preferences",
+                          "DevTools": "Developer Tools & Debugging", "Inspector": "Developer Tools & Debugging",
+                          "Console": "Console: Developer Tools & Debugging",
+                          "Download Manager": "File Handling & System Interaction",
+                          "File Handling": "File Handling & System Interaction",
+                          "Sync": "Session Management & Synchronization",
+                          "Firefox Accounts": "Session Management & Synchronization", }
 
-DB={"dbname":"bugbug_data","user":"postgres","password":"2331","host":"localhost","port":"5432"}
-ART_RF={"model":"rf_model.pkl","vec":"tfidf_vectorizer.pkl","enc":"label_encoders.pkl","met":"rf_metrics.json"}
-META=["component","product","priority","platform","op_sys","type","resolution","status"]
-
-for k,v in {"authenticated":False,"username":None,"role":None,"pred_bug_id":None,"notes":{}}.items():
-    st.session_state.setdefault(k,v)
+for k, v in {"authenticated": False, "username": None, "role": None,
+             "pred_bug_id": None}.items(): st.session_state.setdefault(k, v)
 
 st.markdown("""
 <style>
@@ -23,241 +55,483 @@ div[role="radiogroup"]>label:has(input:checked){background:linear-gradient(90deg
 div[data-testid="stTabs"] div[role="tablist"]{width:100%!important;display:flex!important;justify-content:center!important;align-items:center!important;}
 div[data-testid="stTabs"] div[role="tab"]{margin:0 18px!important;padding-bottom:6px!important;}
 </style>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-def sql(q,p=(),one=False):
-    conn=psycopg2.connect(**DB); cur=conn.cursor(); cur.execute(q,p)
-    if q.strip().lower().startswith("select"):
-        r=cur.fetchone() if one else cur.fetchall(); conn.close(); return r
-    conn.commit(); conn.close()
 
-def user_exists():
-    return sql("SELECT COUNT(*) FROM users",one=True)[0]>0
+def sql(q, p=(), one=False):
+    c = psycopg2.connect(**DB);
+    cur = c.cursor();
+    cur.execute(q, p)
+    r = cur.fetchone() if one else (cur.fetchall() if q.strip().lower().startswith("select") else None);
+    c.commit();
+    c.close();
+    return r
 
-def create_user(u,p,r):
-    h=bcrypt.hashpw(p.encode(),bcrypt.gensalt()).decode()
-    sql("INSERT INTO users(username,password_hash,role) VALUES(%s,%s,%s)",(u,h,r))
 
-def check_user(u,p):
-    r=sql("SELECT password_hash,role FROM users WHERE username=%s",(u,),one=True)
-    if not r:return False,None
-    return (bcrypt.checkpw(p.encode(),r[0].encode()),r[1])
+def user_exists(): return sql("SELECT COUNT(*) FROM users", one=True)[0] > 0
+
+
+def create_user(u, p, r): sql("INSERT INTO users(username,password_hash,role)VALUES(%s,%s,%s)",
+                              (u, bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode(), r))
+
+
+def check_user(u, p):
+    r = sql("SELECT password_hash,role FROM users WHERE username=%s", (u,), one=True)
+    return (bcrypt.checkpw(p.encode(), r[0].encode()), r[1]) if r else (False, None)
+
 
 @st.cache_data(show_spinner="Loading bugs")
 def load_bugs(limit=5000):
     try:
-        conn=psycopg2.connect(**DB)
-        df=pd.read_sql(f"SELECT bug_id,data FROM bugs LIMIT {limit}",conn); conn.close()
-    except: return pd.DataFrame()
-    def p(x,k):
+        df = pd.read_sql(f"SELECT bug_id,data FROM bugs LIMIT {limit}", psycopg2.connect(**DB))
+    except:
+        return pd.DataFrame()
+
+    def g(x, k):
         try:
-            d=x if isinstance(x,dict) else json.loads(x)
-            return d.get(k,"N/A")
-        except:return "N/A"
-    cols=["summary","keywords"]+META+["severity"]
-    for c in cols: df[c]=df["data"].apply(lambda x:p(x,c))
-    return df[["bug_id"]+cols]
+            d = x if isinstance(x, dict) else json.loads(x); return d.get(k, "N/A")
+        except:
+            return "N/A"
+
+    cols = ["summary", "keywords"] + META + ["severity"]
+    for c in cols: df[c] = df["data"].apply(lambda x: g(x, c))
+    df["raw"] = df["data"].apply(lambda x: x if isinstance(x, dict) else json.loads(x))
+    return df[["bug_id"] + cols + ["raw"]]
+
 
 @st.cache_resource
 def load_pack(s):
-    try:return(joblib.load(s["model"]),joblib.load(s["vec"]),joblib.load(s["enc"]),json.load(open(s["met"])) if os.path.exists(s["met"]) else {})
-    except:return None,None,None,{}
+    try:
+        return joblib.load(s["model"]), joblib.load(s["vec"]), joblib.load(s["enc"]), json.load(
+            open(s["met"])) if os.path.exists(s["met"]) else {}
+    except:
+        return None, None, None, {}
+
 
 def login_ui():
     st.markdown("<h2 style='text-align:center;margin-top:2rem;'>Bug Prioritization Login</h2>", unsafe_allow_html=True)
-    tabs = st.tabs(["Login","Create User","Manage Users","Reset Password"] if user_exists() else ["Initial Setup"])
+    tabs = st.tabs(["Login", "Create User", "Manage Users", "Reset Password"] if user_exists() else ["Initial Setup"])
     if not user_exists():
         with tabs[0]:
-            L,C,R = st.columns([1,1,1])
-            with C:
-                a = st.text_input("Admin Username", key="setup_admin_user")
-                b = st.text_input("Admin Password", type="password", key="setup_admin_pass")
-                if st.button("Create Admin", key="setup_admin_btn", use_container_width=True):
-                    if a and b: create_user(a,b,"admin"); st.rerun()
-                    else: st.error("All fields required.")
+            with st.columns([1, 1, 1])[1]:
+                a = st.text_input("Admin Username", key="setup_admin_u");
+                b = st.text_input("Admin Password", type="password", key="setup_admin_p")
+                if st.button("Create Admin", key="setup_admin_btn") and a and b: create_user(a, b, "admin"); st.rerun()
         return
     with tabs[0]:
-        L, C, R = st.columns([1, 1, 1])
-        with C:
-            with st.form("login_form", clear_on_submit=False):
-                u = st.text_input("Username")
-                p = st.text_input("Password", type="password")
-                submit = st.form_submit_button("Login")  # Enter key triggers this
-
-            if submit:
-                ok, role = check_user(u, p)
+        with st.columns([1, 1, 1])[1]:
+            with st.form("login_f"):
+                u = st.text_input("Username", key="login_u");
+                p = st.text_input("Password", type="password", key="login_p")
+                s = st.form_submit_button("Login")
+            if s:
+                ok, r = check_user(u, p)
                 if ok:
-                    st.session_state.authenticated = True
-                    st.session_state.username = u
-                    st.session_state.role = role
-                    st.rerun()
+                    st.session_state.authenticated = True; st.session_state.username = u; st.session_state.role = r; st.rerun()
                 else:
                     st.error("Invalid credentials")
-
     with tabs[1]:
-        L,C,R = st.columns([1,1,1])
-        with C:
-            new_u = st.text_input("New Username", key="create_user_user")
-            new_p = st.text_input("New Password", type="password", key="create_user_pass")
-            new_r = st.selectbox("Role", ["user","admin"], key="create_user_role")
-            if st.button("Create User", key="create_user_btn", use_container_width=True):
-                if new_u and new_p: create_user(new_u,new_p,new_r); st.success("Created.")
-                else: st.error("Required.")
+        with st.columns([1, 1, 1])[1]:
+            nu = st.text_input("New Username", key="create_u");
+            np = st.text_input("New Password", type="password", key="create_p")
+            nr = st.selectbox("Role", ["user", "admin"], key="create_r")
+            if st.button("Create User", key="create_user_btn") and nu and np: create_user(nu, np, nr); st.success(
+                "Created.")
     with tabs[2]:
-        L,C,R = st.columns([1,1,1])
-        with C:
-            users = sql("SELECT username, role FROM users ORDER BY username")
-            st.table(pd.DataFrame(users, columns=["Username","Role"]))
-            du = st.text_input("Delete Username", key="delete_user_user")
-            if st.button("Delete User", key="delete_user_btn", use_container_width=True) and du:
-                sql("DELETE FROM users WHERE username=%s",(du,)); st.rerun()
+        with st.columns([1, 1, 1])[1]:
+            us = sql("SELECT username,role FROM users ORDER BY username")
+            st.table(pd.DataFrame(us, columns=["Username", "Role"]))
+            d = st.text_input("Delete Username", key="delete_user_u")
+            if st.button("Delete User", key="delete_user_btn") and d: sql("DELETE FROM users WHERE username=%s",
+                                                                          (d,)); st.rerun()
     with tabs[3]:
-        L,C,R = st.columns([1,1,1])
-        with C:
-            ru = st.text_input("Username", key="reset_user_user")
-            npw = st.text_input("New Password", type="password", key="reset_user_pass")
-            if st.button("Reset Password", key="reset_user_btn", use_container_width=True) and ru and npw:
-                h = bcrypt.hashpw(npw.encode(),bcrypt.gensalt()).decode()
-                sql("UPDATE users SET password_hash=%s WHERE username=%s",(h,ru))
-                st.success("Reset.")
+        with st.columns([1, 1, 1])[1]:
+            ru = st.text_input("Username", key="reset_u");
+            np = st.text_input("New Password", type="password", key="reset_new_p")
+            if st.button("Reset Password", key="reset_btn") and ru and np: sql(
+                "UPDATE users SET password_hash=%s WHERE username=%s",
+                (bcrypt.hashpw(np.encode(), bcrypt.gensalt()).decode(), ru)); st.success("Reset.")
 
-def predict(summary,meta,m,v,e):
-    if not all([m,v,e]):return"N/A",pd.DataFrame()
-    xt=v.transform([summary]).toarray()
-    xm=np.array([[e[c].transform([meta.get(c,"N/A")])[0] if meta.get(c,"") in e[c].classes_ else 0 for c in META]])
-    pro=m.predict_proba(np.hstack([xm,xt]))[0]
-    lab=e["severity"].inverse_transform(np.arange(len(pro)))
-    return lab[np.argmax(pro)],pd.DataFrame({"Severity":lab,"Probability":pro}).sort_values("Probability",ascending=False)
 
-def kpi(m,df):
-    t=len(df); c=df[df["severity"].astype(str).str.lower()=="critical"]
-    c1,c2,c3,c4=st.columns(4)
-    c1.metric("Total Bugs",f"{t:,}"); c2.metric("Accuracy",f"{m.get('accuracy',0)*100:.2f}%")
-    c3.metric("Macro F1",f"{m.get('macro_f1',0)*100:.2f}%"); c4.metric("Critical Bugs",f"{len(c):,}")
+def extract_flags(raw, kw):
+    k = [str(x).lower() for x in kw] if isinstance(kw, list) else []
+    return {"has_crash": int(raw.get("cf_crash_signature") not in [None, "", {}, []]),
+            "is_accessibility": int("accessibility" in k), "is_regression": int("regression" in k),
+            "is_intermittent": int("intermittent" in k), "has_patch": int("patch" in k or bool(raw.get("attachments")))}
 
-def search(df,key):
-    q=st.text_input("Search bugs",key=f"{key}_q")
-    r=df[df["summary"].astype(str).str.contains(q,case=False,na=False)].head(20) if q else df.head(15)
-    with st.expander("Results",expanded=bool(q)):
-        for _,x in r.iterrows():
-            if st.button(f"[{x['bug_id']}] {x['summary'][:80]}",key=f"{key}_{x['bug_id']}"): return int(x["bug_id"])
 
-def home(df,m):
-    st.title("Bug Prioritization based on Severity")
-    st.info("Welcome to the Bug Severity dashboard. Use this app to explore data, analyze severity patterns, and predict severity for new or existing bugs.")
-    kpi(m,df)
-    c1,c2,c3=st.columns(3)
-    sev_counts=df["severity"].value_counts()
-    s1,s2,s3,s4=[int(sev_counts.get(x,0)) for x in ["S1","S2","S3","S4"]]
-    with c1: st.metric("S1 (Highest)",f"{s1:,}")
-    with c2: st.metric("S2/S3 (Medium)",f"{s2+s3:,}")
-    with c3: st.metric("S4 (Lowest)",f"{s4:,}")
-    st.markdown("""
-**How to use this app:**
-- **Bug data explorer**: Filter and drill into bugs by severity, product, type, resolution, status, and Bugzilla keywords.
-- **Analytics**: View distribution of severities across products and high-level component volumes.
-- **Severity prediction**: Paste or load a bug summary and metadata to get ML-based severity suggestions.
-- **Model evaluation**: Inspect confusion matrix and metrics for the Random Forest model.
-""")
+def predict(sum, meta, m, v, e):
+    if not all([m, v, e]): return "N/A", pd.DataFrame()
+    xt = v.transform([sum]).toarray()
+    xm = np.array([e[c].transform([meta[c]])[0] if meta[c] in e[c].classes_ else 0 for c in META]).reshape(1, -1)
+    xf = np.array([[meta[f] for f in FLAGS]])
+    pro = m.predict_proba(np.hstack([xm, xf, xt]))[0]
+    lab = e["severity"].inverse_transform(np.arange(len(pro)))
+    return lab[np.argmax(pro)], pd.DataFrame({"Severity": lab, "Probability": pro}).sort_values("Probability",
+                                                                                                ascending=False)
 
-def explorer(df):
-    st.header("Bug data explorer")
-    df=load_bugs(st.slider("Max bugs",200,10000,3000,400))
-    if df.empty:
-        st.warning("No bugs loaded.");return
 
-    valid_sev=["S1","S2","S3","S4"]
-    df=df[df["severity"].isin(valid_sev)]
+def categorize_page():
+    st.header("Bug Categorization")
+    df = load_bugs(8000)
 
-    with st.expander("Filters",expanded=True):
-        c1,c2,c3,c4=st.columns(4)
-        s=c1.multiselect("Severity",valid_sev)
-        p=c2.multiselect("Product",sorted(df["product"].dropna().unique()))
-        t=c3.multiselect("Type",sorted(df["type"].dropna().unique()))
-        r=c4.multiselect("Resolution",sorted(df["resolution"].dropna().unique()))
+    def tbl_kw(kw):
+        if not isinstance(kw, list): return "Other"
+        t = [x.lower() for x in kw]
+        for c, keys in CATEGORY_TABLE.items():
+            if any(k in x for k in keys for x in t): return c
+        return "Other"
 
-        c5,c6=st.columns(2)
-        stt=c5.multiselect("Status",sorted(df["status"].dropna().unique()))
+    def derive(comp, kw):
+        return COMPONENT_CATEGORY_MAP.get(comp, tbl_kw(kw))
 
-        kw_series=df["keywords"] if "keywords" in df.columns else pd.Series([])
-        kw_opts=sorted({k for row in kw_series if isinstance(row,list) for k in row})
-        kw_bug=c6.multiselect("Keywords (Bugzilla)",kw_opts)
+    df["category"] = df.apply(lambda r: derive(str(r["component"]), r["keywords"]), axis=1)
+    st.subheader("Filters");
+    c1, c2 = st.columns(2)
+    fc = c1.multiselect("Category", sorted(df["category"].unique()))
+    comp = c2.multiselect("Component", sorted(df["component"].astype(str).unique()))
+    f = df.copy()
+    if fc: f = f[f["category"].isin(fc)]
+    if comp: f = f[f["component"].astype(str).isin(comp)]
+    st.subheader("Category Distribution");
+    cc = f["category"].value_counts().reset_index(name="count").rename(columns={"index": "category"})
+    st.plotly_chart(px.bar(cc, x="category", y="count", color="category", height=500), use_container_width=True)
+    st.subheader("Severity Per Category");
+    sc = f.groupby(["category", "severity"]).size().reset_index(name="count")
+    st.plotly_chart(
+        px.bar(sc, x="category", y="count", color="severity", barmode="stack", category_orders={"severity": TOP_SEV},
+               height=500), use_container_width=True)
+    st.subheader("Component Distribution Per Category");
+    comp_cat = f.groupby(["component", "category"]).size().reset_index(name="count")
+    comp_cat = comp_cat[comp_cat["component"] != "N/A"]
+    if not comp_cat.empty:
+        st.plotly_chart(
+            px.bar(comp_cat.head(50), x="component", y="count", color="category", barmode="group", height=600),
+            use_container_width=True)
+    else:
+        st.info("No component data available.")
+    st.subheader(f"Bug list ({len(f):,} bugs)")
+    st.dataframe(f[["bug_id", "summary", "category", "component", "severity", "keywords"]], use_container_width=True,
+                 height=420)
 
-        kw=st.text_input("Search in summary")
 
-    f=df.copy()
-    if s:f=f[f["severity"].isin(s)]
-    if p:f=f[f["product"].isin(p)]
-    if t:f=f[f["type"].isin(t)]
-    if r:f=f[f["resolution"].isin(r)]
-    if stt:f=f[f["status"].isin(stt)]
-    if kw_bug and "keywords" in f.columns:
-        f=f[f["keywords"].apply(lambda ks:isinstance(ks,list) and any(k in ks for k in kw_bug))]
-    if kw:f=f[f["summary"].astype(str).str.contains(kw,case=False,na=False)]
+def predict_page(df, rf):
+    st.header("Severity Prediction")
+    m, v, e, _ = rf
+    st.subheader("Find a bug")
+    s = st.text_input("Search (ID, summary, keyword, component)",
+                      placeholder="Search by ID, summary text, keyword, component…")
+    r = df.copy()
+    if s:
+        ls = s.lower()
+        r = df[df["bug_id"].astype(str).str.contains(s) | df["summary"].str.lower().str.contains(ls) | df[
+            "component"].astype(str).str.lower().str.contains(ls) | df["keywords"].apply(
+            lambda ks: isinstance(ks, list) and any(ls in str(k).lower() for k in ks))]
+    r = r.head(50)
+    opts = [""] + [f"{int(x.bug_id)} – {str(x.summary)[:80]}" for _, x in r.iterrows()]
+    sel = st.selectbox("Select a bug", opts)
+    if sel: st.session_state.pred_bug_id = int(sel.split(" – ")[0])
+    row = df[df["bug_id"] == st.session_state.get("pred_bug_id")] if st.session_state.get("pred_bug_id") else None
+    br = row.iloc[0] if row is not None and not row.empty else None
+    st.subheader("Bug summary")
+    summary = st.text_area("Summary", br["summary"] if br is not None else "", height=130)
+    meta = {mn: (br[mn] if br is not None else "") for mn in META}
+    flags = extract_flags(br["raw"], br["keywords"]) if br is not None else {f: 0 for f in FLAGS}
+    with st.expander("Metadata"):
+        cs = st.columns(4)
+        for i, mn in enumerate(META): meta[mn] = cs[i % 4].text_input(mn, str(meta[mn]))
+        fs = st.columns(5)
+        for i, f in enumerate(FLAGS): flags[f] = 1 if fs[i].checkbox(f, value=bool(flags[f])) else 0
+    if st.button("Predict Severity"):
+        pr, dfp = predict(summary, {**meta, **flags}, m, v, e)
+        st.subheader(f"Prediction: {pr}")
+        st.plotly_chart(px.bar(dfp, x="Severity", y="Probability", category_orders={"Severity": TOP_SEV}),
+                        use_container_width=True)
 
-    st.info(f"Showing {len(f):,} bugs")
-    st.dataframe(f,use_container_width=True,height=460)
-    st.download_button("Download CSV",f.to_csv(index=False),"bugs.csv","text/csv")
+
+def insights_page(df, rf):
+    st.header("Advanced Insights: Risk and Process Analysis")
+    df = df.copy();
+    df = df[df["severity"].isin(TOP_SEV)]
+    st.subheader("Top-Line Stats")
+    total = len(df);
+    uniq_comp = df["component"].nunique();
+    uniq_prod = df["product"].nunique()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total S1-S4 Bugs", f"{total:,}");
+    c2.metric("Unique Components", f"{uniq_comp:,}");
+    c3.metric("Unique Products", f"{uniq_prod:,}")
+    st.subheader("Product/Severity Impact (Treemap)")
+    ps_data = df.groupby(["product", "severity"]).size().reset_index(name="count")
+    fig_tree = px.treemap(ps_data, path=["product", "severity"], values="count", color="severity",
+                          color_discrete_sequence=px.colors.qualitative.Plotly,
+                          title="Volume of Bugs by Product and Severity", height=600)
+    st.plotly_chart(fig_tree, use_container_width=True)
+    st.subheader("Top Component Risk Heatmap")
+    heat = df.groupby(["component", "severity"]).size().reset_index(name="count")
+    pivot = heat.pivot_table(values="count", index="component", columns="severity", fill_value=0)
+    pivot = pivot.reindex(columns=TOP_SEV, fill_value=0)
+
+    if not pivot.empty:
+        top_comp = pivot.sort_values(by=TOP_SEV, ascending=False).head(20).index
+        fig_heat = px.imshow(pivot.loc[top_comp, TOP_SEV], aspect="auto", color_continuous_scale="Reds",
+                             title="Top 20 Components by S1/S2/S3/S4 Bug Count", height=600)
+        fig_heat.update_xaxes(side="top")
+        st.plotly_chart(fig_heat, use_container_width=True)
+    else:
+        st.info("Insufficient component/severity data.")
+
+    st.subheader("Weighted Component Risk Score")
+    if not pivot.empty:
+        risk_weights = {"S1": 4, "S2": 3, "S3": 2, "S4": 1}
+        pivot_risk = pivot.copy()
+        for sev, weight in risk_weights.items():
+            if sev in pivot_risk.columns: pivot_risk[sev] = pivot_risk[sev] * weight
+        pivot_risk["Risk Score"] = pivot_risk[list(risk_weights.keys())].sum(axis=1)
+        top_risk_comp = pivot_risk.sort_values("Risk Score", ascending=False).head(20).reset_index()
+        fig_risk = px.bar(top_risk_comp, x="Risk Score", y="component", orientation="h",
+                          title="Top 20 Components by Weighted Risk Score", color="Risk Score",
+                          color_continuous_scale="Plasma", height=600)
+        st.plotly_chart(fig_risk, use_container_width=True)
+    else:
+        st.info("Insufficient data for risk scoring.")
+
+    st.subheader("Bug Lifecycle Flow (Status to Resolution)")
+    sr_data = df.groupby(["status", "resolution"]).size().reset_index(name="count")
+    fig_sun = px.sunburst(sr_data, path=['status', 'resolution'], values='count',
+                          title='Bug Flow from Status to Resolution', height=600)
+    st.plotly_chart(fig_sun, use_container_width=True)
 
 
 def analytics(df):
     st.header("Analytics")
-    df_s=df[df["severity"].isin(["S1","S2","S3","S4"])]
-    if df_s.empty:
-        st.warning("No S1–S4 severity data available.");return
-    bp=df_s.groupby(["product","severity"]).size().reset_index(name="count")
-    st.plotly_chart(px.bar(bp,x="product",y="count",color="severity",barmode="group"),use_container_width=True)
-    tc=df_s["component"].astype(str).value_counts().reset_index(name="count").rename(columns={"index":"component"})
-    st.plotly_chart(px.bar(tc.head(15),x="count",y="component",orientation="h"),use_container_width=True)
+    # Use a constant for severity list for better consistency
+    TOP_SEV = ["S1", "S2", "S3", "S4"]
+    df = df[df["severity"].isin(TOP_SEV)]
 
-def predict_page(df,rf):
-    st.header("Severity prediction")
-    sel=search(df,"pred")
-    if sel: st.session_state.pred_bug_id=sel
-    row=df[df["bug_id"]==st.session_state.pred_bug_id]
-    br=row.iloc[0] if not row.empty else None
-    c1,c2=st.columns([2,1])
-    with c1:
-        summary=st.text_area("Summary",br["summary"] if br is not None else "",height=150)
-        meta={}
-        with st.expander("Metadata",expanded=(br is not None)):
-            cols=st.columns(4)
-            for i,mn in enumerate(META): meta[mn]=cols[i%4].text_input(mn,br[mn] if br is not None else "")
-    with c2: st.info("The Random Forest model uses TF-IDF features combined with selected Bugzilla metadata to suggest a likely severity class.")
-    if st.button("🔮 Predict Severity",use_container_width=True):
-        m,v,e,_=rf
-        pr,dfp=predict(summary,meta,m,v,e)
-        st.markdown(f"<h3 style='text-align:center;color:#a5b4fc;'>Random Forest: <b>{pr}</b></h3>",unsafe_allow_html=True)
-        if not dfp.empty:
-            st.plotly_chart(px.bar(dfp,x="Severity",y="Probability"),use_container_width=True)
+    if df.empty: st.warning("No S1–S4 severity data."); return
 
-def eval_page(df,rf):
-    st.header("Model evaluation")
-    _,_,_,m=rf
-    if not m: st.warning("No metrics"); return
-    kpi(m,df)
-    cm=m.get("confusion_matrix")
-    if not cm: st.warning("No confusion matrix found.");return
-    lab,mat=cm["labels"],cm["matrix"]
-    keep=[x for x in ["S1","S2","S3","S4","normal"] if x in lab]
-    cm_df=pd.DataFrame(mat,index=lab,columns=lab).loc[keep,keep]
-    fig=px.imshow(cm_df,text_auto=True,color_continuous_scale=["white","black"],aspect="equal")
-    fig.update_layout(title="Confusion Matrix",xaxis_title="Predicted",yaxis_title="True",width=700,height=700,margin=dict(l=60,r=60,t=60,b=60),paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='white',coloraxis_showscale=False)
-    fig.update_xaxes(constrain="domain"); fig.update_yaxes(scaleanchor="x")
-    st.plotly_chart(fig,use_container_width=False)
+    st.subheader("Severity distribution")
+    sev = df["severity"].value_counts().reset_index(name="count").rename(columns={"index": "severity"})
+    st.plotly_chart(px.pie(sev, names="severity", values="count", hole=.35), use_container_width=True)
+
+    st.subheader("Product × Severity")
+    bp = df.groupby(["product", "severity"]).size().reset_index(name="count")
+    st.plotly_chart(px.bar(bp, x="product", y="count", color="severity", barmode="group"), use_container_width=True)
+
+    st.subheader("Top components")
+    tc = df["component"].astype(str).value_counts().reset_index(name="count").rename(columns={"index": "component"})
+    st.plotly_chart(px.bar(tc.head(25), x="count", y="component", orientation="h"), use_container_width=True)
+
+    # --- FIX APPLIED HERE for Keyword Frequency ---
+    st.subheader("Keyword frequency")
+    kw = []
+    for row in df["keywords"]:
+        if isinstance(row, list): kw.extend(row)
+
+    kw_df = pd.Series(kw).value_counts().reset_index().rename(columns={"index": "keyword", 0: "count"})
+    if not kw_df.empty:
+        st.plotly_chart(px.bar(kw_df.head(30), x="keyword", y="count"), use_container_width=True)
+    else:
+        st.info("No keywords available for analysis.")
+    st.subheader("Component × Severity heatmap")
+    heat = df.groupby(["component", "severity"]).size().reset_index(name="count")
+    pivot = heat.pivot_table(values="count", index="component", columns="severity", fill_value=0)
+    if not pivot.empty:
+        pivot = pivot.reindex(columns=TOP_SEV, fill_value=0)
+        st.plotly_chart(px.imshow(pivot, aspect="auto", color_continuous_scale="Blues"), use_container_width=True)
+    else:
+        st.info("Insufficient data to generate component × severity heatmap.")
+
+    st.subheader("Severity trend (by bug_id order)")
+    df_sorted = df.sort_values("bug_id")
+    df_sorted["idx"] = range(len(df_sorted))
+    st.plotly_chart(px.line(df_sorted, x="idx", y="bug_id", color="severity"), use_container_width=True)
+
+    st.subheader("Resolution × Severity")
+    rs = df.groupby(["resolution", "severity"]).size().reset_index(name="count")
+    st.plotly_chart(px.bar(rs, x="resolution", y="count", color="severity", barmode="group"), use_container_width=True)
+
+    st.subheader("Type × Severity")
+    tp = df.groupby(["type", "severity"]).size().reset_index(name="count")
+    st.plotly_chart(px.bar(tp, x="type", y="count", color="severity", barmode="group"), use_container_width=True)
+
+    st.subheader("Normalized severity per product")
+    tot = bp.groupby("product")["count"].transform("sum")
+    bp["pct"] = bp["count"] / tot
+    st.plotly_chart(px.bar(bp, x="product", y="pct", color="severity", barmode="stack"), use_container_width=True)
+def home(df, m):
+    st.title("Bug Prioritization and Risk Analysis Platform")
+    st.markdown(
+        """<div style="font-size:15px; line-height:1.55; margin-bottom:1.5rem;">This platform provides a unified interface for exploring, analyzing, and predicting bug severity across large-scale software projects.  Use the interactive dashboard below to filter data by key categories, and navigate the sidebar for deep-dive analysis, categorization, and ML-powered severity prediction.</div>""",
+        unsafe_allow_html=True)
+    df_filtered = df[df["severity"].isin(TOP_SEV)]
+    col_prod, col_sev = st.columns([1, 1])
+    products = col_prod.multiselect("Filter by Product", sorted(df_filtered["product"].dropna().unique()),
+                                    default=df_filtered["product"].dropna().unique())
+    severities = col_sev.multiselect("Filter by Severity", TOP_SEV, default=TOP_SEV)
+    if products: df_filtered = df_filtered[df_filtered["product"].isin(products)]
+    if severities: df_filtered = df_filtered[df_filtered["severity"].isin(severities)]
+    t = len(df_filtered);
+    c = df_filtered[df_filtered["severity"].str.lower() == "critical"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Bugs in Selection", f"{t:,}")
+    c2.metric("ML Accuracy (Model)", f"{m.get('accuracy', 0) * 100:.2f}%")
+    c3.metric("ML Macro F1 (Model)", f"{m.get('macro_f1', 0) * 100:.2f}%")
+    c4.metric("Critical Bugs (Selection)", f"{len(c):,}")
+    sev = df_filtered["severity"].value_counts()
+    s1, s2, s3, s4 = [int(sev.get(x, 0)) for x in TOP_SEV]
+    x1, x2, x3 = st.columns(3)
+    x1.metric("S1 (Highest Priority)", f"{s1:,}")
+    x2.metric("S2/S3 (High/Medium)", f"{s2 + s3:,}")
+    x3.metric("S4 (Lowest Priority)", f"{s4:,}")
+    st.subheader("Filtered Distribution");
+    c_pie, c_bar = st.columns(2)
+    sev_data = df_filtered["severity"].value_counts().reset_index(name="count").rename(columns={"index": "severity"})
+    if not sev_data.empty: c_pie.plotly_chart(
+        px.pie(sev_data, names="severity", values="count", hole=.4, title="Severity Distribution in Selection",
+               category_orders={"severity": TOP_SEV}, height=500), use_container_width=True)
+    tc = df_filtered["component"].astype(str).value_counts().reset_index(name="count").rename(
+        columns={"index": "component"})
+    if not tc.empty: c_bar.plotly_chart(
+        px.bar(tc.head(10), x="count", y="component", orientation="h", title="Top 10 Components in Selection",
+               height=500), use_container_width=True)
+
+
+def explorer(df):
+    st.header("Bug Data Explorer")
+    df = load_bugs(st.slider("Max bugs to load", 200, 10000, 3000, 400))
+    if df.empty: st.warning("No bugs loaded."); return
+    df = df[df["severity"].isin(TOP_SEV)]
+    with st.expander("Filters", expanded=True):
+        c1, c2, c3, c4 = st.columns(4)
+        s = c1.multiselect("Severity", TOP_SEV)
+        p = c2.multiselect("Product", sorted(df["product"].dropna().unique()))
+        t = c3.multiselect("Type", sorted(df["type"].dropna().unique()))
+        r = c4.multiselect("Resolution", sorted(df["resolution"].dropna().unique()))
+        c5, c6 = st.columns(2)
+        stt = c5.multiselect("Status", sorted(df["status"].dropna().unique()))
+        kw_opts = sorted({k for row in df["keywords"] if isinstance(row, list) for k in row})
+        kw_bug = c6.multiselect("Keywords", kw_opts)
+        kw = st.text_input("Search in summary")
+    f = df.copy()
+    if s: f = f[f["severity"].isin(s)]
+    if p: f = f[f["product"].isin(p)]
+    if t: f = f[f["type"].isin(t)]
+    if r: f = f[f["resolution"].isin(r)]
+    if stt: f = f[f["status"].isin(stt)]
+    if kw_bug: f = f[f["keywords"].apply(lambda ks: isinstance(ks, list) and any(k in ks for k in kw_bug))]
+    if kw: f = f[f["summary"].str.contains(kw, case=False, na=False)]
+    st.info(f"{len(f):,} bugs")
+    display_cols = [c for c in f.columns if c != "raw"]
+    st.dataframe(f[display_cols], use_container_width=True, height=460)
+    st.download_button("Download CSV", f[display_cols].to_csv(index=False), "bugs.csv", "text/csv")
+
+
+def eval_page(df, rf):
+    st.header("Model Evaluation: Deep Dive Performance")
+    _, _, _, m = rf
+    if not m: st.warning("No metrics file loaded."); return
+
+    t = len(df);
+    c = df[df["severity"].str.lower() == "critical"]
+    pcm = m.get("per_class") or m.get("class_metrics") or {}
+    avg_precision = np.mean([v.get('precision', 0) for v in pcm.values() if isinstance(v, dict) and 'precision' in v])
+    avg_recall = np.mean([v.get('recall', 0) for v in pcm.values() if isinstance(v, dict) and 'recall' in v])
+
+    st.subheader("Overall Performance Summary")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("Total Bugs (DF)", f"{t:,}")
+    c2.metric("Accuracy", f"{m.get('accuracy', 0) * 100:.2f}%")
+    c3.metric("Macro F1", f"{m.get('macro_f1', 0) * 100:.2f}%")
+    c4.metric("Critical Bugs (DF)", f"{len(c):,}")
+    c5.metric("Avg Precision", f"{avg_precision * 100:.2f}%" if pcm else "N/A")
+    c6.metric("Avg Recall", f"{avg_recall * 100:.2f}%" if pcm else "N/A")
+
+    st.subheader("Confusion Matrix: True vs. Predicted")
+    cm = m.get("confusion_matrix")
+    if cm:
+        lab, mat = cm.get("labels", []), cm.get("matrix", [])
+        keep = [x for x in TOP_SEV + ["normal"] if x in lab]
+        try:
+            cm_df = pd.DataFrame(mat, index=lab, columns=lab).loc[keep, keep]
+            fig = px.imshow(cm_df, text_auto=True, color_continuous_scale="Blues", aspect="equal",
+                            title="True vs. Predicted Class Counts", height=700)
+            fig.update_layout(xaxis_title="Predicted", yaxis_title="True", margin=dict(l=60, r=60, t=60, b=60),
+                              paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='white', coloraxis_showscale=True)
+            fig.update_xaxes(constrain="domain");
+            fig.update_yaxes(scaleanchor="x")
+            st.plotly_chart(fig, use_container_width=False)
+        except Exception as e:
+            st.error(f"Unable to render confusion matrix: {e}")
+    else:
+        st.warning("No confusion matrix available in metrics file.")
+
+    st.subheader("Model & Dataset Info")
+    info = {"Model Type": "Random Forest Classifier", "Accuracy": f"{m.get('accuracy', 0) * 100:.2f}%",
+            "Macro F1 Score": f"{m.get('macro_f1', 0) * 100:.2f}%",
+            "Training Size": f"{m.get('train_size', 0):,} samples", "Test Size": f"{m.get('test_size', 0):,} samples",
+            "Classes": m.get('classes', "N/A")}
+    st.table(pd.DataFrame(list(info.items()), columns=["Metric", "Value"]))
+
+    st.subheader("Feature Importance Analysis (Top 20)")
+    rf_model, vec, enc, _ = load_pack(ART_RF)
+
+    if rf_model is not None and hasattr(rf_model, "feature_importances_"):
+        fi = np.array(rf_model.feature_importances_)
+        n_meta = len(META);
+        n_flags = len(FLAGS)
+        meta_flag_names = [f"META:{c}" for c in META] + [f"FLAG:{f}" for f in FLAGS]
+        tfidf_names = []
+        if hasattr(vec, "get_feature_names_out"): tfidf_names = list(vec.get_feature_names_out())
+
+        all_feature_names = meta_flag_names + tfidf_names
+
+        if len(fi) == len(all_feature_names):
+            feature_importance_df = pd.DataFrame({"Feature": all_feature_names, "Importance": fi})
+            top_features = feature_importance_df.sort_values("Importance", ascending=False).head(20)
+
+            fig_feat = px.bar(top_features, x="Importance", y="Feature", orientation="h",
+                              title="Top 20 Features by Random Forest Importance", color="Importance",
+                              color_continuous_scale=px.colors.sequential.Plasma, height=600)
+            fig_feat.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig_feat, use_container_width=True)
+
+            st.markdown("##### Feature Importance Table (Top 10)")
+            st.table(top_features.head(10))
+        else:
+            st.info(
+                f"Feature importance array length mismatch. Expected {len(all_feature_names)}, got {len(fi)}. Check model training consistency.")
+    else:
+        st.info("No feature importance data available or model not loaded correctly.")
+
 
 def main():
-    df=load_bugs(5000); rf=load_pack(ART_RF); _,_,_,met=rf
-    if st.session_state.username: st.sidebar.caption(f"Signed in as **{st.session_state.username}** ({st.session_state.role})")
-    page=st.sidebar.radio("",["Home","Bug data explorer","Analytics","Severity prediction","Model evaluation","Logout"])
-    if page=="Home": home(df,met)
-    elif page=="Bug data explorer": explorer(df)
-    elif page=="Analytics": analytics(df)
-    elif page=="Severity prediction": predict_page(df,rf)
-    elif page=="Model evaluation": eval_page(df,rf)
-    elif page=="Logout":
+    df = load_bugs(5000);
+    rf = load_pack(ART_RF);
+    _, _, _, met = rf
+    if st.session_state.username: st.sidebar.caption(
+        f"Signed in as **{st.session_state.username}** ({st.session_state.role})")
+    page = st.sidebar.radio("", ["Home", "Bug data explorer", "Analytics", "Categorization", "Advanced insights",
+                                 "Severity prediction", "Model evaluation", "Logout"])
+    if page == "Home":
+        home(df, met)
+    elif page == "Bug data explorer":
+        explorer(df)
+    elif page == "Analytics":
+        analytics(df)
+    elif page == "Categorization":
+        categorize_page()
+    elif page == "Advanced insights":
+        insights_page(df, rf)
+    elif page == "Severity prediction":
+        predict_page(df, rf)
+    elif page == "Model evaluation":
+        eval_page(df, rf)
+    elif page == "Logout":
         for k in list(st.session_state.keys()): del st.session_state[k]
-        st.session_state.authenticated=False; st.rerun()
+        st.session_state.authenticated = False;
+        st.rerun()
 
-if st.session_state.authenticated: main()
-else: login_ui()
+
+_ = main() if st.session_state.authenticated else login_ui()
