@@ -1,8 +1,34 @@
+import mmap
+import sys
 import json
 import psycopg2
+import bcrypt
 from psycopg2 import extras
+
+# ==========================================
+# 1. WINDOWS COMPATIBILITY PATCH
+# ==========================================
+if sys.platform == "win32":
+    if not hasattr(mmap, "PROT_READ"):
+        mmap.PROT_READ = mmap.ACCESS_READ
+    _original_mmap = mmap.mmap
+
+
+    def _mmap_windows_wrapper(*args, **kwargs):
+        if "prot" in kwargs:
+            if kwargs["prot"] == mmap.PROT_READ: kwargs["access"] = mmap.ACCESS_READ
+            del kwargs["prot"]
+        if "flags" in kwargs: del kwargs["flags"]
+        return _original_mmap(*args, **kwargs)
+
+
+    mmap.mmap = _mmap_windows_wrapper
+
 from bugbug import bugzilla, db
 
+# ==========================================
+# 2. CONFIGURATION
+# ==========================================
 DB = {
     "dbname": "bugbug_data",
     "user": "postgres",
@@ -11,21 +37,39 @@ DB = {
     "port": "5432"
 }
 
+# The ID for the automatic account
+DEFAULT_COMPANY_ID = 1
+
+
 def get_connection():
     return psycopg2.connect(**DB)
 
-def sanitize_json(bug):
-    """
-    Sanitizes the bug dictionary to valid JSON string, removing Null bytes
-    that cause PostgreSQL errors.
-    """
-    try:
-        text = json.dumps(bug, ensure_ascii=False)
-        clean_text = text.replace("\u0000", "").replace("\x00", "")
-        return clean_text
-    except Exception as e:
-        print(f"Sanitization failed: {e}")
-        return "{}"
+
+def clean_obj(obj):
+    if isinstance(obj, dict):
+        return {k: clean_obj(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_obj(v) for v in obj]
+    elif isinstance(obj, str):
+        return obj.replace("\x00", "").encode("utf-8", "ignore").decode("utf-8", "ignore")
+    else:
+        return obj
+
+
+def insert_batch(cursor, batch_data):
+    query = """
+            INSERT INTO bugs (bug_id, data, company_id)
+            VALUES \
+            %s
+            ON CONFLICT (bug_id)
+            DO UPDATE SET data = EXCLUDED.data;
+            """
+    extras.execute_values(
+        cursor,
+        query,
+        batch_data,
+        template="(%s, %s, %s)"
+    )
 
 
 def main():
@@ -35,76 +79,72 @@ def main():
     conn = get_connection()
     cur = conn.cursor()
 
-    print("Setting up database schema...")
+    print("--- SETUP: Ensuring Default Company & User Exist ---")
+
+    # 1. Create Company
     cur.execute("""
-                CREATE TABLE IF NOT EXISTS bugs
-                (
-                    id     SERIAL PRIMARY KEY,
-                    bug_id BIGINT UNIQUE,
-                    data   JSONB
-                );
-                """)
+                INSERT INTO companies (id, name)
+                VALUES (%s, 'Default Corp')
+                ON CONFLICT (id) DO NOTHING;
+                """, (DEFAULT_COMPANY_ID,))
+
+    # 2. Create Admin User (admin / admin)
+    password = b"admin"
+    hashed = bcrypt.hashpw(password, bcrypt.gensalt()).decode('utf-8')
+
+    cur.execute("""
+                INSERT INTO users (username, password_hash, role, company_id)
+                VALUES ('admin', %s, 'admin', %s)
+                ON CONFLICT (username) DO NOTHING;
+                """, (hashed, DEFAULT_COMPANY_ID))
+
     conn.commit()
+    print("✅ Created/Verified User: 'admin' with password: 'admin'")
+    print("----------------------------------------------------")
 
-    print("Streaming bugs and inserting into PostgreSQL...")
+    print("Streaming bugs and inserting into PostgreSQL (Optimized Mode)...")
 
-    # CONFIG: Batch size for bulk inserts (higher = faster, but more RAM)
-    BATCH_SIZE = 2000
-
+    # OPTIMIZATION: Larger batch size for fewer round-trips
+    BATCH_SIZE = 10000
     batch = []
     total_inserted = 0
 
-    # ITERATE directly (Do not use list() to save RAM)
-    for bug in bugzilla.get_bugs():
-        # Prepare the tuple: (bug_id, json_data)
-        bug_id = bug.get('id')
-        clean_data = sanitize_json(bug)
+    try:
+        for bug in bugzilla.get_bugs():
+            bug_id = bug.get('id')
+            cleaned_bug = clean_obj(bug)
+            json_wrapper = extras.Json(cleaned_bug)
 
-        batch.append((bug_id, clean_data))
+            # Assign to the Default Company
+            batch.append((bug_id, json_wrapper, DEFAULT_COMPANY_ID))
 
-        # When batch is full, execute bulk insert
-        if len(batch) >= BATCH_SIZE:
+            if len(batch) >= BATCH_SIZE:
+                insert_batch(cur, batch)
+                total_inserted += len(batch)
+                print(f"  -> Buffered/Stored {total_inserted} records...")
+                batch = []
+
+        if batch:
             insert_batch(cur, batch)
-            conn.commit()
             total_inserted += len(batch)
-            print(f"Stored {total_inserted} records...")
-            batch = []  # Reset batch
 
-    # Insert any remaining records in the final partial batch
-    if batch:
-        insert_batch(cur, batch)
+        print("Committing transaction to disk...")
         conn.commit()
-        total_inserted += len(batch)
 
-    print(f"\nSUCCESS: Import finished. Total records stored: {total_inserted}")
+        print(f"\nSUCCESS: Import finished. Total records stored: {total_inserted}")
 
-    # Create an index to make training queries faster later
-    print("Creating index on bug_id for faster lookups...")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_bugs_bug_id ON bugs(bug_id);")
-    conn.commit()
+        print("Ensuring indexes exist...")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_bugs_bug_id ON bugs(bug_id);")
+        conn.commit()
 
-    cur.close()
-    conn.close()
-
-
-def insert_batch(cursor, batch_data):
-    """
-    Uses execute_values for high-speed bulk insertion.
-    Handles conflicts by updating the data if bug_id exists.
-    """
-    query = """
-            INSERT INTO bugs (bug_id, data)
-            VALUES \
-            %s
-        ON CONFLICT (bug_id)
-            DO UPDATE SET data = EXCLUDED.data; \
-            """
-    extras.execute_values(
-        cursor,
-        query,
-        batch_data,
-        template="(%s, %s)"
-    )
+    except Exception as e:
+        print(f"\nCRITICAL ERROR during import: {e}")
+        conn.rollback()
+        import traceback
+        traceback.print_exc()
+    finally:
+        cur.close()
+        conn.close()
 
 
 if __name__ == "__main__":

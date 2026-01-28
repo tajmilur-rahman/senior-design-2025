@@ -8,7 +8,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 from imblearn.over_sampling import SMOTE
 from scipy.sparse import hstack, csr_matrix
-
+# Old ML code
 # -----------------------------
 # CONFIGURATION
 # -----------------------------

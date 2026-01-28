@@ -1,5 +1,6 @@
 import os
 
+# --- DATABASE CONNECTION ---
 DB = {
     "dbname": "bugbug_data",
     "user": "postgres",
@@ -8,8 +9,10 @@ DB = {
     "port": "5432"
 }
 
+# --- ML ARTIFACT PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ML_DIR = os.path.join(BASE_DIR, "Random Forest ML")
+# FIX: Go up one level (..) to find the folder in the root directory
+ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "Random Forest ML"))
 
 ART_RF = {
     "model": os.path.join(ML_DIR, "rf_model.pkl"),
@@ -18,10 +21,12 @@ ART_RF = {
     "met": os.path.join(ML_DIR, "rf_metrics.json")
 }
 
+# --- ML CONSTANTS ---
 META = ["component", "product", "priority", "platform", "op_sys", "type", "resolution", "status"]
 FLAGS = ["has_crash", "is_accessibility", "is_regression", "is_intermittent", "has_patch"]
 TOP_SEV = ["S1", "S2", "S3", "S4"]
 
+# --- BUSINESS LOGIC MAPPINGS ---
 CATEGORY_TABLE = {
     "Networking & Security": ["network", "connect", "ssl", "tls", "certificate", "security", "vulnerability", "auth", "breach"],
     "Performance & Resource Management": ["slow", "lag", "freeze", "hang", "resource", "memory", "cpu", "performance"],
