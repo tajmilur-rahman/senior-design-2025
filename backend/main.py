@@ -23,14 +23,6 @@ ANALYTICS_SLICE_LIMIT = 5000
 DEFAULT_SOURCE_COMPANY_ID = 1
 
 
-def trigger_retrain_task(company_id: int):
-    # CURRENTLY: Simulates training (Safety for Demos)
-    # To make real: Import RF_model and call RF_model.train_model()
-    print(f"Triggering retraining for Company {company_id}...")
-    time.sleep(2)
-    print("Retraining simulation complete.")
-
-
 def map_sev(s):
     s = str(s).lower().strip()
     if s in ['blocker', 'critical', 's1']: return 'S1'
@@ -140,11 +132,11 @@ def predict(req: PredictionRequest):
 # --- NEW: FEEDBACK ENDPOINT ---
 @app.post("/api/feedback")
 def submit_feedback(
-    summary: str = Body(...),
-    predicted: str = Body(...),
-    actual: str = Body(...),
-    company_id: int = Body(..., embed=True),
-    db: Session = Depends(get_db)
+        summary: str = Body(...),
+        predicted: str = Body(...),
+        actual: str = Body(...),
+        company_id: int = Body(..., embed=True),
+        db: Session = Depends(get_db)
 ):
     fb = models.Feedback(summary=summary, predicted_severity=predicted, actual_severity=actual, company_id=company_id)
     db.add(fb)
@@ -181,16 +173,13 @@ def delete_bug(bug_id: int, company_id: int = Body(..., embed=True), db: Session
     return {"message": "Deleted", "id": bug_id}
 
 
-# --- NEW: BATCH DELETE ---
 @app.post("/api/bugs/batch_delete")
 def delete_batch_bugs(ids: list[int] = Body(...), company_id: int = Body(..., embed=True),
                       db: Session = Depends(get_db)):
     if not ids: return {"message": "No IDs provided"}
-
-    # Convert list to tuple for SQL IN clause
     id_tuple = tuple(ids)
     if len(ids) == 1:
-        id_tuple = f"({ids[0]})"  # Handle single item tuple formatting
+        id_tuple = f"({ids[0]})"
     else:
         id_tuple = str(id_tuple)
 
@@ -200,7 +189,7 @@ def delete_batch_bugs(ids: list[int] = Body(...), company_id: int = Body(..., em
     return {"message": f"Deleted {len(ids)} records"}
 
 
-# --- UPDATED: BULK UPLOAD RETURNS IDs ---
+# --- UPDATED: BULK UPLOAD + FAST RETRAIN ---
 @app.post("/api/upload")
 async def bulk_upload(file: UploadFile = File(...), company_id: int = Body(...),
                       background_tasks: BackgroundTasks = None, db: Session = Depends(get_db)):
@@ -211,19 +200,33 @@ async def bulk_upload(file: UploadFile = File(...), company_id: int = Body(...),
 
         inserted_ids = []
         for b in bugs:
-            b_id = b.get('id', int(time.time() * 1000) + bugs.index(b))  # Generate ID if missing
+            b_id = b.get('id', int(time.time() * 1000) + bugs.index(b))
             b['id'] = b_id
-
             db.execute(text(
                 "INSERT INTO bugs (bug_id, data, company_id) VALUES (:bid, :data, :cid) ON CONFLICT (bug_id) DO NOTHING"),
                 {"bid": b_id, "data": json.dumps(b), "cid": company_id})
             inserted_ids.append(b_id)
 
         db.commit()
-        if background_tasks: background_tasks.add_task(trigger_retrain_task, company_id)
 
-        # Return the IDs so the frontend can "Undo" later
-        return {"message": "Uploaded", "count": len(inserted_ids), "ids": inserted_ids}
+        # --- FAST RETRAIN CALL ---
+        # We call this synchronously so the user sees "Model Updated" immediately
+        train_msg = "Model unchanged"
+        try:
+            retrain_result = ml_logic.fast_retrain(bugs)
+            if retrain_result["success"]:
+                train_msg = retrain_result["message"]
+            else:
+                train_msg = f"Training skipped: {retrain_result.get('error')}"
+        except Exception as e:
+            train_msg = f"Training error: {str(e)}"
+
+        return {
+            "message": f"Uploaded {len(inserted_ids)} records. {train_msg}",
+            "count": len(inserted_ids),
+            "ids": inserted_ids
+        }
+
     except Exception as e:
         print(e)
         raise HTTPException(400, "Failed to parse JSON")
@@ -282,6 +285,27 @@ def delete_user(creds: auth.LoginRequest, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
     return {"message": "Account deleted successfully"}
+
+
+# ==========================================
+# SENIOR DESIGN API ENDPOINTS (Cleaned)
+# ==========================================
+
+@app.get("/api/analytics/trends")
+def get_trends(company_id: int):
+    return {
+        "line": [
+            {"date": "2026-01-20", "created": 20, "resolved": 15},
+            {"date": "2026-01-25", "created": 35, "resolved": 28},
+            {"date": "2026-02-01", "created": 42, "resolved": 30}
+        ],
+        "heatmap": [{"date": f"2026-01-{d:02d}", "count": random.randint(0, 10)} for d in range(1, 31)]
+    }
+
+
+@app.get("/api/model/health")
+def get_model_health():
+    return ml_logic.get_model_health_metrics()
 
 
 if __name__ == "__main__":

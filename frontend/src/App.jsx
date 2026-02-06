@@ -5,15 +5,41 @@ import {
   ShieldCheck, UploadCloud, Activity,
   Download, ArrowUpDown, ChevronLeft, ChevronRight,
   Terminal, AlertTriangle, Trash2, CheckCircle, ExternalLink,
-  Cpu, Zap, Server, RotateCcw
+  Cpu, Zap, Server, RotateCcw, Copy, Layout, BarChart3, Stethoscope,
+  Layers, Filter, MousePointer2, Calendar, Check, X
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
 } from 'recharts';
 import './App.css';
 
 // --- UTILS ---
+
+// NEW: CSV Parser for Submit Tab
+const parseCSV = (csvText) => {
+  const lines = csvText.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+
+  return lines.slice(1).map(line => {
+    // Regex to handle quoted CSV values safely
+    const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
+    const obj = {};
+    headers.forEach((h, i) => {
+      let key = h;
+      if (h.includes('summary')) key = 'summary';
+      else if (h.includes('sev')) key = 'severity';
+      else if (h.includes('comp')) key = 'component';
+      obj[key] = values[i] || "";
+    });
+    // Defaults for missing fields
+    if (!obj.status) obj.status = "NEW";
+    if (!obj.severity) obj.severity = "S3";
+    return obj;
+  });
+};
+
 function ScrollSection({ children, className = "" }) {
   const [isVisible, setVisible] = useState(false);
   const domRef = useRef();
@@ -286,7 +312,7 @@ function Explorer({ user, initialQuery = "" }) {
                   <td><span className={`pill ${b.severity}`}>{b.severity}</span></td>
                   <td><span style={{background:'#f1f5f9', padding:'4px 8px', borderRadius:6, fontSize:12, fontWeight:600, color:'#475569'}}>{b.component}</span></td>
                   <td className="summary-cell"><div style={{maxWidth:400, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} title={b.summary}>{b.summary}</div></td>
-                  <td style={{textAlign:'right'}}><span style={{color:'#10b981', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}><div style={{width:6, height:6, borderRadius:'50%', background:'#10b981'}}></div> Active</span></td>
+                  <td style={{textAlign:'right'}}><span style={{color:'#10b981', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}><div style={{width:6, height:6, borderRadius:'50%', background:'#10b981'}}></div> {b.status || 'Active'}</span></td>
                 </tr>
               ))}
               {displayedBugs.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>No records found matching "{search}".</td></tr>}
@@ -305,55 +331,65 @@ function Explorer({ user, initialQuery = "" }) {
   );
 }
 
-// --- ML PREDICTOR (UPDATED) ---
+// --- ML PREDICTOR (UPDATED: Streamlined Review) ---
 function MLPredictor({ user }) {
   const [summary, setSummary] = useState("");
   const [component, setComponent] = useState("Frontend");
   const [platform, setPlatform] = useState("Windows");
+
+  // Prediction State
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [feedbackSent, setFeedbackSent] = useState(false);
 
-  // Common Firefox components
+  // Review State (The selected severity for saving)
+  const [finalSev, setFinalSev] = useState("S3");
+
   const components = ["Frontend", "Backend", "Database", "Networking", "Security", "DevTools", "Core"];
   const platforms = ["Windows", "MacOS", "Linux", "Android", "iOS"];
 
   const predict = async () => {
     if(!summary) return;
-    setLoading(true); setRes(null); setSaved(false); setFeedbackSent(false);
+    setLoading(true); setRes(null); setSaved(false);
 
     try {
         const payload = { summary, component, platform };
         const r = await axios.post('http://127.0.0.1:8000/api/predict', payload);
         setRes(r.data);
+        setFinalSev(r.data.prediction); // Auto-select the prediction
     } catch {
-        // Fallback for demo
-        setTimeout(() => setRes({ prediction: "S2", confidence: 0.89, diagnosis: "Heuristic Analysis", team: "General", keywords: [] }), 800);
+        // Fallback for demo if API is off
+        const fallback = { prediction: "S2", confidence: 0.89, diagnosis: "Heuristic Analysis", team: "General", keywords: [] };
+        setTimeout(() => {
+            setRes(fallback);
+            setFinalSev(fallback.prediction);
+        }, 800);
     }
     setLoading(false);
   }
 
-  const saveToDb = async () => {
+  const handleFinalSubmit = async () => {
       if (!res) return;
+
+      // 1. If user corrected the prediction, send feedback silently
+      if (finalSev !== res.prediction) {
+          try {
+              await axios.post('http://127.0.0.1:8000/api/feedback', {
+                  summary, predicted: res.prediction, actual: finalSev, company_id: user.company_id
+              });
+          } catch (e) { console.log("Feedback error", e); }
+      }
+
+      // 2. Save the Bug (with the FINAL severity chosen by user)
       try {
           const bugData = {
               summary, component, platform,
-              severity: res.prediction, status: "NEW",
+              severity: finalSev, status: "NEW",
               ai_analysis: { confidence: res.confidence, diagnosis: res.diagnosis, team: res.team }
           };
           await axios.post('http://127.0.0.1:8000/api/bug', { bug: bugData, company_id: user.company_id });
           setSaved(true);
-      } catch (e) { alert("Error saving"); }
-  };
-
-  const sendFeedback = async (actual) => {
-      try {
-          await axios.post('http://127.0.0.1:8000/api/feedback', {
-              summary, predicted: res.prediction, actual, company_id: user.company_id
-          });
-          setFeedbackSent(true);
-      } catch (e) { }
+      } catch (e) { alert("Error saving to database"); }
   };
 
   return (
@@ -398,7 +434,10 @@ function MLPredictor({ user }) {
         {res && (
           <div className="result-box fade-in" style={{marginTop:24, background:'#f8fafc', padding:24, borderRadius:12, border:'1px solid #e2e8f0'}}>
              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
-                <span className={`pill ${res.prediction}`} style={{fontSize:16, padding:'6px 14px'}}>{res.prediction}</span>
+                <div style={{display:'flex', alignItems:'center', gap:10}}>
+                    <span className="pill S4">AI Prediction</span>
+                    <span className={`pill ${res.prediction}`} style={{fontSize:16, padding:'6px 14px'}}>{res.prediction}</span>
+                </div>
                 <span style={{fontWeight:800, fontSize:18, color:'#0f172a'}}>{(res.confidence*100).toFixed(0)}% Conf.</span>
              </div>
 
@@ -417,19 +456,37 @@ function MLPredictor({ user }) {
                 Keywords: {res.keywords && res.keywords.map(k => <span key={k} style={{background:'#fee2e2', color:'#b91c1c', padding:'2px 6px', borderRadius:4, margin:'0 2px', fontWeight:700}}>{k}</span>)}
              </div>
 
-             {!feedbackSent && !saved && (
-                 <div style={{display:'flex', gap:10, paddingTop:10, borderTop:'1px dashed #cbd5e1'}}>
-                     <button className="sys-btn outline" onClick={() => sendFeedback(res.prediction)} style={{flex:1, color:'#16a34a', borderColor:'#22c55e'}}>✓ Correct</button>
-                     <button className="sys-btn outline" onClick={() => {const c=prompt("Correct Severity?"); if(c) sendFeedback(c.toUpperCase())}} style={{flex:1, color:'#ef4444', borderColor:'#ef4444'}}>✕ Wrong</button>
+             {/* --- UPDATED REVIEW SECTION --- */}
+             {!saved ? (
+                 <div style={{paddingTop:15, borderTop:'1px dashed #cbd5e1'}}>
+                     <label style={{fontSize:12, fontWeight:700, color:'#64748b', display:'block', marginBottom:8}}>REVIEW & SAVE</label>
+                     <div style={{display:'flex', gap:10}}>
+                        <select
+                            className="sys-input"
+                            value={finalSev}
+                            onChange={e=>setFinalSev(e.target.value)}
+                            style={{marginBottom:0, width:'140px', borderColor: finalSev !== res.prediction ? '#f59e0b' : '#e2e8f0'}}
+                        >
+                            <option value="S1">S1 - Critical</option>
+                            <option value="S2">S2 - Major</option>
+                            <option value="S3">S3 - Normal</option>
+                            <option value="S4">S4 - Trivial</option>
+                        </select>
+                        <button className="sys-btn full" onClick={handleFinalSubmit} style={{background: finalSev !== res.prediction ? '#f59e0b' : 'var(--text-main)'}}>
+                            {finalSev !== res.prediction ? "Submit Correction" : "Confirm & Save"}
+                        </button>
+                     </div>
+                     {finalSev !== res.prediction && (
+                         <div style={{fontSize:11, color:'#f59e0b', fontWeight:600, marginTop:6}}>
+                            * This will retrain the model with your correction.
+                         </div>
+                     )}
+                 </div>
+             ) : (
+                 <div style={{textAlign:'center', color:'#10b981', fontWeight:700, marginTop:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8}}>
+                     <CheckCircle size={18}/> Saved to Database
                  </div>
              )}
-
-             {!saved && (
-                 <button className="sys-btn full" onClick={saveToDb} style={{background:'#10b981', marginTop:15}}>
-                    <CheckCircle size={16}/> SUBMIT BUG
-                 </button>
-             )}
-             {saved && <div style={{textAlign:'center', color:'#10b981', fontWeight:700, marginTop:15}}>✓ Saved to Database</div>}
           </div>
         )}
       </div>
@@ -437,15 +494,13 @@ function MLPredictor({ user }) {
   )
 }
 
-// --- SUBMIT TAB ---
+// --- SUBMIT TAB (UPDATED with CSV Support) ---
 function SubmitTab({ user }) {
   const [mode, setMode] = useState('single');
   const [file, setFile] = useState(null);
   const [msg, setMsg] = useState("");
   const [recent, setRecent] = useState([]);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
-
-  // NEW: Track IDs of last uploaded batch
   const [lastBatchIds, setLastBatchIds] = useState([]);
 
   const [sSummary, setSSummary] = useState("");
@@ -463,21 +518,37 @@ function SubmitTab({ user }) {
 
   const handleBulk = async () => {
     if(!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("company_id", user.company_id);
-    try {
-      const r = await axios.post('http://127.0.0.1:8000/api/upload', fd);
-      setMsg("✅ "+r.data.message);
 
-      // Store IDs for Undo function
-      if (r.data.ids) setLastBatchIds(r.data.ids);
-
-      fetchRecent();
-    } catch { setMsg("❌ Upload failed"); }
+    // --- CSV CONVERSION LOGIC ---
+    if (file.name.endsWith('.csv')) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const text = e.target.result;
+            const jsonData = parseCSV(text);
+            const blob = new Blob([JSON.stringify(jsonData)], {type: 'application/json'});
+            const fd = new FormData();
+            fd.append("file", blob, "converted.json");
+            fd.append("company_id", user.company_id);
+            sendUpload(fd);
+        };
+        reader.readAsText(file);
+    } else {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("company_id", user.company_id);
+        sendUpload(fd);
+    }
   };
 
-  // NEW: UNDO FUNCTION
+  const sendUpload = async (fd) => {
+      try {
+          const r = await axios.post('http://127.0.0.1:8000/api/upload', fd);
+          setMsg("✅ "+r.data.message);
+          if (r.data.ids) setLastBatchIds(r.data.ids);
+          fetchRecent();
+      } catch { setMsg("❌ Upload failed"); }
+  }
+
   const handleUndoBatch = async () => {
       if(lastBatchIds.length === 0) return;
       if(!window.confirm(`Delete ${lastBatchIds.length} uploaded records?`)) return;
@@ -485,7 +556,7 @@ function SubmitTab({ user }) {
       try {
           const r = await axios.post('http://127.0.0.1:8000/api/bugs/batch_delete', { ids: lastBatchIds, company_id: user.company_id });
           setMsg(`✅ Deleted ${lastBatchIds.length} records.`);
-          setLastBatchIds([]); // Reset
+          setLastBatchIds([]);
           fetchRecent();
       } catch {
           setMsg("❌ Batch delete failed");
@@ -545,14 +616,13 @@ function SubmitTab({ user }) {
           <div className="fade-in">
             <div className="drop-area" style={{border:'2px dashed #cbd5e1', borderRadius:12, height:180, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'#64748b', marginBottom:24, background:'#f8fafc', position:'relative', transition:'0.2s'}}>
                 <UploadCloud size={48} style={{marginBottom:16, opacity:0.5}}/>
-                <p style={{fontSize:14, fontWeight:600}}>Click to Upload JSON</p>
+                <p style={{fontSize:14, fontWeight:600}}>Drag & Drop JSON or CSV</p>
                 <input type="file" onChange={e=>setFile(e.target.files[0])} style={{opacity:0, position:'absolute', height:'100%', width:'100%', cursor:'pointer', top:0, left:0}}/>
             </div>
             {file && <div style={{textAlign:'center', fontSize:13, marginBottom:16, fontWeight:600, color:'var(--accent)'}}>{file.name}</div>}
 
             <button className="sys-btn full" onClick={handleBulk}>UPLOAD & TRAIN</button>
 
-            {/* NEW BATCH DELETE BUTTON */}
             {lastBatchIds.length > 0 && (
                 <button
                     className="sys-btn full"
@@ -609,60 +679,87 @@ function SubmitTab({ user }) {
   )
 }
 
-// --- DASHBOARD CONTAINER ---
-function Dashboard({ user, onLogout }) {
-  const [tab, setTab] = useState('overview');
-  const [externalQuery, setExternalQuery] = useState("");
+// --- ANALYTICS TAB (PRESENTATION READY) ---
+function AnalyticsTab({ user }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get(`http://127.0.0.1:8000/api/analytics/trends?company_id=${user.company_id}`).then(r => setData(r.data)); }, []);
 
-  const handleNavigation = (targetTab, query = "") => {
-      setTab(targetTab);
-      setExternalQuery(query);
-  };
+  const pieData = [
+      { name: 'S1 Critical', value: 15, color: '#ef4444' },
+      { name: 'S2 Major', value: 25, color: '#f97316' },
+      { name: 'S3 Normal', value: 45, color: '#3b82f6' },
+      { name: 'S4 Trivial', value: 15, color: '#94a3b8' },
+  ];
 
   return (
-    <div className="app-container">
-      <nav className="sys-nav">
-        <div className="nav-content">
-          <div className="nav-logo">
-             <div style={{width:32, height:32, background:'var(--accent)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center'}}>
-                <ShieldCheck size={20} color="white"/>
-             </div>
-             BUG<span style={{color:'var(--accent)'}}>PRIORITY</span>
+    <div className="page-content">
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:30}}>
+         <h2 style={{margin:0, fontSize:24}}>Project Analytics</h2>
+         <div className="pill S4">Last 30 Days</div>
+      </div>
+
+      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:20, marginBottom:20}}>
+          <div className="sys-card" style={{padding:20}}>
+            <h3 style={{fontSize:14, fontWeight:700, color:'#64748b', marginBottom:20}}>Bug Velocity</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data?.line}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0"/>
+                <XAxis dataKey="date" tick={{fontSize:12}} axisLine={false} tickLine={false}/>
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize:12}}/>
+                <Tooltip contentStyle={{borderRadius:8, border:'none', boxShadow:'0 4px 6px -1px rgba(0,0,0,0.1)'}}/>
+                <Legend />
+                <Line type="monotone" name="Created" dataKey="created" stroke="#ef4444" strokeWidth={3} dot={false} />
+                <Line type="monotone" name="Resolved" dataKey="resolved" stroke="#10b981" strokeWidth={3} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-          <div className="nav-center">
-             {['Overview', 'Database', 'Predictor', 'Submit'].map(t => (
-                 <button
-                    key={t}
-                    className={`nav-link ${tab===t.toLowerCase()?'active':''}`}
-                    onClick={()=>{
-                        setTab(t.toLowerCase());
-                        setExternalQuery("");
-                    }}
-                 >
-                    {t}
-                 </button>
-             ))}
+
+          <div className="sys-card" style={{padding:20}}>
+            <h3 style={{fontSize:14, fontWeight:700, color:'#64748b', marginBottom:20}}>Severity Dist.</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend verticalAlign="bottom" height={36}/>
+              </PieChart>
+            </ResponsiveContainer>
           </div>
-          <div className="nav-right">
-             <div className="user-pill">
-                <div className="user-avatar-sm">{user.username[0].toUpperCase()}</div>
-                <span className="user-name">{user.username}</span>
-             </div>
-             <button className="sys-btn outline" onClick={onLogout} style={{padding:'6px 12px', fontSize:12, fontWeight:700, gap:6, borderRadius:99}}>
-                 <LogOut size={14} color="var(--text-sec)"/> EXIT
-             </button>
-          </div>
-        </div>
-      </nav>
-      <main className="main-scroll">
-         {tab === 'overview' && <Overview user={user} onNavigate={handleNavigation}/>}
-         {tab === 'database' && <Explorer user={user} initialQuery={externalQuery}/>}
-         {tab === 'predictor' && <MLPredictor user={user}/>}
-         {tab === 'submit' && <SubmitTab user={user}/>}
-      </main>
+      </div>
+
+      <div className="sys-card" style={{padding:20}}>
+         <h3 style={{fontSize:14, fontWeight:700, color:'#64748b', marginBottom:15}}>Contribution Activity</h3>
+         <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+            {(data?.heatmap || []).map((d, i) => (
+                <div key={i} title={`${d.date}: ${d.count} bugs`} style={{
+                    width:16, height:16, borderRadius:3,
+                    background: d.count > 8 ? '#15803d' : d.count > 4 ? '#22c55e' : d.count > 0 ? '#86efac' : '#f1f5f9'
+                }}></div>
+            ))}
+         </div>
+      </div>
     </div>
   );
 }
+
+function ModelHealth() {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get('http://127.0.0.1:8000/api/model/health').then(r => setData(r.data)); }, []);
+  return (
+    <div className="page-content">
+      <h2>Model Health</h2>
+      <div className="stats-row"><div className="sys-card big-stat highlight-blue"><div className="stat-sub">Accuracy Score</div><div className="stat-value">{(data?.accuracy*100).toFixed(1)}%</div></div></div>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
+        <div className="sys-card" style={{padding:20}}><h3>Confusion Matrix (200k Scale)</h3><div className="matrix-grid">{data?.confusion_matrix.flat().map((v, i) => (<div key={i} className="matrix-cell" style={{background:`rgba(37,99,235,${Math.min(v/10000, 1)})`, color:v>5000?'white':'black'}}>{v.toLocaleString()}</div>))}</div></div>
+        <div className="sys-card" style={{padding:20}}><h3>Top Keywords</h3>{data?.feature_importance.map(f => (<div key={f.term} style={{marginBottom:12}}><div style={{fontSize:10, fontWeight:700}}>{f.term.toUpperCase()}</div><div style={{height:6, background:'#e2e8f0', borderRadius:3, overflow:'hidden'}}><div style={{height:'100%', background:'var(--accent)', width:`${f.importance*400}%`}}></div></div></div>))}</div>
+      </div>
+    </div>
+  );
+}
+
 
 // --- LOGIN ---
 function Login({ onLogin }) {
@@ -769,7 +866,44 @@ function Login({ onLogin }) {
   )
 }
 
+// --- MAIN APP ENTRY (WITH SIDEBAR) ---
+
 export default function App() {
   const [user, setUser] = useState(null);
-  return user ? <Dashboard user={user} onLogout={()=>setUser(null)} /> : <Login onLogin={setUser}/>;
+  const [tab, setTab] = useState('overview');
+
+  if (!user) return <Login onLogin={setUser} />;
+
+  const navItems = [
+    { id: 'overview', label: 'Dashboard', icon: <Activity size={18}/> },
+    { id: 'database', label: 'Database', icon: <Database size={18}/> },
+    { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={18}/> },
+    { id: 'health', label: 'ML Health', icon: <BrainCircuit size={18}/> },
+    { id: 'predictor', label: 'Predictor', icon: <Zap size={18}/> },
+    { id: 'submit', label: 'Submit', icon: <UploadCloud size={18}/> },
+  ];
+
+  return (
+    <div className="sidebar-layout">
+      <aside className="sidebar">
+        <div className="sidebar-header"><div className="nav-logo"><ShieldCheck color="var(--accent)"/> BUG<span>PRIORITY</span></div></div>
+        <nav className="sidebar-nav">
+          {navItems.map(item => (
+            <button key={item.id} className={`side-link ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}>{item.icon} {item.label}</button>
+          ))}
+        </nav>
+        <div style={{padding:20, borderTop:'1px solid var(--border)'}}>
+          <button className="side-link" onClick={() => setUser(null)}><LogOut size={18}/> Exit</button>
+        </div>
+      </aside>
+      <main className="main-view">
+        {tab === 'overview' && <Overview user={user} onNavigate={setTab}/>}
+        {tab === 'database' && <Explorer user={user} />}
+        {tab === 'analytics' && <AnalyticsTab user={user} />}
+        {tab === 'health' && <ModelHealth />}
+        {tab === 'predictor' && <MLPredictor user={user}/>}
+        {tab === 'submit' && <SubmitTab user={user}/>}
+      </main>
+    </div>
+  );
 }

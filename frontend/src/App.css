@@ -346,3 +346,83 @@ body {
     50% { opacity: 0.6; transform: scale(1.2); }
     100% { opacity: 1; transform: scale(1); }
 }
+
+/* --- SIDEBAR LAYOUT --- */
+.sidebar-layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg);
+}
+
+.sidebar {
+  width: 260px;
+  background: white;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+
+.sidebar-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: var(--text-sec);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+  border: none;
+  background: transparent;
+  width: 100%;
+}
+
+.side-link:hover { background: #f1f5f9; color: var(--text-main); }
+.side-link.active { background: #eff6ff; color: var(--accent); }
+
+.main-view {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  background: white; /* Clean background for kanban lanes */
+}
+
+/* --- CONFUSION MATRIX --- */
+.matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 20px;
+}
+.matrix-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* --- PRESENTATION ANALYTICS --- */
+.recharts-legend-item { font-size: 12px !important; color: #64748b !important; }
+
+.sys-input:disabled { background: #f1f5f9; cursor: not-allowed; opacity: 0.7; }
+.recharts-tooltip-cursor { fill: #f1f5f9; }
+.icon-dim { opacity: 0.3; }

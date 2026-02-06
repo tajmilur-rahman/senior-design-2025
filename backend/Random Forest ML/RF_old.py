@@ -8,7 +8,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 from imblearn.over_sampling import SMOTE
 from scipy.sparse import hstack, csr_matrix
-# Old ML code
+
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
@@ -35,26 +35,26 @@ ARTIFACTS = {
 }
 
 QUERY = """
-SELECT
-  (data->>'summary')     AS summary,
-  (data->>'component')   AS component,
-  (data->>'priority')    AS priority,
-  (data->>'status')      AS status,
-  (data->>'product')     AS product,
-  (data->>'platform')    AS platform,
-  (data->>'op_sys')      AS op_sys,
-  (data->>'type')        AS type,
-  (data->>'resolution')  AS resolution,
-  (data->>'severity')    AS severity,
-  (data->>'cf_crash_signature') IS NOT NULL AS has_crash,
-  (data->>'keywords') ILIKE '%accessibility%' AS is_accessibility,
-  (data->>'keywords') ILIKE '%regression%' AS is_regression,
-  (data->>'keywords') ILIKE '%intermittent%' AS is_intermittent,
-  (data->>'keywords') ILIKE '%patch%' AS has_patch
-FROM bugs
-WHERE (data->>'summary') IS NOT NULL
-  AND (data->>'severity') IS NOT NULL;
-"""
+        SELECT (data ->> 'summary')                          AS summary, \
+               (data ->> 'component')                        AS component, \
+               (data ->> 'priority')                         AS priority, \
+               (data ->> 'status')                           AS status, \
+               (data ->> 'product')                          AS product, \
+               (data ->> 'platform')                         AS platform, \
+               (data ->> 'op_sys')                           AS op_sys, \
+               (data ->> 'type')                             AS type, \
+               (data ->> 'resolution')                       AS resolution, \
+               (data ->> 'severity')                         AS severity, \
+               (data ->> 'cf_crash_signature') IS NOT NULL   AS has_crash, \
+               (data ->> 'keywords') ILIKE '%accessibility%' AS is_accessibility, \
+               (data ->> 'keywords') ILIKE '%regression%'    AS is_regression, \
+               (data ->> 'keywords') ILIKE '%intermittent%'  AS is_intermittent, \
+               (data ->> 'keywords') ILIKE '%patch%'         AS has_patch
+        FROM bugs
+        WHERE (data ->> 'summary') IS NOT NULL
+          AND (data ->> 'severity') IS NOT NULL; \
+        """
+
 
 # -----------------------------
 # DATA LOADING
@@ -70,14 +70,15 @@ def load_bugs(limit=None):
     print(f"Loaded {len(df):,} bugs.")
     return df.dropna(subset=["summary", "severity"])
 
+
 # -----------------------------
 # FEATURE ENGINEERING
 # -----------------------------
 def prepare_features(df, max_features):
     print("Preparing features...")
     text_col = "summary"
-    cat_cols = ["component","priority","status","product","platform","op_sys","type","resolution"]
-    extra_cols = ["has_crash","is_accessibility","is_regression","is_intermittent","has_patch"]
+    cat_cols = ["component", "priority", "status", "product", "platform", "op_sys", "type", "resolution"]
+    extra_cols = ["has_crash", "is_accessibility", "is_regression", "is_intermittent", "has_patch"]
 
     # Merge blocker and S1
     df["severity"] = df["severity"].replace({"blocker": "S1"})
@@ -85,8 +86,13 @@ def prepare_features(df, max_features):
     # Clean and encode metadata
     for c in cat_cols:
         df[c] = df[c].fillna("UNKNOWN").astype(str)
+
+    # --- FIX APPLIED HERE ---
+    # We use fillna(0) to handle cases where ILIKE returned NULL (None)
     for c in extra_cols:
-        df[c] = df[c].astype(int)
+        df[c] = df[c].fillna(0).astype(int)
+    # ------------------------
+
     df[text_col] = df[text_col].astype(str)
 
     all_meta = cat_cols + extra_cols
@@ -94,7 +100,7 @@ def prepare_features(df, max_features):
     X_meta = np.vstack([encoders[c].transform(df[c]) for c in all_meta]).T
     X_meta_sparse = csr_matrix(X_meta)
 
-    tfidf = TfidfVectorizer(max_features=max_features, stop_words="english", ngram_range=(1,2))
+    tfidf = TfidfVectorizer(max_features=max_features, stop_words="english", ngram_range=(1, 2))
     X_text = tfidf.fit_transform(df[text_col])
 
     X = hstack([X_meta_sparse, X_text])
@@ -102,6 +108,7 @@ def prepare_features(df, max_features):
 
     print(f"Feature matrix: {X.shape}, Labels: {len(np.unique(y))}")
     return X, y, tfidf, encoders
+
 
 # -----------------------------
 # MODEL TRAINING & EVALUATION
@@ -156,6 +163,7 @@ def train_model(X, y, encoders, n_estimators):
     print(f"Final Accuracy: {acc:.3f}, Macro F1: {macro_f1:.3f}, Weighted F1: {weighted_f1:.3f}")
     return rf, metrics
 
+
 # -----------------------------
 # SAVE ARTIFACTS
 # -----------------------------
@@ -168,6 +176,7 @@ def save_all(model, vec, enc, metrics):
     print("Artifacts saved:")
     for k, v in ARTIFACTS.items():
         print(f" - {v}")
+
 
 # -----------------------------
 # MAIN EXECUTION
@@ -189,4 +198,4 @@ if __name__ == "__main__":
         model, metrics = train_model(X, y, encoders, n_estimators=N_ESTIMATORS)
 
     save_all(model, tfidf, encoders, metrics)
-    print("Training complete. Artifacts ready for Streamlit.")
+    print("Training complete. Artifacts ready")
