@@ -1,0 +1,226 @@
+/* frontend/src/pages/BugAnalysis.css */
+
+.ba-container {
+  /* Switch to Light Background */
+  background-color: #ffffff;
+  color: #1e293b; /* Dark Slate Blue for text */
+  
+  /* Layout */
+  min-height: calc(100vh - 120px);
+  margin: 0 auto;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* Softer shadow */
+  
+  /* Centering */
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+}
+
+.ba-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.ba-title {
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  color: #0f172a; /* Very Dark Blue */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.ba-subtitle {
+  color: #64748b; /* Slate Grey */
+  font-size: 16px;
+}
+
+/* --- SEARCH BAR --- */
+.ba-input-wrapper {
+  background: #f1f5f9; /* Light Grey background for input */
+  padding: 8px 8px 8px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.ba-input-wrapper:focus-within {
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); /* Blue Glow */
+  border-color: #3b82f6;
+}
+
+.ba-search-icon {
+  color: #94a3b8;
+  margin-right: 12px;
+}
+
+.ba-input {
+  background: transparent;
+  border: none;
+  color: #0f172a;
+  font-size: 16px;
+  flex: 1;
+  outline: none;
+  font-weight: 500;
+}
+
+.ba-input::placeholder {
+  color: #94a3b8;
+}
+
+.ba-analyze-btn {
+  background: #0f172a; /* Black/Blue Button */
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ba-analyze-btn:hover {
+  background: #334155;
+}
+
+/* --- GRID LAYOUT --- */
+.ba-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+  max-width: 1000px;
+  margin-top: 40px;
+}
+
+/* --- CARDS --- */
+.ba-card {
+  background: #f8fafc; /* Very light grey card */
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  height: 100%;
+}
+
+.ba-card-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- SEVERITY PILLS --- */
+.ba-severity-content {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.ba-badge-critical {
+  background: #fee2e2;
+  color: #ef4444;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 24px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+.ba-badge-low {
+  background: #dcfce7;
+  color: #16a34a;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 24px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+.ba-badge-medium {
+  background: #ffedd5;
+  color: #f97316;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 24px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+.ba-confidence {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.ba-action-box {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.ba-action-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.ba-action-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-top: 4px;
+}
+
+/* --- SIMILAR BUGS LIST --- */
+.ba-bug-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.ba-bug-summary {
+  font-weight: 600;
+  font-size: 14px;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.ba-tags {
+  display: flex;
+  gap: 8px;
+}
+
+.ba-tag {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.tag-match { background: #eff6ff; color: #3b82f6; }
+.tag-fixed { background: #f0fdf4; color: #16a34a; }
+.tag-open { background: #fff1f2; color: #e11d48; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .ba-grid { grid-template-columns: 1fr; }
+}
