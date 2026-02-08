@@ -3,7 +3,6 @@ import axios from 'axios';
 import BugAnalysis from './Pages/BugAnalysis';
 import { ScrollSection, Background, SkeletonLoader } from './Components/LayoutUtils';
 import Overview from './Pages/Overview';
-import MLPredictor from "./Pages/Predictor";
 import Explorer from "./Pages/Explorer";
 import SubmitTab from "./Pages/Submit";
 import Login from "./Pages/Login";
@@ -43,8 +42,8 @@ function Dashboard({ user, onLogout }) {
              BUG<span style={{color:'var(--accent)'}}>PRIORITY</span>
           </div>
           <div className="nav-center">
-             {/* ✅ UPDATED: Added 'Analysis' to this list */}
-             {['Overview', 'Database', 'Predictor', 'Analysis', 'Submit'].map(t => (
+             {/* UPDATED: Added 'Analysis' to this list */}
+             {['Overview', 'Database', 'Analysis', 'Submit'].map(t => (
                  <button
                     key={t}
                     className={`nav-link ${tab===t.toLowerCase()?'active':''}`}
@@ -71,9 +70,6 @@ function Dashboard({ user, onLogout }) {
       <main className="main-scroll">
          {tab === 'overview' && <Overview user={user} onNavigate={handleNavigation}/>}
          {tab === 'database' && <Explorer user={user} initialQuery={externalQuery}/>}
-         {tab === 'predictor' && <MLPredictor user={user}/>}
-         
-         {/* ✅ ADDED: This shows your new Bug Analysis Page */}
          {tab === 'analysis' && <BugAnalysis />}
          
          {tab === 'submit' && <SubmitTab user={user}/>}

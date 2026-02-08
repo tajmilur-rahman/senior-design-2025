@@ -1,0 +1,17 @@
+1. source venv/bin/activate
+    cd backend
+    python3 -m uvicorn main:app --reload --host 0.0.0.0
+
+    cd frontend
+    npm run dev -- --host
+
+
+02.08 
+Data Upgrade: Swapped a 15-line dummy CSV for a 60,000-line real
+bug dataset (Eclipse/Firefox bugs).
+Memory Built: Successfully indexed those 60k bugs into ChromaDB so the "Similar Bugs" 
+feature actually finds real history.
+Hybrid Intelligence: Implemented a "Safety Net" in main.py that forces 
+1 Critical for dangerous keywords (crash, 500, security), 
+ensuring your demo never fails on obvious cases.
+Math Fix: Fixed the "Negative Percentage" bug in the matching score logic.
