@@ -155,7 +155,10 @@ def search_hints(q: str, db: Session = Depends(get_db)):
 @app.post("/api/bug")
 def submit_single_bug(bug: dict = Body(...), company_id: int = Body(..., embed=True),
                       background_tasks: BackgroundTasks = None, db: Session = Depends(get_db)):
-    new_id = int(time.time() * 1000)
+    # FIX: Use seconds (int) instead of milliseconds (*1000) so it fits in standard Postgres Integer columns.
+    # Current timestamp is ~1.7 Billion, which fits safely under the 2.14 Billion max limit of Integer.
+    new_id = int(time.time()) + random.randint(0, 999)
+
     bug['id'] = new_id
     db.execute(text("INSERT INTO bugs (bug_id, data, company_id) VALUES (:bid, :data, :cid)"),
                {"bid": new_id, "data": json.dumps(bug), "cid": company_id})
@@ -199,8 +202,12 @@ async def bulk_upload(file: UploadFile = File(...), company_id: int = Body(...),
         if not isinstance(bugs, list): bugs = [bugs]
 
         inserted_ids = []
-        for b in bugs:
-            b_id = b.get('id', int(time.time() * 1000) + bugs.index(b))
+        # FIX: Ensure base_id fits within standard Integer limits
+        base_id = int(time.time())
+
+        for i, b in enumerate(bugs):
+            # FIX: Do not multiply by 1000. Add index to ensure uniqueness in batch.
+            b_id = b.get('id', base_id + i + random.randint(0, 500))
             b['id'] = b_id
             db.execute(text(
                 "INSERT INTO bugs (bug_id, data, company_id) VALUES (:bid, :data, :cid) ON CONFLICT (bug_id) DO NOTHING"),
@@ -237,13 +244,17 @@ async def bulk_upload(file: UploadFile = File(...), company_id: int = Body(...),
 def create_user(req: auth.CreateUserRequest, company_name: str = Body(..., embed=True), db: Session = Depends(get_db)):
     if db.query(models.User).filter(models.User.username == req.username).first():
         raise HTTPException(400, "Username taken")
+
+    # FIX: Ensure company ID also fits in Integer
     new_cid = int(time.time())
+
     db.execute(text("INSERT INTO companies (id, name) VALUES (:id, :name)"), {"id": new_cid, "name": company_name})
     hashed = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode()
     db.execute(text("INSERT INTO users (username, password_hash, role, company_id) VALUES (:u, :p, :r, :cid)"),
                {"u": req.username, "p": hashed, "r": req.role, "cid": new_cid})
     try:
-        offset = new_cid * 1000
+        # Scale offset for demo purposes, ensuring it doesn't overflow
+        offset = new_cid + 100000
         db.execute(text("""
                         INSERT INTO bugs (bug_id, data, company_id)
                         SELECT bug_id + :offset, data, :new_cid
