@@ -28,3 +28,6 @@ python-dotenv==1.0.1
 
 # CORS & Middleware
 python-cors==1.0.0
+
+chromadb
+sentence-transformers

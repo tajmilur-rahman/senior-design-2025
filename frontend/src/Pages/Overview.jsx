@@ -6,10 +6,9 @@ import {
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer 
 } from 'recharts';
-// Note: We go up one level (..) to find Components
 import { ScrollSection, SkeletonLoader } from '../Components/LayoutUtils';
 
-// --- LIVE FEED COMPONENT (Helper for Overview) ---
+// --- LIVE FEED COMPONENT ---
 function LiveFeedRow({ bug }) {
     return (
         <div className="live-feed-item">
@@ -18,57 +17,33 @@ function LiveFeedRow({ bug }) {
                 <span className="feed-id">#{bug.id}</span>
             </div>
             <span className="feed-summary" title={bug.summary}>{bug.summary}</span>
-            <span className={`pill ${bug.severity} tiny`}>{bug.severity}</span>
+            <span className={`pill ${bug.severity} tiny`}>{bug.severity || 'S3'}</span>
         </div>
     )
 }
 
 export default function Overview({ user, onNavigate }) {
   const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
 
+  // [FIX] Auto-Polling for "Live" effect
   useEffect(() => {
-    const source = axios.CancelToken.source();
-    const timeout = setTimeout(() => {
-        if (!data) {
-             source.cancel();
-             loadDemoData();
-        }
-    }, 2000);
+    const fetchData = () => {
+        axios.get(`http://127.0.0.1:8000/api/hub/overview?company_id=${user.company_id}`)
+             .then(res => setData(res.data))
+             .catch(err => {
+                console.error("Overview Error:", err);
+                setError(true);
+             });
+    };
 
-    // Using localhost for now - we can update this URL globally later
-    axios.get(`http://127.0.0.1:8000/api/hub/overview?company_id=${user.company_id}`, { cancelToken: source.token })
-         .then(res => {
-             clearTimeout(timeout);
-             setData(res.data);
-         })
-         .catch(err => {
-            clearTimeout(timeout);
-            if (axios.isCancel(err) || err) loadDemoData();
-         });
+    fetchData(); // Initial load
+    const interval = setInterval(fetchData, 2000); // Refresh every 2s
 
-    return () => clearTimeout(timeout);
-  }, []);
+    return () => clearInterval(interval);
+  }, [user.company_id]);
 
-  const loadDemoData = () => {
-      setData({
-        stats: { total_db: 220214, analyzed: 5000, critical: 142, components: 12 },
-        charts: { components: [
-            { name: 'Layout: Flexbox', count: 450 },
-            { name: 'DOM: Core', count: 320 },
-            { name: 'JS Engine', count: 280 },
-            { name: 'Security: SSL', count: 150 },
-            { name: 'WebRTC', count: 90 }
-        ]},
-        recent: [
-            { id: 9821, summary: 'Crash in WebGL rendering context on startup', severity: 'S1' },
-            { id: 9820, summary: 'Flexbox alignment breaks on mobile view', severity: 'S3' },
-            { id: 9819, summary: 'Slow query execution in History API', severity: 'S2' },
-            { id: 9818, summary: 'Memory leak in video decoder thread', severity: 'S1' },
-            { id: 9817, summary: 'Typos in preferences menu', severity: 'S4' }
-        ]
-      });
-  };
-
+  if (error) return <div className="page-content" style={{textAlign:'center', marginTop:50}}>❌ Error loading stats. Is backend running?</div>;
   if (!data) return <div className="page-content"><SkeletonLoader /></div>;
 
   const cardStyle = { cursor: 'pointer', transition: 'all 0.2s ease' };
@@ -79,11 +54,12 @@ export default function Overview({ user, onNavigate }) {
         <div className="hero-content">
           <div className="live-pill"><span className="pulse-dot"></span> SYSTEM ACTIVE</div>
           <h1>BUG PRIORITY <span style={{color:'var(--accent)'}}>OS</span></h1>
-          <p className="subtitle">Firefox Intelligence & Defect Classification System</p>
+          <p className="subtitle">Real-time Intelligence & Defect Classification</p>
         </div>
       </section>
 
       <ScrollSection className="stats-row">
+         {/* 1. DATABASE CARD */}
          <div className="sys-card big-stat" style={cardStyle} onClick={() => onNavigate('database', '')}>
             <div className="stat-top-row">
                 <span className="stat-label" style={{color:'#64748b'}}>DATABASE</span>
@@ -91,26 +67,37 @@ export default function Overview({ user, onNavigate }) {
             </div>
             <div className="stat-main-content">
                <Database size={40} strokeWidth={1} color="#64748b" />
-               <div><div className="stat-value">{data.stats.total_db.toLocaleString()}</div><div className="stat-sub">TOTAL RECORDS</div></div>
+               <div>
+                   <div className="stat-value">{data.stats.total_db.toLocaleString()}</div>
+                   <div className="stat-sub">TOTAL RECORDS</div>
+               </div>
             </div>
          </div>
 
-         <div className="sys-card big-stat" style={cardStyle} onClick={() => onNavigate('database', 'Active')}>
+         {/* 2. PROCESSED CARD */}
+         <div className="sys-card big-stat" style={cardStyle} onClick={() => onNavigate('database', 'Fixed')}>
             <div className="stat-top-row">
                 <span className="stat-label" style={{color:'#64748b'}}>PROCESSED</span>
                 <ExternalLink size={14} color="#94a3b8"/>
             </div>
             <div className="stat-main-content">
                <Server size={40} strokeWidth={1} color="#3b82f6" />
-               <div><div className="stat-value">{data.stats.analyzed.toLocaleString()}</div><div className="stat-sub">AI ANALYZED</div></div>
+               <div>
+                   <div className="stat-value">{data.stats.analyzed.toLocaleString()}</div>
+                   <div className="stat-sub">ACTION TAKEN</div>
+               </div>
             </div>
          </div>
 
+         {/* 3. CRITICAL CARD - Click filters for 'S1' */}
          <div className="sys-card big-stat highlight-blue" style={cardStyle} onClick={() => onNavigate('database', 'S1')}>
             <div className="stat-top-row"><span className="stat-label" style={{color:'#94a3b8'}}>CRITICAL</span><AlertTriangle size={18} color="#fff"/></div>
             <div className="stat-main-content">
                <Activity size={40} strokeWidth={1} color="#fff" />
-               <div><div className="stat-value">{data.stats.critical}</div><div className="stat-sub" style={{color:'#cbd5e1'}}>ACTION REQUIRED</div></div>
+               <div>
+                   <div className="stat-value">{data.stats.critical}</div>
+                   <div className="stat-sub" style={{color:'#cbd5e1'}}>ACTION REQUIRED</div>
+               </div>
             </div>
          </div>
       </ScrollSection>
@@ -119,7 +106,7 @@ export default function Overview({ user, onNavigate }) {
         <div className="feature-text">
           <h2>BUG STREAM</h2>
           <div className="divider-line"></div>
-          <p>Recent stream of bug summaries from the <strong>Firefox Bugzilla</strong> repository.</p>
+          <p>Live stream of the most recent bug submissions from your repository.</p>
           <button className="sys-btn outline" onClick={() => onNavigate('database', '')}>VIEW FULL LOGS</button>
         </div>
         <div className="feature-visual">
@@ -128,7 +115,8 @@ export default function Overview({ user, onNavigate }) {
                 <span style={{fontSize:11, fontWeight:800, color:'#64748b', textTransform:'uppercase'}}>Recent Analysis</span>
                 <div className="pulse-dot"></div>
              </div>
-             <div className="feed-list">
+             {/* [FIX] Added custom-scrollbar class here */}
+             <div className="feed-list custom-scrollbar">
                 {(data.recent || []).map((bug, i) => <LiveFeedRow key={i} bug={bug} />)}
              </div>
            </div>
@@ -152,7 +140,7 @@ export default function Overview({ user, onNavigate }) {
          <div className="feature-text">
             <h2>COMPONENT CHART</h2>
             <div className="divider-line"></div>
-            <p>The system identifies high-risk components in the database. Currently, <strong>{data.charts.components[0]?.name || 'Unknown'}</strong> is showing as the highest.</p>
+            <p>Real-time analysis of failing components. Currently, <strong>{data.charts.components[0]?.name || 'a component'}</strong> is reporting the highest volume of defects.</p>
          </div>
       </ScrollSection>
     </div>
