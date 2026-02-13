@@ -7,6 +7,11 @@ from pydantic import BaseModel
 import models, auth, bcrypt, time, os
 import json
 
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
@@ -19,6 +24,13 @@ tfidf_vectorizer = None
 rag_client = None
 rag_collection = None
 rag_model = None
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 # --- LAZY LOADING FUNCTION ---
@@ -83,6 +95,26 @@ class ResetPasswordRequest(BaseModel):
     username: str
     new_password: str
 
+SECRET_KEY = "SECRET_KEY" # In production, use a real secret!
+ALGORITHM = "HS256"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
+def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
+    try:
+        # This assumes your login returns a JWT. 
+        # For now, let's create a simpler version that handles your current session logic.
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    user = db.execute(text("SELECT username, role, company_id FROM users WHERE username = :u"), {"u": username}).fetchone()
+    if user is None:
+        raise credentials_exception
+    return user
 
 # --- AI ENDPOINTS ---
 @app.post("/analyze_bug")
@@ -121,15 +153,24 @@ def analyze_bug(bug_text: str, db: Session = Depends(get_db)):
 
 
 # --- AUTH ENDPOINTS ---
-
 @app.post("/api/login")
 def login(creds: auth.LoginRequest, db: Session = Depends(get_db)):
     user = db.execute(text("SELECT username, password_hash, role, company_id FROM users WHERE username = :u"),
                       {"u": creds.username}).fetchone()
+    
     if not user or not bcrypt.checkpw(creds.password.encode(), user.password_hash.encode()):
         raise HTTPException(401, "Invalid credentials")
-    return {"username": user.username, "role": user.role, "company_id": user.company_id}
 
+    # --- THE FIX: Generate the token here ---
+    access_token = create_access_token(data={"sub": user.username})
+    
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "username": user.username, 
+        "role": user.role, 
+        "company_id": user.company_id
+    }
 
 @app.post("/api/users")
 def create_user(req: RegisterRequest, db: Session = Depends(get_db)):
@@ -198,20 +239,22 @@ def delete_bug(bid: int, req: DeleteBugRequest, db: Session = Depends(get_db)):
     if res.rowcount == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
-
 @app.get("/api/hub/explorer")
-def get_bugs(company_id: int, limit: int = 50, db: Session = Depends(get_db)):
-    # Optimized: Uses defer() to skip loading heavy JSON 'data' column
+def get_bugs(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    # Automatically filter by the logged-in user's company
+    company_id = current_user.company_id
+    
     return db.query(models.Bug) \
         .filter(models.Bug.company_id == company_id) \
         .options(defer(models.Bug.data)) \
-        .order_by(models.Bug.id.desc()) \
-        .limit(limit) \
+        .order_by(models.Bug.bug_id.desc()) \
+        .limit(50) \
         .all()
-
-
 @app.get("/api/hub/overview")
-def get_overview(company_id: int, db: Session = Depends(get_db)):
+def get_overview(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    # SECURE: Pulls ID from the token, not the URL
+    company_id = current_user.company_id 
+    
     # 1. Counts
     total = db.execute(text("SELECT COUNT(*) FROM bugs WHERE company_id=:c"), {"c": company_id}).scalar()
     critical = db.execute(text("SELECT COUNT(*) FROM bugs WHERE severity='S1' AND company_id=:c"),
@@ -232,20 +275,21 @@ def get_overview(company_id: int, db: Session = Depends(get_db)):
 
     # 3. Stream (Recent 20)
     recent = db.execute(text("""
-                             SELECT bug_id, id, summary, severity
+                             SELECT bug_id, summary, severity
                              FROM bugs
                              WHERE company_id = :c
-                             ORDER BY id DESC
+                             ORDER BY bug_id DESC
                              LIMIT 20
                              """), {"c": company_id}).fetchall()
 
-    recent_data = [{"id": r[0] or r[1], "summary": r[2], "severity": r[3]} for r in recent]
+    recent_data = [{"id": r[0], "summary": r[1], "severity": r[2]} for r in recent]
 
     return {
         "stats": {"total_db": total, "analyzed": processed, "critical": critical},
         "charts": {"components": chart_data},
         "recent": recent_data
     }
+    
 
 
 if __name__ == "__main__":

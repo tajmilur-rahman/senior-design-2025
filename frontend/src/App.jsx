@@ -20,6 +20,14 @@ import {
 } from 'recharts';
 import './App.css';
 
+// Add this in App.jsx
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 // --- DASHBOARD CONTAINER ---
 function Dashboard({ user, onLogout }) {

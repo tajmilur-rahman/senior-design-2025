@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Search, Download, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
-export default function Explorer({ user, initialQuery = "" }) {
+export default function Explorer({ user, initialQuery = "", onNavigate }) {
   const [bugs, setBugs] = useState([]);
   const [search, setSearch] = useState(initialQuery);
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -10,39 +10,46 @@ export default function Explorer({ user, initialQuery = "" }) {
   const [loading, setLoading] = useState(true);
   const itemsPerPage = 10;
 
+  // Sync search state with navigation props (e.g., from Dashboard cards)
   useEffect(() => { setSearch(initialQuery); }, [initialQuery]);
 
-  const fetchBugs = () => {
+  // Logic to get data from API
+  const fetchBugs = useCallback(async () => {
     setLoading(true);
+    try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get("http://127.0.0.1:8000/api/hub/explorer", {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
 
-    // Safety Timeout: Force stop loading after 5s if backend is stuck
-    const safetyTimer = setTimeout(() => setLoading(false), 5000);
+        setBugs(response.data);
+    } catch (err) {
+        console.error("Explorer Error:", err);
+        if (err.response?.status === 401 && onNavigate) {
+            onNavigate('login');
+        }
+    } finally {
+        setLoading(false);
+    }
+  }, [onNavigate]);
 
-    // 1. Instant Load (50 items)
-    axios.get(`http://127.0.0.1:8000/api/hub/explorer?company_id=${user.company_id}&limit=50`)
-         .then(res => {
-             clearTimeout(safetyTimer); // Clear safety timer
-             setBugs(res.data);
-             setLoading(false); // Show table immediately
+  // Load data on mount
+  useEffect(() => { 
+    fetchBugs(); 
+  }, [fetchBugs]);
 
-             // 2. Background Load (20k items - Now fast due to backend fix)
-             return axios.get(`http://127.0.0.1:8000/api/hub/explorer?company_id=${user.company_id}&limit=20000`);
-         })
-         .then(res => {
-             if(res.data.length > 0) setBugs(res.data);
-         })
-         .catch(err => {
-             console.error("Fetch Error:", err);
-             setLoading(false);
-         });
-  };
-
-  useEffect(() => { fetchBugs(); }, [user.company_id]);
-
-  // Helper to get fields safely
+  // Helper to extract fields from database row vs nested data object
   const getField = (bug, field) => {
+    // 1. Check top level (bug_id, summary, etc.)
     if (bug[field]) return bug[field];
+    if (field === 'id' && bug.bug_id) return bug.bug_id;
+    
+    // 2. Check JSON data column
     if (bug.data && bug.data[field]) return bug.data[field];
+    
+    // 3. Handle mappings for Bugzilla formats
     if (field === 'severity' && bug.data?.priority) return bug.data.priority;
     if (field === 'component' && bug.data?.product) return bug.data.product;
     return "";
@@ -50,14 +57,21 @@ export default function Explorer({ user, initialQuery = "" }) {
 
   const filtered = bugs.filter(b => {
       const term = search.toLowerCase();
-      const line = (getField(b, 'summary') + getField(b, 'component') + String(b.id) + getField(b, 'severity') + getField(b, 'status')).toLowerCase();
+      const idStr = String(b.bug_id || b.id || "");
+      const line = (getField(b, 'summary') + getField(b, 'component') + idStr + getField(b, 'severity') + getField(b, 'status')).toLowerCase();
       return line.includes(term);
   });
 
   const sortedBugs = [...filtered].sort((a, b) => {
     let valA, valB;
-    if (sortConfig.key === 'id') { valA = a.id; valB = b.id; }
-    else { valA = getField(a, sortConfig.key) || ""; valB = getField(b, sortConfig.key) || ""; }
+    if (sortConfig.key === 'id') { 
+        valA = a.bug_id || a.id; 
+        valB = b.bug_id || b.id; 
+    }
+    else { 
+        valA = getField(a, sortConfig.key) || ""; 
+        valB = getField(b, sortConfig.key) || ""; 
+    }
     if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
@@ -76,7 +90,8 @@ export default function Explorer({ user, initialQuery = "" }) {
     const headers = ["ID", "Severity", "Component", "Summary", "Status"];
     const csvContent = [headers.join(","), ...sortedBugs.map(b => {
         const sum = (getField(b, 'summary')||"").replace(/"/g, '""');
-        return [b.id, getField(b, 'severity'), getField(b, 'component'), `"${sum}"`, getField(b, 'status')||'Active'].join(",");
+        const id = b.bug_id || b.id;
+        return [id, getField(b, 'severity'), getField(b, 'component'), `"${sum}"`, getField(b, 'status')||'Active'].join(",");
     })].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -88,11 +103,9 @@ export default function Explorer({ user, initialQuery = "" }) {
   return (
     <div className="page-content">
       <div className="explorer-header">
-        <div style={{display:'flex', alignItems:'center', gap:12}}>
-            <div>
-                <h1 style={{fontSize:24, fontWeight:800, margin:0, color:'var(--text-main)'}}>DATABASE</h1>
-                <span style={{fontSize:13, color:'#64748b'}}>Total Records: {sortedBugs.length.toLocaleString()}</span>
-            </div>
+        <div>
+            <h1 style={{fontSize:24, fontWeight:800, margin:0, color:'var(--text-main)'}}>DATABASE</h1>
+            <span style={{fontSize:13, color:'#64748b'}}>Total Records: {sortedBugs.length.toLocaleString()}</span>
         </div>
 
         <div style={{display:'flex', gap:10, alignItems: 'center'}}>
@@ -102,7 +115,7 @@ export default function Explorer({ user, initialQuery = "" }) {
                   className="sys-input"
                   placeholder="Filter ID, Sev, Component..."
                   value={search}
-                  onChange={e=>setSearch(e.target.value)}
+                  onChange={e=>{setSearch(e.target.value); setPage(1);}}
                   style={{marginBottom: 0, paddingLeft: 36, height: 42}}
                />
            </div>
@@ -126,33 +139,34 @@ export default function Explorer({ user, initialQuery = "" }) {
             </thead>
             <tbody>
               {displayedBugs.map(b => {
+                const bugId = b.bug_id || b.id;
                 const summary = getField(b, 'summary') || "No Summary";
                 const component = getField(b, 'component') || "General";
                 const severity = getField(b, 'severity') || "S3";
                 const status = getField(b, 'status') || "Active";
 
                 return (
-                    <tr key={b.id}>
-                    <td style={{fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:600}}>#{b.id}</td>
-                    <td><span className={`pill ${severity}`}>{severity}</span></td>
-                    <td><span style={{background:'#f1f5f9', padding:'4px 8px', borderRadius:6, fontSize:12, fontWeight:600, color:'#475569'}}>{component}</span></td>
-                    <td className="summary-cell">
-                        <div style={{maxWidth:400, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} title={summary}>
-                            {summary}
-                        </div>
-                    </td>
-                    <td style={{textAlign:'right'}}>
-                        <span style={{color: status==='Fixed'?'#16a34a':'#e11d48', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
-                            <div style={{width:6, height:6, borderRadius:'50%', background: status==='Fixed'?'#16a34a':'#e11d48'}}></div>
-                            {status}
-                        </span>
-                    </td>
+                    <tr key={bugId}>
+                        <td style={{fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:600}}>#{bugId}</td>
+                        <td><span className={`pill ${severity}`}>{severity}</span></td>
+                        <td><span style={{background:'#f1f5f9', padding:'4px 8px', borderRadius:6, fontSize:12, fontWeight:600, color:'#475569'}}>{component}</span></td>
+                        <td className="summary-cell">
+                            <div style={{maxWidth:400, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} title={summary}>
+                                {summary}
+                            </div>
+                        </td>
+                        <td style={{textAlign:'right'}}>
+                            <span style={{color: status==='Fixed'?'#16a34a':'#e11d48', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
+                                <div style={{width:6, height:6, borderRadius:'50%', background: status==='Fixed'?'#16a34a':'#e11d48'}}></div>
+                                {status}
+                            </span>
+                        </td>
                     </tr>
                 );
               })}
               {displayedBugs.length === 0 && (
                   <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>
-                      {loading ? "Loading..." : `No records found matching "${search}".`}
+                      {loading ? "Loading Database..." : `No records found matching "${search}".`}
                   </td></tr>
               )}
             </tbody>

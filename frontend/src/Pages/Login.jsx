@@ -27,6 +27,15 @@ export default function Login({ onLogin }) {
 
       if(mode === 'login'){
         const r = await axios.post(`${API_URL}/login`, { username: u, password: p });
+        
+        // --- [FIX] TOKEN STORAGE ---
+        // We save the token so Overview.jsx can use it for Authorization headers
+        // Check if your backend sends it as 'access_token' or just 'token'
+        const token = r.data.access_token || r.data.token;
+        if (token) {
+            localStorage.setItem("token", token);
+        }
+        
         onLogin(r.data);
 
       } else if(mode === 'register'){
@@ -36,7 +45,6 @@ export default function Login({ onLogin }) {
         setViewState('success');
 
       } else if(mode === 'reset'){
-         // [FIX] Call the new reset endpoint
          await axios.put(`${API_URL}/users`, {
              username: u, new_password: p
          });
@@ -59,10 +67,9 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login-backdrop">
-      {/* Optional: Add a subtle animated background component if available */}
       <div className="login-card-modern">
 
-         {/* LEFT SIDE: BRANDING (Hidden on mobile) */}
+         {/* LEFT SIDE: BRANDING */}
          <div className="login-brand-side">
             <div className="brand-content">
                 <div className="logo-box"><ShieldCheck size={32} color="white"/></div>

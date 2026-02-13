@@ -10,18 +10,15 @@ class Company(Base):
 
 class Bug(Base):
     __tablename__ = "bugs"
-    id = Column(Integer, primary_key=True, index=True)
-    # Matches your DB Schema
-    bug_id = Column(BigInteger, unique=True, index=True)
 
-    # [FIX] Added these columns so we can fetch them without loading the huge 'data' JSON
-    summary = Column(Text)
+    # Change 'id' to 'bug_id' to match the database exactly
+    bug_id = Column(Integer, primary_key=True, index=True) 
+    summary = Column(String)
     component = Column(String)
     severity = Column(String)
     status = Column(String)
-
-    data = Column(JSON)
     company_id = Column(Integer, ForeignKey("companies.id"))
+    data = Column(JSON)
 
 
 class User(Base):

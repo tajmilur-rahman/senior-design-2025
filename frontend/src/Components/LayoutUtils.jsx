@@ -50,3 +50,27 @@ export function SkeletonLoader() {
     </div>
   )
 }
+export default function App() {
+  const [user, setUser] = useState(null);
+
+  // Check for an existing session on startup
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user_info");
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  if (!user) {
+    return <Login onLogin={(loggedInUser) => {
+        localStorage.setItem("user_info", JSON.stringify(loggedInUser));
+        setUser(loggedInUser);
+    }} />;
+  }
+
+  return <Dashboard user={user} onLogout={() => {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user_info");
+      setUser(null);
+  }} />;
+}

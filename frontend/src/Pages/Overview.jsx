@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { ScrollSection, SkeletonLoader } from '../Components/LayoutUtils';
 
+
 // --- LIVE FEED COMPONENT ---
 function LiveFeedRow({ bug }) {
     return (
@@ -26,24 +27,38 @@ export default function Overview({ user, onNavigate }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
-  // [FIX] Auto-Polling for "Live" effect
   useEffect(() => {
     const fetchData = () => {
-        axios.get(`http://127.0.0.1:8000/api/hub/overview?company_id=${user.company_id}`)
-             .then(res => setData(res.data))
+        // 1. Get the token from storage
+        const token = localStorage.getItem("token");
+
+        // 2. Remove the query param and add the Header
+        axios.get(`http://127.0.0.1:8000/api/hub/overview`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        })
+             .then(res => {
+                setData(res.data);
+                setError(false); // Reset error if request succeeds
+             })
              .catch(err => {
                 console.error("Overview Error:", err);
+                // If we get a 401, it means the token expired or is missing
+                if (err.response?.status === 401) {
+                    console.warn("Unauthorized! Please log in again.");
+                }
                 setError(true);
              });
     };
 
-    fetchData(); // Initial load
-    const interval = setInterval(fetchData, 2000); // Refresh every 2s
+    fetchData(); 
+    const interval = setInterval(fetchData, 5000); // Changed to 5s to be kinder to the server
 
     return () => clearInterval(interval);
-  }, [user.company_id]);
+  }, []); // Removed user.company_id dependency since we use the token now
 
-  if (error) return <div className="page-content" style={{textAlign:'center', marginTop:50}}>❌ Error loading stats. Is backend running?</div>;
+  if (error) return <div className="page-content" style={{textAlign:'center', marginTop:50}}> Error loading stats. Is backend running?</div>;
   if (!data) return <div className="page-content"><SkeletonLoader /></div>;
 
   const cardStyle = { cursor: 'pointer', transition: 'all 0.2s ease' };
