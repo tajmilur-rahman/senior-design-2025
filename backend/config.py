@@ -5,7 +5,7 @@ DB = {
     "dbname": "bugbug_data",
     "user": "postgres",
     "password": "2331",
-    "host": "localhost",
+    "host": "127.0.0.1", # Changed from localhost
     "port": "5432"
 }
 

@@ -1,164 +1,170 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
-import { UploadCloud, RotateCcw, AlertTriangle, Trash2 } from 'lucide-react';
+import { 
+  Send, ShieldAlert, Sparkles, CheckCircle, 
+  ChevronRight, List, Info, Database 
+} from 'lucide-react';
+import { ScrollSection } from '../Components/LayoutUtils';
 
-export default function SubmitTab({ user }) {
-  const [mode, setMode] = useState('single');
-  const [file, setFile] = useState(null);
-  const [msg, setMsg] = useState("");
-  const [recent, setRecent] = useState([]);
-  const [deleteTargetId, setDeleteTargetId] = useState(null);
-  const [lastBatchIds, setLastBatchIds] = useState([]);
-  const [sSummary, setSSummary] = useState("");
-  const [sComp, setSComp] = useState("Frontend");
-  const [sSev, setSSev] = useState("S3");
+export default function Submit({ user, onNavigate }) {
+  const [summary, setSummary] = useState('');
+  const [component, setComponent] = useState('Core');
+  const [severity, setSeverity] = useState('S3');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
 
-  useEffect(() => { fetchRecent(); }, []);
-
-  const fetchRecent = async () => {
-      try {
-          const res = await axios.get(`http://127.0.0.1:8000/api/hub/explorer?company_id=${user.company_id}&limit=10`);
-          setRecent(res.data);
-      } catch (err) { }
-  };
-
-  const handleBulk = async () => {
-    if(!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("company_id", user.company_id);
+  // --- 1. AI ANALYSIS CALL ---
+  const handleAnalyze = async () => {
+    if (!summary) return;
+    setLoading(true);
     try {
-      const r = await axios.post('http://127.0.0.1:8000/api/upload', fd);
-      setMsg("✅ "+r.data.message);
-      if (r.data.ids) setLastBatchIds(r.data.ids);
-      fetchRecent();
-    } catch { setMsg("❌ Upload failed"); }
+      const token = localStorage.getItem("token");
+      // Analyze bug expects the text in a query param based on your main.py
+      const res = await axios.post(`http://127.0.0.1:8000/analyze_bug?bug_text=${encodeURIComponent(summary)}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setResult(res.data);
+      if (res.data.severity) setSeverity(res.data.severity.label);
+    } catch (err) {
+      console.error("AI Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUndoBatch = async () => {
-      if(lastBatchIds.length === 0) return;
-      if(!window.confirm(`Delete ${lastBatchIds.length} uploaded records?`)) return;
-      try {
-          await axios.post('http://127.0.0.1:8000/api/bugs/batch_delete', { ids: lastBatchIds, company_id: user.company_id });
-          setMsg(`✅ Deleted ${lastBatchIds.length} records.`);
-          setLastBatchIds([]);
-          fetchRecent();
-      } catch { setMsg("❌ Batch delete failed"); }
-  };
-
-  const handleSingle = async () => {
+  // --- 2. FINAL DATABASE SUBMISSION ---
+  const handleFinalSubmit = async () => {
     try {
-      const bug = { summary: sSummary, component: sComp, severity: sSev, status: "NEW" };
-      await axios.post('http://127.0.0.1:8000/api/bug', { bug, company_id: user.company_id });
-      setMsg("✅ Saved");
-      setSSummary("");
-      fetchRecent();
-    } catch { setMsg("❌ Error saving bug"); }
+      const token = localStorage.getItem("token");
+      const payload = {
+        bug: {
+          summary,
+          component,
+          severity,
+          status: "NEW",
+          platform: "Windows"
+        },
+        company_id: user.company_id
+      };
+
+      await axios.post("http://127.0.0.1:8000/api/bug", payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setSubmitted(true);
+      setTimeout(() => onNavigate('database', ''), 2000);
+    } catch (err) {
+      console.error("Submit Error:", err);
+    }
   };
 
-  const confirmDelete = async () => {
-      if (!deleteTargetId) return;
-      try {
-          await axios.delete(`http://127.0.0.1:8000/api/bug/${deleteTargetId}`, { data: { company_id: user.company_id } });
-          setRecent(recent.filter(item => item.id !== deleteTargetId));
-          setDeleteTargetId(null);
-      } catch (err) {
-          alert("Could not delete. It may already be gone.");
-          setDeleteTargetId(null);
-      }
-  };
+  if (submitted) {
+    return (
+      <div className="page-content center-content" style={{height:'70vh'}}>
+         <div className="success-anim">
+            <CheckCircle size={80} color="#16a34a" />
+            <h1 style={{marginTop:20}}>Report Filed Successfully</h1>
+            <p style={{color:'#64748b'}}>Redirecting to Bug Explorer...</p>
+         </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="page-content centered-page">
-      {deleteTargetId && (
-        <div className="modal-overlay">
-            <div className="modal-card">
-               <div style={{width:60, height:60, background:'#fee2e2', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px'}}>
-                  <AlertTriangle size={30} color="#ef4444"/>
-               </div>
-               <h3 style={{margin:'0 0 10px 0', fontSize:20, fontWeight:800}}>Delete Record?</h3>
-               <p style={{margin:0, color:'#64748b', fontSize:14, lineHeight:1.5}}>Are you sure you want to delete Bug <strong>#{deleteTargetId}</strong>? This action cannot be undone.</p>
-               <div style={{display:'flex', gap:12, marginTop:24}}>
-                  <button onClick={()=>setDeleteTargetId(null)} className="sys-btn outline full" style={{fontSize:13}}>Cancel</button>
-                  <button onClick={confirmDelete} className="sys-btn full" style={{background:'var(--danger)', fontSize:13}}>Delete Forever</button>
-               </div>
-            </div>
+    <div className="scroll-container">
+      <section className="hero-section small">
+        <div className="hero-content">
+          <div className="live-pill"><Database size={12}/> REPOSITORY INGESTION</div>
+          <h1>FILE NEW <span style={{color:'var(--accent)'}}>REPORT</span></h1>
         </div>
-      )}
+      </section>
 
-      <div className="sys-card form-wrapper">
-        <div className="form-header">
-          <h2 style={{fontSize:24, fontWeight:800}}>SUBMIT DATA</h2>
-          <div style={{display:'flex', background:'#f1f5f9', padding:4, borderRadius:10, marginTop:24}}>
-            <button style={{flex:1, padding:10, border:'none', background:mode==='single'?'white':'transparent', boxShadow:mode==='single'?'var(--shadow-sm)':'none', borderRadius:8, fontWeight:600, fontSize:13, cursor:'pointer', color:mode==='single'?'var(--accent)':'#64748b', transition:'0.2s'}} onClick={() => setMode('single')}>Manual Entry</button>
-            <button style={{flex:1, padding:10, border:'none', background:mode==='bulk'?'white':'transparent', boxShadow:mode==='bulk'?'var(--shadow-sm)':'none', borderRadius:8, fontWeight:600, fontSize:13, cursor:'pointer', color:mode==='bulk'?'var(--accent)':'#64748b', transition:'0.2s'}} onClick={() => setMode('bulk')}>Bulk Upload</button>
-          </div>
+      <ScrollSection className="submit-grid">
+        {/* LEFT: INPUT FORM */}
+        <div className="sys-card form-card">
+           <h3 className="card-title"><Info size={16}/> Bug Details</h3>
+           <div className="modern-form">
+              <label>Brief Summary</label>
+              <textarea 
+                placeholder="Describe the defect (e.g., 'UI crash on login' or 'Memory leak in Core')..."
+                value={summary}
+                onChange={e => setSummary(e.target.value)}
+              />
+
+              <div className="form-row">
+                 <div style={{flex:1}}>
+                    <label>Component</label>
+                    <select value={component} onChange={e=>setComponent(e.target.value)}>
+                        <option>Core</option>
+                        <option>Firefox</option>
+                        <option>DevTools</option>
+                        <option>Security</option>
+                    </select>
+                 </div>
+                 <div style={{flex:1}}>
+                    <label>Manual Priority</label>
+                    <select value={severity} onChange={e=>setSeverity(e.target.value)}>
+                        <option value="S1">S1 - Blocker</option>
+                        <option value="S2">S2 - Critical</option>
+                        <option value="S3">S3 - Normal</option>
+                        <option value="S4">S4 - Low</option>
+                    </select>
+                 </div>
+              </div>
+
+              <button 
+                className={`sys-btn full ${loading ? 'loading' : ''}`} 
+                onClick={handleAnalyze}
+                disabled={!summary || loading}
+              >
+                {loading ? 'ANALYZING...' : 'RUN AI CLASSIFICATION'}
+                <Sparkles size={16}/>
+              </button>
+           </div>
         </div>
 
-        {mode === 'bulk' ? (
-          <div className="fade-in">
-            <div className="drop-area" style={{border:'2px dashed #cbd5e1', borderRadius:12, height:180, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', color:'#64748b', marginBottom:24, background:'#f8fafc', position:'relative', transition:'0.2s'}}>
-                <UploadCloud size={48} style={{marginBottom:16, opacity:0.5}}/>
-                <p style={{fontSize:14, fontWeight:600}}>Click to Upload JSON</p>
-                <input type="file" onChange={e=>setFile(e.target.files[0])} style={{opacity:0, position:'absolute', height:'100%', width:'100%', cursor:'pointer', top:0, left:0}}/>
-            </div>
-            {file && <div style={{textAlign:'center', fontSize:13, marginBottom:16, fontWeight:600, color:'var(--accent)'}}>{file.name}</div>}
-
-            <button className="sys-btn full" onClick={handleBulk}>UPLOAD & TRAIN</button>
-
-            {/* NEW BATCH DELETE BUTTON */}
-            {lastBatchIds.length > 0 && (
-                <button
-                    className="sys-btn full"
-                    onClick={handleUndoBatch}
-                    style={{marginTop:12, background:'#fee2e2', color:'#ef4444', border:'1px solid #fecaca'}}
-                >
-                    <RotateCcw size={14}/> UNDO LAST BATCH ({lastBatchIds.length})
-                </button>
-            )}
-          </div>
-        ) : (
-          <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:15}}>
-            <div>
-                <label style={{fontSize:12, fontWeight:700, color:'#64748b', marginBottom:6, display:'block'}}>SUMMARY</label>
-                <input className="sys-input" placeholder="Bug description..." value={sSummary} onChange={e=>setSSummary(e.target.value)} style={{marginBottom:0}}/>
-            </div>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:15}}>
-              <div>
-                <label style={{fontSize:12, fontWeight:700, color:'#64748b', marginBottom:6, display:'block'}}>COMPONENT</label>
-                <select className="sys-input" value={sComp} onChange={e=>setSComp(e.target.value)} style={{marginBottom:0}}><option>Frontend</option><option>Backend</option><option>Database</option></select>
-              </div>
-              <div>
-                <label style={{fontSize:12, fontWeight:700, color:'#64748b', marginBottom:6, display:'block'}}>SEVERITY</label>
-                <select className="sys-input" value={sSev} onChange={e=>setSSev(e.target.value)} style={{marginBottom:0}}><option>S1</option><option>S2</option><option>S3</option></select>
-              </div>
-            </div>
-            <button className="sys-btn full" onClick={handleSingle} style={{marginTop:10}}>SUBMIT RECORD</button>
-          </div>
-        )}
-
-        {msg && <div style={{marginTop:24, textAlign:'center', fontSize:14, fontWeight:600, color:msg.includes('Error')||msg.includes('fail')?'var(--danger)':'var(--success)'}}>{msg}</div>}
-
-        {recent.length > 0 && (
-            <div style={{marginTop:30, paddingTop:24, borderTop:'1px dashed #e2e8f0'}}>
-                <h4 style={{fontSize:12, fontWeight:700, color:'#64748b', textTransform:'uppercase', marginBottom:12}}>Recent Submissions</h4>
-                <div style={{maxHeight:150, overflowY:'auto'}}>
-                    {recent.map((item) => (
-                        <div key={item.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'#f8fafc', padding:'8px 12px', borderRadius:8, marginBottom:8, border:'1px solid #f1f5f9'}}>
-                            <div style={{flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:13, color:'#334155'}}>
-                                <span style={{fontWeight:700, color:'var(--accent)', marginRight:8}}>#{item.id}</span>
-                                {item.summary}
-                            </div>
-                            <button onClick={() => setDeleteTargetId(item.id)} style={{background:'none', border:'none', cursor:'pointer', color:'#ef4444', padding:4}} title="Delete Bug">
-                                <Trash2 size={14}/>
-                            </button>
-                        </div>
-                    ))}
+        {/* RIGHT: AI PREDICTION PREVIEW */}
+        <div className="sys-card ai-preview-card">
+            {!result ? (
+                <div className="empty-preview">
+                    <ShieldAlert size={48} color="#e2e8f0"/>
+                    <p>Run AI classification to see predicted severity and similar historical bugs.</p>
                 </div>
-            </div>
-        )}
+            ) : (
+                <div className="fade-in">
+                    <div className="prediction-header">
+                        <div className="label-group">
+                            <span className="tiny-label">AI PREDICTION</span>
+                            <div className="predicted-sev">{result.severity.label}</div>
+                        </div>
+                        <div className="confidence-meter">
+                            <div className="conf-value">{result.severity.confidence}% Confident</div>
+                            <div className="conf-bar-bg">
+                                <div className="conf-bar-fill" style={{width: `${result.severity.confidence}%`}}></div>
+                            </div>
+                        </div>
+                    </div>
 
-      </div>
+                    <div className="similar-bugs-list">
+                        <span className="tiny-label">SIMILAR HISTORICAL BUGS</span>
+                        {result.similar_bugs.map((b, i) => (
+                            <div key={i} className="similar-item">
+                                <ChevronRight size={14} color="var(--accent)"/>
+                                <span className="sim-text">{b.summary}</span>
+                                <span className="sim-match">{b.match}% Match</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop:30}}>
+                        CONFIRM & SUBMIT TO DB
+                        <Send size={16}/>
+                    </button>
+                </div>
+            )}
+        </div>
+      </ScrollSection>
     </div>
-  )
+  );
 }

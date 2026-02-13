@@ -3,9 +3,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config import DB
 
-# Construct URL from your config dictionary
-#DATABASE_URL = f"postgresql+pg8000://{DB['user']}:{DB['password']}@{DB['host']}:{DB['port']}/{DB['dbname']}"
-DATABASE_URL = "postgresql+pg8000://postgres:2331@localhost:5432/bugbug_data"
+# FIXED: Switched to 'psycopg2' for faster connection handshake
+#DATABASE_URL = f"postgresql+psycopg2://{DB['user']}:{DB['password']}@{DB['host']}:{DB['port']}/{DB['dbname']}"
+DATABASE_URL = "postgresql://postgres:anunjin123@127.0.0.1:5432/bugbug_data"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

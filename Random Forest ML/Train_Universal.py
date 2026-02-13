@@ -14,8 +14,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE = os.path.join(BASE_DIR, "data.csv") 
 
 ARTIFACTS = {
-    "model": os.path.join(BASE_DIR, "rf_model.pkl"),
-    "vectorizer": os.path.join(BASE_DIR, "tfidf_vectorizer.pkl"),
+    "model": os.path.join(BASE_DIR, "../backend/rf_model.pkl"),
+    "vectorizer": os.path.join(BASE_DIR, "../backend/tfidf_vectorizer.pkl"),
     "metrics": os.path.join(BASE_DIR, "rf_metrics.json"),
 }
 

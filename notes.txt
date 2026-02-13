@@ -15,3 +15,22 @@ Hybrid Intelligence: Implemented a "Safety Net" in main.py that forces
 1 Critical for dangerous keywords (crash, 500, security), 
 ensuring your demo never fails on obvious cases.
 Math Fix: Fixed the "Negative Percentage" bug in the matching score logic.
+
+02.12 
+Instructions: 
+    Connect Local DB: DATABASE_URL = "postgresql://postgres:anunjin123@127.0.0.1:5432/bugbug_data"
+    run 'python3 make_data.py
+    run 'python3 Train_Universal.py
+    pkl files were in backend - fixed 
+
+downloaded the bug_bug data from Firefox Repo: 
+https://github.com/mozilla/bugbug/blob/master/docs/data.md
+
+1. pip install bugbug 
+2. Save this as download_only.py
+    from bugbug import bugzilla, db
+    print("Starting download... this may take a while.")
+    db.download(bugzilla.BUGS_DB)
+    print("Download complete!")
+
+
