@@ -1,11 +1,11 @@
-# 🐞 Bug Priority & Analysis System
+# Bug Priority & Analysis System
 **Senior Design Project - AI-Powered Bug Tracking**
 
 This system integrates a **Random Forest** classifier for real-time severity prediction and a **ChromaDB-powered RAG** (Retrieval-Augmented Generation) engine to detect duplicate bugs within the database.
 
 ---
 
-## ⚠️ Critical Version Requirements
+## Critical Version Requirements
 * **Python 3.11 ONLY**: Do not use Python 3.12 or higher. Many core AI libraries used here (such as `bugbug` and older `TensorFlow` dependencies) are not yet compatible with newer Python versions.
 * **Node.js**: Required for the React frontend.
 * **PostgreSQL**: A local instance must be running with a database named `bugbug_data`.
@@ -75,7 +75,7 @@ You must generate the model artifacts before starting the server for the first t
 
 ---
 
-## 🚀 Running the Application
+## Running the Application
 
 ### **Terminal 1: Backend (FastAPI)**
 ```bash
