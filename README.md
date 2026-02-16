@@ -1,62 +1,87 @@
-How to Run the Bug Priority System
-Important: This project requires Python 3.11. Do not use Python 3.12 or 3.14, as the AI libraries (TensorFlow/Onnx) are not compatible yet.
+# 🐞 Bug Priority & Analysis System
+**Senior Design Project - AI-Powered Bug Tracking**
 
-1️⃣ Prerequisites
-Node.js (for Frontend)
+This system integrates a **Random Forest** classifier for real-time severity prediction and a **ChromaDB-powered RAG** (Retrieval-Augmented Generation) engine to detect duplicate bugs within the database.
 
-Python 3.11 (Ensure you check "Add to PATH" during installation)
+---
 
-2️⃣ Backend Setup
-Open a terminal in the backend/ folder.
+## ⚠️ Critical Version Requirements
+* **Python 3.11 ONLY**: Do not use Python 3.12 or higher. Many core AI libraries used here (such as `bugbug` and older `TensorFlow` dependencies) are not yet compatible with newer Python versions.
+* **Node.js**: Required for the React frontend.
+* **PostgreSQL**: A local instance must be running with a database named `bugbug_data`.
 
-Create a Virtual Environment:
+---
 
-Bash
-python -m venv .venv
-(Mac/Linux: python3 -m venv .venv)
+## 1️⃣ Backend Setup
+The backend serves as the API and houses the machine learning logic.
 
-Activate it:
+1.  **Navigate to the backend folder**:
+    ```bash
+    cd backend
+    ```
+2.  **Create and Activate a Virtual Environment**:
+    * **Windows**: 
+        ```bash
+        python -m venv .venv
+        .venv\Scripts\activate
+        ```
+    * **Mac/Linux**: 
+        ```bash
+        python3 -m venv .venv
+        source .venv/bin/activate
+        ```
+3.  **Install Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-Windows: .venv\Scripts\activate
+---
 
-Mac/Linux: source .venv/bin/activate
+## 2️⃣ Machine Learning Pipeline (The "Brain")
+You must generate the model artifacts before starting the server for the first time.
 
-Install Dependencies:
 
-Bash
-pip install fastapi uvicorn sqlalchemy pg8000 chromadb sentence-transformers scikit-learn joblib pandas numpy
-(Note: We use pg8000 instead of psycopg2 to prevent Windows DLL errors).
 
-Initialize the AI Models:
+1.  **Generate Dataset**:
+    * Navigate to the `Random Forest ML/` folder.
+    * Run `python make_data.py` to download and prepare the Hugging Face dataset.
+2.  **Train the Model**:
+    * Run `python Train_Universal.py`.
+    * This will create `rf_model.pkl` and `tfidf_vectorizer.pkl`.
+3.  **Automatic Deployment**:
+    * The scripts are configured to save these artifacts directly into the `backend/` directory where the API expects it.
 
-Make sure data.csv is inside the backend/ folder.
+---
 
-Run the training script (Creates the generic logic):
+## 3️⃣ Database & Search Initialization
+1.  **Import Bugzilla Data**:
+    * Inside the `backend/` folder, run `python import.py`.
+    * This script maps raw Bugzilla data to our internal S1–S4 severity scale.
+2.  **Build Vector Memory**:
+    * Run `python build_rag_db.py` to initialize the ChromaDB instance.
+    * This creates the `rag_db` folder used for finding similar past bugs.
 
-Bash
-python train_model.py
-Run the database builder (Creates the search engine):
+---
 
-Bash
-python build_rag_db.py
-3️⃣ Frontend Setup
-Open a new terminal in the frontend/ folder.
+## 4️⃣ Frontend Setup
+1.  **Navigate to the frontend folder**:
+    ```bash
+    cd frontend
+    ```
+2.  **Install Packages**:
+    ```bash
+    npm install
+    ```
 
-Install packages:
+---
 
-Bash
-npm install
-4️⃣ Start the App
-Terminal 1 (Backend):
+## 🚀 Running the Application
 
-Bash
+### **Terminal 1: Backend (FastAPI)**
+```bash
 cd backend
 uvicorn main:app --reload
-(Wait 15 seconds for "✅ Random Forest & Vectorizer Loaded" message).
-
-Terminal 2 (Frontend):
-
-Bash
+### **Terminal 2: Frontend (React)**
+```bash
 cd frontend
 npm run dev
-Open Browser: Go to http://localhost:5173

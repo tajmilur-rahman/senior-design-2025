@@ -5,9 +5,6 @@ import psycopg2
 import bcrypt
 from psycopg2 import extras
 
-# ==========================================
-# 1. WINDOWS COMPATIBILITY PATCH
-# ==========================================
 if sys.platform == "win32":
     if not hasattr(mmap, "PROT_READ"):
         mmap.PROT_READ = 0x01  # Windows fallback

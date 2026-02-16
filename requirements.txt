@@ -1,33 +1,37 @@
-# Core Backend Framework
+# --- Core Backend & API ---
+# Run pip install -r requirements.txt
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.0
+python-multipart==0.0.12
 
-# Database
+# --- Database & Persistence ---
 psycopg2-binary==2.9.10
 sqlalchemy==2.0.35
 
-# Authentication & Security
+# --- Security & Authentication ---
 bcrypt==4.2.0
 python-jose[cryptography]==3.3.0
-python-multipart==0.0.12
 
-# Bug Data Source (Windows build dependency first)
-patch-ng==1.18.1
-bugbug==0.0.622
-
-# Machine Learning
+# --- Machine Learning & AI Pipeline ---
+# Essential for Random Forest training and TF-IDF vectorization
 scikit-learn==1.5.2
 numpy==2.1.0
 pandas==2.2.3
 joblib==1.4.2
 scipy==1.14.1
 
-# Environment & Configuration
-python-dotenv==1.0.1
-
-# CORS & Middleware
-python-cors==1.0.0
-
-chromadb
+# --- RAG & Vector Memory ---
+# Powers the similar bug detection in build_memory.py and main.py
 sentence-transformers
+chromadb
+
+# --- Data Procurement & Datasets ---
+# Required for make_data.py to download training sets from Hugging Face
+datasets
+bugbug==0.0.622
+# patch-ng is a mandatory build dependency for bugbug on Windows
+patch-ng==1.18.1
+
+# --- Utilities ---
+python-dotenv==1.0.1
