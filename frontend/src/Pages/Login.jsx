@@ -23,7 +23,7 @@ export default function Login({ onLogin }) {
     }
 
     try {
-      const API_URL = 'http://127.0.0.1:8000/api';
+      const API_URL = '/api';
 
       if(mode === 'login'){
         const r = await axios.post(`${API_URL}/login`, { username: u, password: p });

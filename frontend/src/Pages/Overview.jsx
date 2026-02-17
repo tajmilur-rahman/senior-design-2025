@@ -33,7 +33,7 @@ export default function Overview({ user, onNavigate }) {
         const token = localStorage.getItem("token");
 
         // 2. Remove the query param and add the Header
-        axios.get(`http://127.0.0.1:8000/api/hub/overview`, {
+        axios.get(`/api/hub/overview`, { 
             headers: {
                 Authorization: `Bearer ${token}`
             }

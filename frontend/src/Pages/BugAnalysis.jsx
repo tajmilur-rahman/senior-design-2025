@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Search, History, Bug, ThumbsUp, ThumbsDown, Sparkles, ArrowRight, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, Search, History, Bug, ThumbsUp, ThumbsDown, Sparkles, ArrowRight, RefreshCw, CheckCircle } from 'lucide-react';
 
 const BugAnalysis = () => {
   const [query, setQuery] = useState('');
@@ -28,9 +28,15 @@ const BugAnalysis = () => {
     if (overrideQuery) setQuery(overrideQuery);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/analyze_bug?bug_text=${encodeURIComponent(textToAnalyze)}`, {
+      const token = localStorage.getItem("token");
+
+      // We use the relative path '/analyze_bug' to utilize the Vite Proxy
+      const response = await fetch(`/analyze_bug?bug_text=${encodeURIComponent(textToAnalyze)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
       });
 
       if (!response.ok) throw new Error("Failed to connect to backend");
@@ -48,12 +54,6 @@ const BugAnalysis = () => {
   };
 
   const sendFeedback = (isCorrect, actualSeverity) => {
-    // In a real app, you would POST this to your backend
-    if (isCorrect) {
-        // console.log("Feedback: Correct");
-    } else {
-        // console.log("Feedback: Incorrect, should be", actualSeverity);
-    }
     setFeedbackSent(true);
   };
 
@@ -74,7 +74,7 @@ const BugAnalysis = () => {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
         />
-        <button onClick={() => handleAnalyze()} className="ba-analyze-btn" disabled={analyzing} style={{display:'flex', alignItems:'center', gap:8}}>
+        <button onClick={() => handleAnalyze()} className="ba-analyze-btn" disabled={analyzing}>
           {analyzing ? <><RefreshCw size={16} className="spin"/> Scanning...</> : "Analyze"}
         </button>
       </div>
@@ -104,16 +104,15 @@ const BugAnalysis = () => {
 
       {prediction && (
         <div className="ba-grid fade-in">
-           {/* LEFT CARD: PREDICTION */}
            <div className="ba-card">
             <div className="ba-card-header"><AlertTriangle size={16} /> Predicted Severity</div>
 
             <div className="ba-severity-content">
-              <span className={`ba-badge-critical 
-                  ${['CRITICAL', 'S1'].includes(prediction.label) ? 'ba-badge-critical' : ''}
-                  ${['LOW', 'S3', 'S4'].includes(prediction.label) ? 'ba-badge-low' : ''}
-                  ${['MEDIUM', 'S2'].includes(prediction.label) ? 'ba-badge-medium' : ''}
-                  ${!['S1','S2','S3','S4','CRITICAL','LOW','MEDIUM'].includes(prediction.label) ? 'ba-badge-medium' : ''}
+              {/* Dynamic Badge Coloring */}
+              <span className={`pill 
+                  ${['CRITICAL', 'S1'].includes(prediction.label) ? 'S1' : ''}
+                  ${['MEDIUM', 'S2'].includes(prediction.label) ? 'S2' : ''}
+                  ${['LOW', 'S3', 'S4'].includes(prediction.label) ? 'S3' : ''}
               `}>
                 {prediction.label}
               </span>
@@ -131,50 +130,38 @@ const BugAnalysis = () => {
                         Is this accurate?
                     </p>
                     <div style={{display: 'flex', gap: 12}}>
-                        <button
-                            onClick={() => sendFeedback(true, prediction.label)}
-                            className="sys-btn"
-                            style={{ flex: 1, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '10px' }}
-                        >
+                        <button onClick={() => sendFeedback(true)} className="sys-btn" style={{ flex: 1, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '10px' }}>
                             <ThumbsUp size={16}/> Yes
                         </button>
-                        <button
-                            onClick={() => {
-                                const correct = prompt("What should the severity be? (S1, S2, S3)");
-                                if(correct) sendFeedback(false, correct.toUpperCase());
-                            }}
-                            className="sys-btn"
-                            style={{ flex: 1, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '10px' }}
-                        >
+                        <button onClick={() => sendFeedback(false)} className="sys-btn" style={{ flex: 1, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '10px' }}>
                             <ThumbsDown size={16}/> No
                         </button>
                     </div>
                 </div>
             )}
             {feedbackSent && (
-                <div style={{marginTop: 20, padding: 12, background: '#f0fdf4', borderRadius: 8, textAlign: 'center', fontSize: '13px', color: '#16a34a', fontWeight: '700', display: 'flex', alignItems:'center', justifyContent:'center', gap: 8}}>
+                <div className="fade-in" style={{marginTop: 20, padding: 12, background: '#f0fdf4', borderRadius: 8, textAlign: 'center', fontSize: '13px', color: '#16a34a', fontWeight: '700', display: 'flex', alignItems:'center', justifyContent:'center', gap: 8}}>
                     <CheckCircle size={16}/> Feedback Received
                 </div>
             )}
           </div>
 
-          {/* RIGHT CARD: SIMILAR BUGS */}
           <div className="ba-card">
             <div className="ba-card-header"><History size={16} /> Similar Past Bugs</div>
-            <div>
+            <div className="custom-scrollbar" style={{maxHeight: 400, overflowY: 'auto'}}>
               {duplicates.length === 0 ? (
                   <div style={{padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px', display:'flex', flexDirection:'column', alignItems:'center', gap:10}}>
                       <Search size={32} style={{opacity:0.2}}/>
-                      No similar bugs found in database.
+                      No similar bugs found.
                   </div>
               ) : (
                   duplicates.map((bug, index) => (
                     <div key={index} className="ba-bug-item">
-                      <p className="ba-bug-summary" title={bug.summary}>{bug.summary}</p>
+                      <p className="ba-bug-summary">{bug.summary}</p>
                       <div className="ba-tags">
                         <span className="ba-tag tag-match">{bug.match}% Match</span>
-                        <span className={`ba-tag ${bug.status === 'Fixed' || bug.status === 'RESOLVED' ? 'tag-fixed' : 'tag-open'}`}>
-                            {bug.status || 'Unknown'}
+                        <span className={`ba-tag ${bug.status === 'Fixed' ? 'tag-fixed' : 'tag-open'}`}>
+                            {bug.status}
                         </span>
                       </div>
                     </div>

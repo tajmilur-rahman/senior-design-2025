@@ -1,36 +1,46 @@
-1. source venv/bin/activate
-    cd backend
-    python3 -m uvicorn main:app --reload --host 0.0.0.0
+Run the entire stack with a single command from the root directory:
 
-    cd frontend
-    npm run dev -- --host
+chmod +x run_app.sh
+./run_app.sh
+This launches the FastAPI backend on port 8000 and the Vite/React frontend on port 5173.
 
+The System Architecture
 
-02.08 
-Data Upgrade: Swapped a 15-line dummy CSV for a 60,000-line real
-bug dataset (Eclipse/Firefox bugs).
-Memory Built: Successfully indexed those 60k bugs into ChromaDB so the "Similar Bugs" 
-feature actually finds real history.
-Hybrid Intelligence: Implemented a "Safety Net" in main.py that forces 
-1 Critical for dangerous keywords (crash, 500, security), 
-ensuring your demo never fails on obvious cases.
-Math Fix: Fixed the "Negative Percentage" bug in the matching score logic.
+The platform is designed with a "Security-First" approach to handle data from multiple clients simultaneously.
+- The Secure Handshake (Auth)
+- The system uses JWT (JSON Web Tokens) to power its dynamic routing:
+- Login: Users receive a token containing their unique company_id.
+- Isolation: Every database query is filtered by this ID. User A can never see User B's bugs, even though they share the same physical database.
+- Dynamic UI: The dashboard automatically calculates statistics based only on the data belonging to the logged-in user's company.
 
-02.12 
-Instructions: 
-    Connect Local DB: DATABASE_URL = "postgresql://postgres:anunjin123@127.0.0.1:5432/bugbug_data"
-    run 'python3 make_data.py
-    run 'python3 Train_Universal.py
-    pkl files were in backend - fixed 
+The AI Engine (ML & RAG)
 
-downloaded the bug_bug data from Firefox Repo: 
-https://github.com/mozilla/bugbug/blob/master/docs/data.md
+Severity Prediction: A Random Forest model (rf_model.pkl) analyzes report text to predict severity (S1-S4) with a confidence score.
+Duplicate Detection: Uses ChromaDB and Sentence Transformers to perform a vector search. It finds similar bugs based on semantic meaning (context) rather than just keyword matching.
 
-1. pip install bugbug 
-2. Save this as download_only.py
-    from bugbug import bugzilla, db
-    print("Starting download... this may take a while.")
-    db.download(bugzilla.BUGS_DB)
-    print("Download complete!")
+🛠️ First-Time Installation
 
+If you have just pulled this repository, follow these steps to initialize your local environment:
 
+1. Backend Setup
+
+cd backend
+pip install -r requirements.txt
+# Create the database and admin user
+./setup_db.sh 
+
+2. Frontend Setup
+
+cd frontend
+npm install
+
+Technology Stack
+Frontend: React, Vite, Tailwind CSS, Lucide Icons.
+Backend: FastAPI (Python), SQLAlchemy ORM.
+Database: PostgreSQL (Relational data), ChromaDB (Vector/AI data).
+ML/AI: Scikit-Learn (Random Forest), Sentence Transformers (all-MiniLM-L6-v2).
+
+Important Security Notes
+
+Local Database: The rag_db/ and local .sqlite files are ignored by Git to prevent data corruption. Use setup_db.sh to generate your local tables.
+Sensitive Data: Ensure your .env file in the backend contains the correct DATABASE_URL for your local PostgreSQL instance and is never pushed to the public repo.

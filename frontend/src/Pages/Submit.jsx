@@ -14,20 +14,27 @@ export default function Submit({ user, onNavigate }) {
   const [result, setResult] = useState(null);
   const [submitted, setSubmitted] = useState(false);
 
+  // Helper for consistent headers
+  const getHeaders = () => ({
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+  });
+
   // --- 1. AI ANALYSIS CALL ---
   const handleAnalyze = async () => {
     if (!summary) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      // Analyze bug expects the text in a query param based on your main.py
-      const res = await axios.post(`http://127.0.0.1:8000/analyze_bug?bug_text=${encodeURIComponent(summary)}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // FIX 1: Use relative path for Proxy + Auth headers
+      const res = await axios.post(
+        `/analyze_bug?bug_text=${encodeURIComponent(summary)}`, 
+        {}, 
+        getHeaders()
+      );
       setResult(res.data);
       if (res.data.severity) setSeverity(res.data.severity.label);
     } catch (err) {
       console.error("AI Error:", err);
+      if (err.response?.status === 401) alert("Session expired. Please log in again.");
     } finally {
       setLoading(false);
     }
@@ -36,7 +43,6 @@ export default function Submit({ user, onNavigate }) {
   // --- 2. FINAL DATABASE SUBMISSION ---
   const handleFinalSubmit = async () => {
     try {
-      const token = localStorage.getItem("token");
       const payload = {
         bug: {
           summary,
@@ -48,21 +54,21 @@ export default function Submit({ user, onNavigate }) {
         company_id: user.company_id
       };
 
-      await axios.post("http://127.0.0.1:8000/api/bug", payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // FIX 2: Use relative path for Proxy + Auth headers
+      await axios.post("/api/bug", payload, getHeaders());
       
       setSubmitted(true);
       setTimeout(() => onNavigate('database', ''), 2000);
     } catch (err) {
       console.error("Submit Error:", err);
+      alert("Failed to save to database. Check if backend is running.");
     }
   };
 
   if (submitted) {
     return (
       <div className="page-content center-content" style={{height:'70vh'}}>
-         <div className="success-anim">
+         <div className="success-anim fade-in">
             <CheckCircle size={80} color="#16a34a" />
             <h1 style={{marginTop:20}}>Report Filed Successfully</h1>
             <p style={{color:'#64748b'}}>Redirecting to Bug Explorer...</p>
@@ -87,7 +93,7 @@ export default function Submit({ user, onNavigate }) {
            <div className="modern-form">
               <label>Brief Summary</label>
               <textarea 
-                placeholder="Describe the defect (e.g., 'UI crash on login' or 'Memory leak in Core')..."
+                placeholder="Describe the defect (e.g., 'UI crash on login')..."
                 value={summary}
                 onChange={e => setSummary(e.target.value)}
               />
@@ -100,6 +106,7 @@ export default function Submit({ user, onNavigate }) {
                         <option>Firefox</option>
                         <option>DevTools</option>
                         <option>Security</option>
+                        <option>Networking</option>
                     </select>
                  </div>
                  <div style={{flex:1}}>
@@ -136,7 +143,7 @@ export default function Submit({ user, onNavigate }) {
                     <div className="prediction-header">
                         <div className="label-group">
                             <span className="tiny-label">AI PREDICTION</span>
-                            <div className="predicted-sev">{result.severity.label}</div>
+                            <div className={`predicted-sev ${result.severity.label}`}>{result.severity.label}</div>
                         </div>
                         <div className="confidence-meter">
                             <div className="conf-value">{result.severity.confidence}% Confident</div>
@@ -147,18 +154,22 @@ export default function Submit({ user, onNavigate }) {
                     </div>
 
                     <div className="similar-bugs-list">
-                        <span className="tiny-label">SIMILAR HISTORICAL BUGS</span>
-                        {result.similar_bugs.map((b, i) => (
-                            <div key={i} className="similar-item">
-                                <ChevronRight size={14} color="var(--accent)"/>
-                                <span className="sim-text">{b.summary}</span>
-                                <span className="sim-match">{b.match}% Match</span>
-                            </div>
-                        ))}
+                        <span className="tiny-label">SIMILAR HISTORICAL BUGS (RAG)</span>
+                        {result.similar_bugs && result.similar_bugs.length > 0 ? (
+                           result.similar_bugs.map((b, i) => (
+                              <div key={i} className="similar-item">
+                                  <ChevronRight size={14} color="var(--accent)"/>
+                                  <span className="sim-text" title={b.summary}>{b.summary}</span>
+                                  <span className="sim-match">{b.match}% Match</span>
+                              </div>
+                           ))
+                        ) : (
+                          <div style={{padding: '10px 0', fontSize: 12, color: '#94a3b8'}}>No similar records found.</div>
+                        )}
                     </div>
 
-                    <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop:30}}>
-                        CONFIRM & SUBMIT TO DB
+                    <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop:30, background: '#10b981'}}>
+                        CONFIRM & SUBMIT TO DATABASE
                         <Send size={16}/>
                     </button>
                 </div>

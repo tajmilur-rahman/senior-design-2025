@@ -10,15 +10,14 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
   const [loading, setLoading] = useState(true);
   const itemsPerPage = 10;
 
-  // Sync search state with navigation props (e.g., from Dashboard cards)
   useEffect(() => { setSearch(initialQuery); }, [initialQuery]);
 
-  // Logic to get data from API
   const fetchBugs = useCallback(async () => {
     setLoading(true);
     try {
         const token = localStorage.getItem("token");
-        const response = await axios.get("http://127.0.0.1:8000/api/hub/explorer", {
+        // FIX 1: Use relative path for Vite Proxy
+        const response = await axios.get("/api/hub/explorer", {
             headers: {
                 Authorization: `Bearer ${token}`
             }
@@ -27,6 +26,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         setBugs(response.data);
     } catch (err) {
         console.error("Explorer Error:", err);
+        // If token is expired or invalid, send user back to login
         if (err.response?.status === 401 && onNavigate) {
             onNavigate('login');
         }
@@ -35,42 +35,42 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
     }
   }, [onNavigate]);
 
-  // Load data on mount
   useEffect(() => { 
     fetchBugs(); 
   }, [fetchBugs]);
 
-  // Helper to extract fields from database row vs nested data object
+  // FIX 2: Standardized helper to match your SQLAlchemy models.py
   const getField = (bug, field) => {
-    // 1. Check top level (bug_id, summary, etc.)
-    if (bug[field]) return bug[field];
-    if (field === 'id' && bug.bug_id) return bug.bug_id;
+    if (field === 'id') return bug.bug_id || bug.id;
+    if (bug[field] !== undefined && bug[field] !== null) return bug[field];
     
-    // 2. Check JSON data column
+    // Check JSON data column if it exists
     if (bug.data && bug.data[field]) return bug.data[field];
-    
-    // 3. Handle mappings for Bugzilla formats
-    if (field === 'severity' && bug.data?.priority) return bug.data.priority;
-    if (field === 'component' && bug.data?.product) return bug.data.product;
     return "";
   };
 
   const filtered = bugs.filter(b => {
       const term = search.toLowerCase();
-      const idStr = String(b.bug_id || b.id || "");
-      const line = (getField(b, 'summary') + getField(b, 'component') + idStr + getField(b, 'severity') + getField(b, 'status')).toLowerCase();
+      const idStr = String(b.bug_id || "");
+      const line = (
+          (b.summary || "") + 
+          (b.component || "") + 
+          idStr + 
+          (b.severity || "") + 
+          (b.status || "")
+      ).toLowerCase();
       return line.includes(term);
   });
 
   const sortedBugs = [...filtered].sort((a, b) => {
     let valA, valB;
     if (sortConfig.key === 'id') { 
-        valA = a.bug_id || a.id; 
-        valB = b.bug_id || b.id; 
+        valA = a.bug_id || 0; 
+        valB = b.bug_id || 0; 
     }
     else { 
-        valA = getField(a, sortConfig.key) || ""; 
-        valB = getField(b, sortConfig.key) || ""; 
+        valA = getField(a, sortConfig.key).toString().toLowerCase(); 
+        valB = getField(b, sortConfig.key).toString().toLowerCase(); 
     }
     if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -101,7 +101,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
   };
 
   return (
-    <div className="page-content">
+    <div className="page-content fade-in">
       <div className="explorer-header">
         <div>
             <h1 style={{fontSize:24, fontWeight:800, margin:0, color:'var(--text-main)'}}>DATABASE</h1>
@@ -130,20 +130,20 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
           <table className="sleek-table">
             <thead>
               <tr>
-                <th onClick={() => requestSort('id')} style={{width: 90}}>ID <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
-                <th onClick={() => requestSort('severity')} style={{width: 90}}>SEV <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
-                <th onClick={() => requestSort('component')} style={{width: 160}}>COMPONENT <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
-                <th>SUMMARY</th>
+                <th onClick={() => requestSort('id')} style={{width: 90, cursor:'pointer'}}>ID <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
+                <th onClick={() => requestSort('severity')} style={{width: 90, cursor:'pointer'}}>SEV <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
+                <th onClick={() => requestSort('component')} style={{width: 160, cursor:'pointer'}}>COMPONENT <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
+                <th onClick={() => requestSort('summary')} style={{cursor:'pointer'}}>SUMMARY <ArrowUpDown size={12} style={{opacity:0.5}}/></th>
                 <th style={{width: 120, textAlign:'right'}}>STATUS</th>
               </tr>
             </thead>
             <tbody>
               {displayedBugs.map(b => {
                 const bugId = b.bug_id || b.id;
-                const summary = getField(b, 'summary') || "No Summary";
-                const component = getField(b, 'component') || "General";
-                const severity = getField(b, 'severity') || "S3";
-                const status = getField(b, 'status') || "Active";
+                const summary = b.summary || "No Summary";
+                const component = b.component || "General";
+                const severity = b.severity || "S3";
+                const status = b.status || "Active";
 
                 return (
                     <tr key={bugId}>
@@ -164,9 +164,14 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                     </tr>
                 );
               })}
-              {displayedBugs.length === 0 && (
+              {displayedBugs.length === 0 && !loading && (
                   <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>
-                      {loading ? "Loading Database..." : `No records found matching "${search}".`}
+                      No records found matching "{search}".
+                  </td></tr>
+              )}
+              {loading && (
+                  <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>
+                      Loading...
                   </td></tr>
               )}
             </tbody>

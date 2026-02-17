@@ -1,8 +1,25 @@
+# --- Frontend ---
 node_modules/
 dist/
+.DS_Store
+
+# --- Backend & Environment ---
 .env
-__pycache__/
 .venv/
+venv/
+__pycache__/
+*.pyc
+
+# --- AI Models (Too large for Git) ---
+backend/*.pkl
+
+# --- Databases & Vector Stores ---
+# This keeps your local data from overwriting your teammates' data
+*.db
+*.sqlite3
+data/
+rag_db/
+
+# --- Media & Large Data Assets ---
 *.mp4
-*.pkl
 *.csv
