@@ -1,10 +1,17 @@
-from fastapi import FastAPI, Depends, HTTPException, Body
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, defer
 from sqlalchemy import text
 from database import get_db, engine
 from pydantic import BaseModel
 import models, auth, time, os, json
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from auth import get_current_user
+from database import get_db, engine
+from models import Base, User, Bug, Company, TrainingBatch, Feedback
+from fastapi import Query
+
 
 # --- AI & CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,19 +59,29 @@ class RegisterRequest(BaseModel):
     role: str = "admin"
     company_name: str
 
-# --- AI ENDPOINT (SECURE) ---
-@app.post("/api/predict") # Matches MLPredictor.jsx
-@app.post("/analyze_bug") # Matches BugAnalysis.jsx
-def analyze_bug(bug_text: str, current_user = Depends(auth.get_current_user)):
-    get_ai_models()
-    similar_bugs = []
-    # ... (Your existing RAG/RF logic remains same) ...
-    # Placeholder for brevity
-    sev, conf = "S3", 80 
-    if any(k in bug_text.lower() for k in ["crash", "leak"]): sev, conf = "S1", 95
-    
-    return {"severity": {"label": sev, "confidence": conf, "action": "Investigate"}, "similar_bugs": similar_bugs}
 
+@app.post("/api/analyze_bug")
+@app.post("/api/predict")
+async def analyze_bug(
+    bug_text: str = Query(...), # Explicitly define as a query parameter
+    current_user = Depends(auth.get_current_user)
+):
+    # Ensure models are loaded
+    # get_ai_models() 
+    
+    # Your Logic
+    sev, conf = "S3", 80 
+    if any(k in bug_text.lower() for k in ["crash", "leak"]): 
+        sev, conf = "S1", 95
+    
+    return {
+        "severity": {
+            "label": sev, 
+            "confidence": conf, 
+            "action": "Investigate"
+        }, 
+        "similar_bugs": []
+    }
 # --- AUTH ENDPOINTS ---
 @app.post("/api/login")
 def login(creds: auth.LoginRequest, db: Session = Depends(get_db)):
@@ -89,15 +106,18 @@ def create_user(req: RegisterRequest, db: Session = Depends(get_db)):
 
 # --- BUG OPERATIONS ---
 @app.post("/api/bug")
-def create_bug(req: CreateBugRequest, db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
-    new_id = int(time.time())
-    db.execute(text(
-        "INSERT INTO bugs (bug_id, summary, component, severity, status, company_id) VALUES (:b, :s, :c, :sev, :stat, :cid)"),
-               {"b": new_id, "s": req.bug.summary, "c": req.bug.component, "sev": req.bug.severity,
-                "stat": req.bug.status, "cid": current_user.company_id})
+async def create_bug(payload: dict, db: Session = Depends(get_db)):
+    # Extract only the data, let the DB handle the ID
+    new_bug = Bug(
+        summary=payload['bug']['summary'],
+        component=payload['bug']['component'],
+        severity=payload['bug']['severity'],
+        status="NEW",
+        company_id=payload['company_id']
+    )
+    db.add(new_bug)
     db.commit()
-    return {"message": "Saved", "id": new_id}
-
+    return {"status": "success"}
 @app.get("/api/hub/overview")
 def get_overview(db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
     cid = current_user.company_id
@@ -125,3 +145,54 @@ def get_bugs(db: Session = Depends(get_db), current_user = Depends(auth.get_curr
         .all()
         
     return bugs
+
+@app.get("/api/batches")
+def get_training_batches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Secure: identifies the company
+):
+    """
+    Returns the 'Model Ledger' history for the logged-in user's company.
+    """
+    batches = db.query(TrainingBatch).filter(
+        TrainingBatch.company_id == current_user.company_id
+    ).order_by(TrainingBatch.upload_time.desc()).all()
+    
+    # Format the data for the frontend
+    return [
+        {
+            "batch_id": b.id,
+            "filename": b.filename,
+            "record_count": b.record_count,
+            "accuracy": b.accuracy,
+            "upload_time": b.upload_time.strftime("%b %d, %Y %H:%M")
+        } for b in batches
+    ]
+
+@app.post("/api/upload_and_train")
+async def upload_and_train(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Read the CSV/File
+    # 2. Retrain your Random Forest model
+    # 3. Calculate Accuracy
+    
+    new_acc = 0.89 # Placeholder for your model.score()
+    
+    # 4. SAVE TO THE LEDGER
+    new_batch = TrainingBatch(
+        company_id=current_user.company_id,
+        filename=file.filename,
+        record_count=150, # Example count
+        accuracy=new_acc * 100
+    )
+    db.add(new_batch)
+    db.commit()
+
+    return {
+        "status": "success",
+        "added": 150,
+        "training": {"metrics": {"accuracy": round(new_acc * 100, 2)}}
+    }

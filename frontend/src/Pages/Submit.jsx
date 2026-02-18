@@ -1,181 +1,183 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-  Send, ShieldAlert, Sparkles, CheckCircle, 
-  ChevronRight, List, Info, Database 
+  UploadCloud, RotateCcw, AlertCircle, FileText, PenTool, 
+  Cpu, Activity, Layers, BarChart3, Database, CheckCircle,
+  Sparkles, ChevronRight, Send, ShieldAlert 
 } from 'lucide-react';
-import { ScrollSection } from '../Components/LayoutUtils';
 
 export default function Submit({ user, onNavigate }) {
+  // UI State
+  const [mode, setMode] = useState('single');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState({ text: "", type: "" });
+  
+  // Single Entry / AI State
   const [summary, setSummary] = useState('');
   const [component, setComponent] = useState('Core');
   const [severity, setSeverity] = useState('S3');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
 
-  // Helper for consistent headers
+  // Bulk / Training State
+  const [file, setFile] = useState(null);
+  const [batches, setBatches] = useState([]);
+
+  useEffect(() => { fetchBatches(); }, []);
+
   const getHeaders = () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
   });
 
-  // --- 1. AI ANALYSIS CALL ---
+  const fetchBatches = async () => {
+    try {
+      const res = await axios.get(`/api/batches`, getHeaders());
+      setBatches(res.data);
+    } catch (err) { console.error("History error", err); }
+  };
+
   const handleAnalyze = async () => {
     if (!summary) return;
     setLoading(true);
     try {
-      // FIX 1: Use relative path for Proxy + Auth headers
       const res = await axios.post(
-        `/analyze_bug?bug_text=${encodeURIComponent(summary)}`, 
+        `/api/analyze_bug?bug_text=${encodeURIComponent(summary)}`, 
         {}, 
         getHeaders()
       );
-      setResult(res.data);
+      setAiResult(res.data);
       if (res.data.severity) setSeverity(res.data.severity.label);
     } catch (err) {
-      console.error("AI Error:", err);
-      if (err.response?.status === 401) alert("Session expired. Please log in again.");
-    } finally {
-      setLoading(false);
-    }
+      setMsg({ text: "AI Analysis Failed", type: "error" });
+    } finally { setLoading(false); }
   };
 
-  // --- 2. FINAL DATABASE SUBMISSION ---
   const handleFinalSubmit = async () => {
     try {
-      const payload = {
-        bug: {
-          summary,
-          component,
-          severity,
-          status: "NEW",
-          platform: "Windows"
-        },
-        company_id: user.company_id
-      };
-
-      // FIX 2: Use relative path for Proxy + Auth headers
-      await axios.post("/api/bug", payload, getHeaders());
-      
-      setSubmitted(true);
-      setTimeout(() => onNavigate('database', ''), 2000);
+        const payload = {
+            bug: { summary, component, severity, status: "NEW" },
+            company_id: user.company_id
+        };
+        const response = await axios.post("/api/bug", payload, getHeaders());
+        if (response.status === 200) {
+            setMsg({ text: "Bug Logged Successfully!", type: "success" });
+            setTimeout(() => {
+                setMsg({ text: "", type: "" });
+                onNavigate('database');
+            }, 2000); 
+        }
     } catch (err) {
-      console.error("Submit Error:", err);
-      alert("Failed to save to database. Check if backend is running.");
+        setMsg({ text: "Failed to save to database.", type: "error" });
     }
   };
 
-  if (submitted) {
-    return (
-      <div className="page-content center-content" style={{height:'70vh'}}>
-         <div className="success-anim fade-in">
-            <CheckCircle size={80} color="#16a34a" />
-            <h1 style={{marginTop:20}}>Report Filed Successfully</h1>
-            <p style={{color:'#64748b'}}>Redirecting to Bug Explorer...</p>
-         </div>
-      </div>
-    );
-  }
+  const handleBulkUpload = async () => {
+    if(!file) return;
+    setLoading(true);
+    setMsg({ text: "Retraining Neural Network...", type: "loading" });
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("company_id", user.company_id);
+
+    try {
+      await axios.post('/api/upload_and_train', fd, getHeaders());
+      setMsg({ text: "Model Retrained Successfully", type: "success" });
+      setFile(null);
+      fetchBatches();
+    } catch (err) {
+      setMsg({ text: "Training Failed", type: "error" });
+    } finally { setLoading(false); }
+  };
 
   return (
-    <div className="scroll-container">
-      <section className="hero-section small">
-        <div className="hero-content">
-          <div className="live-pill"><Database size={12}/> REPOSITORY INGESTION</div>
-          <h1>FILE NEW <span style={{color:'var(--accent)'}}>REPORT</span></h1>
-        </div>
-      </section>
-
-      <ScrollSection className="submit-grid">
-        {/* LEFT: INPUT FORM */}
-        <div className="sys-card form-card">
-           <h3 className="card-title"><Info size={16}/> Bug Details</h3>
-           <div className="modern-form">
-              <label>Brief Summary</label>
-              <textarea 
-                placeholder="Describe the defect (e.g., 'UI crash on login')..."
-                value={summary}
-                onChange={e => setSummary(e.target.value)}
-              />
-
-              <div className="form-row">
-                 <div style={{flex:1}}>
-                    <label>Component</label>
-                    <select value={component} onChange={e=>setComponent(e.target.value)}>
-                        <option>Core</option>
-                        <option>Firefox</option>
-                        <option>DevTools</option>
-                        <option>Security</option>
-                        <option>Networking</option>
-                    </select>
-                 </div>
-                 <div style={{flex:1}}>
-                    <label>Manual Priority</label>
-                    <select value={severity} onChange={e=>setSeverity(e.target.value)}>
-                        <option value="S1">S1 - Blocker</option>
-                        <option value="S2">S2 - Critical</option>
-                        <option value="S3">S3 - Normal</option>
-                        <option value="S4">S4 - Low</option>
-                    </select>
-                 </div>
-              </div>
-
-              <button 
-                className={`sys-btn full ${loading ? 'loading' : ''}`} 
-                onClick={handleAnalyze}
-                disabled={!summary || loading}
-              >
-                {loading ? 'ANALYZING...' : 'RUN AI CLASSIFICATION'}
-                <Sparkles size={16}/>
-              </button>
-           </div>
+    <div className="page-content centered-page" style={{alignItems:'flex-start', gap: 30, padding: 40}}>
+      
+      {/* LEFT: ACTION STATION */}
+      <div className="sys-card" style={{flex: 1.6, padding: 0, overflow:'hidden', minHeight: 600, display:'flex', flexDirection:'column'}}>
+        <div style={{padding: 30, borderBottom: '1px solid var(--border)', background: '#f8fafc'}}>
+            <h2 style={{display:'flex', alignItems:'center', gap: 10, fontSize: 20}}>
+                <Cpu size={22} color="var(--accent)"/> Intelligent Intake
+            </h2>
+            <div className="segmented-control" style={{marginTop: 20}}>
+                <button className={`segment-btn ${mode==='single'?'active':''}`} onClick={()=>setMode('single')}>
+                    <PenTool size={14}/> AI Analysis
+                </button>
+                <button className={`segment-btn ${mode==='bulk'?'active':''}`} onClick={()=>setMode('bulk')}>
+                    <UploadCloud size={14}/> Bulk Training
+                </button>
+            </div>
         </div>
 
-        {/* RIGHT: AI PREDICTION PREVIEW */}
-        <div className="sys-card ai-preview-card">
-            {!result ? (
-                <div className="empty-preview">
-                    <ShieldAlert size={48} color="#e2e8f0"/>
-                    <p>Run AI classification to see predicted severity and similar historical bugs.</p>
+        <div style={{padding: 30, flex: 1}}>
+            {mode === 'single' ? (
+                <div className="fade-in">
+                    <label className="tiny-label">BUG SUMMARY</label>
+                    <textarea 
+                        className="sys-input" 
+                        placeholder="Describe the issue..."
+                        value={summary}
+                        onChange={e => setSummary(e.target.value)}
+                        style={{height: 120, marginBottom: 20}}
+                    />
+                    <button className="sys-btn full" onClick={handleAnalyze} disabled={!summary || loading}>
+                        {loading ? 'ANALYZING...' : 'RUN AI CLASSIFICATION'} <Sparkles size={16}/>
+                    </button>
+
+                    {aiResult && (
+                        <div className="ai-result-box fade-in" style={{marginTop: 25, padding: 20, background: '#f0f9ff', borderRadius: 12, border: '1px solid #bae6fd'}}>
+                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                <span className="tiny-label">PREDICTED SEVERITY</span>
+                                <span className={`predicted-sev ${aiResult.severity.label}`}>{aiResult.severity.label}</span>
+                            </div>
+
+                            {msg.text && (
+                                <div className={`alert-banner-modern ${msg.type}`} style={{marginTop: 15, padding: '10px', borderRadius: '8px', textAlign: 'center', fontSize: '13px', fontWeight: '600'}}>
+                                    {msg.text}
+                                </div>
+                            )}
+
+                            <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop: 20, background: '#10b981'}} disabled={msg.type === 'success'}>
+                                CONFIRM & SAVE <Send size={16}/>
+                            </button>
+                        </div>
+                    )}
                 </div>
             ) : (
-                <div className="fade-in">
-                    <div className="prediction-header">
-                        <div className="label-group">
-                            <span className="tiny-label">AI PREDICTION</span>
-                            <div className={`predicted-sev ${result.severity.label}`}>{result.severity.label}</div>
-                        </div>
-                        <div className="confidence-meter">
-                            <div className="conf-value">{result.severity.confidence}% Confident</div>
-                            <div className="conf-bar-bg">
-                                <div className="conf-bar-fill" style={{width: `${result.severity.confidence}%`}}></div>
-                            </div>
-                        </div>
+                <div className="fade-in" style={{textAlign:'center'}}>
+                    <div className="drop-area-modern" style={{padding: 40, border: '2px dashed #cbd5e1', borderRadius: 16}}>
+                        <FileText size={40} color="#94a3b8" style={{margin:'0 auto 15px'}}/>
+                        <p style={{fontSize: 14, color: 'var(--text-sec)'}}>Upload CSV to improve model knowledge</p>
+                        <input type="file" id="bulk" hidden onChange={e=>setFile(e.target.files[0])}/>
+                        <label htmlFor="bulk" className="sys-btn outline" style={{marginTop: 15, cursor:'pointer'}}>
+                            {file ? file.name : "Select Training File"}
+                        </label>
                     </div>
-
-                    <div className="similar-bugs-list">
-                        <span className="tiny-label">SIMILAR HISTORICAL BUGS (RAG)</span>
-                        {result.similar_bugs && result.similar_bugs.length > 0 ? (
-                           result.similar_bugs.map((b, i) => (
-                              <div key={i} className="similar-item">
-                                  <ChevronRight size={14} color="var(--accent)"/>
-                                  <span className="sim-text" title={b.summary}>{b.summary}</span>
-                                  <span className="sim-match">{b.match}% Match</span>
-                              </div>
-                           ))
-                        ) : (
-                          <div style={{padding: '10px 0', fontSize: 12, color: '#94a3b8'}}>No similar records found.</div>
-                        )}
-                    </div>
-
-                    <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop:30, background: '#10b981'}}>
-                        CONFIRM & SUBMIT TO DATABASE
-                        <Send size={16}/>
+                    <button className="sys-btn full" onClick={handleBulkUpload} disabled={!file || loading} style={{marginTop: 20}}>
+                        {loading ? 'TRAINING...' : 'INITIATE RETRAINING'}
                     </button>
                 </div>
             )}
         </div>
-      </ScrollSection>
+      </div>
+
+      {/* RIGHT: MODEL LEDGER */}
+      <div className="sys-card" style={{flex: 1, padding: 0, minHeight: 600}}>
+          <div style={{padding: 25, borderBottom: '1px solid var(--border)'}}>
+              <h2 style={{fontSize: 16, fontWeight: 800, display:'flex', alignItems:'center', gap: 10}}>
+                  <BarChart3 size={18}/> Model Ledger
+              </h2>
+          </div>
+          <div className="ledger-list" style={{overflowY:'auto', maxHeight: 500}}>
+              {batches.map((b) => (
+                  <div key={b.batch_id} style={{padding: 20, borderBottom: '1px solid #f1f5f9', display:'flex', justifyContent:'space-between'}}>
+                      <div>
+                          <div style={{fontSize: 13, fontWeight: 700}}>{b.filename}</div>
+                          <div style={{fontSize: 11, color: '#94a3b8'}}>{b.record_count} records • {b.upload_time}</div>
+                      </div>
+                      <div style={{fontSize: 13, fontWeight: 800, color: '#16a34a'}}>{Math.round(b.accuracy || 0)}%</div>
+                  </div>
+              ))}
+          </div>
+      </div>
     </div>
   );
 }

@@ -1,25 +1,12 @@
-from sqlalchemy import Column, Integer, String, JSON, ForeignKey, BigInteger, Text
+# backend/models.py
+from sqlalchemy import Column, Integer, String, JSON, ForeignKey, Float, DateTime
 from database import Base
-
+from datetime import datetime
 
 class Company(Base):
     __tablename__ = "companies"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True)
-
-
-class Bug(Base):
-    __tablename__ = "bugs"
-
-    # Change 'id' to 'bug_id' to match the database exactly
-    bug_id = Column(Integer, primary_key=True, index=True) 
-    summary = Column(String)
-    component = Column(String)
-    severity = Column(String)
-    status = Column(String)
-    company_id = Column(Integer, ForeignKey("companies.id"))
-    data = Column(JSON)
-
 
 class User(Base):
     __tablename__ = "users"
@@ -28,10 +15,28 @@ class User(Base):
     role = Column(String)
     company_id = Column(Integer, ForeignKey("companies.id"))
 
+class Bug(Base):
+    __tablename__ = "bugs"
+    bug_id = Column(Integer, primary_key=True, index=True) 
+    summary = Column(String)
+    component = Column(String)
+    severity = Column(String)
+    status = Column(String)
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    data = Column(JSON)
+
+class TrainingBatch(Base):
+    __tablename__ = "training_batches"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    filename = Column(String)
+    record_count = Column(Integer)
+    accuracy = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
 
 class Feedback(Base):
     __tablename__ = "feedback"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     summary = Column(String)
     predicted_severity = Column(String)
     actual_severity = Column(String)
