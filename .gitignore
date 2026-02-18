@@ -19,7 +19,7 @@ backend/*.pkl
 *.sqlite3
 data/
 rag_db/
-
+backend/rag_db/
 # --- Media & Large Data Assets ---
 *.mp4
 *.csv

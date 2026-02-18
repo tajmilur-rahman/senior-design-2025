@@ -6,12 +6,12 @@ import os
 print("--- STARTING DATABASE BUILD ---")
 
 # 1. Load Data
-if not os.path.exists("data.csv"):
+if not os.path.exists("../Random Forest ML/data.csv"):
     print("❌ Error: 'data.csv' not found in backend folder.")
     exit()
 
 try:
-    df = pd.read_csv("data.csv")
+    df = pd.read_csv("../Random Forest ML/data.csv")
     print(f"✅ CSV Loaded. Found {len(df)} rows.")
     print("   Raw Columns:", df.columns.tolist())
 except Exception as e:

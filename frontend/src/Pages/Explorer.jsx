@@ -16,62 +16,35 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
     setLoading(true);
     try {
         const token = localStorage.getItem("token");
-        // FIX 1: Use relative path for Vite Proxy
         const response = await axios.get("/api/hub/explorer", {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
+            headers: { Authorization: `Bearer ${token}` }
         });
-
         setBugs(response.data);
     } catch (err) {
-        console.error("Explorer Error:", err);
-        // If token is expired or invalid, send user back to login
-        if (err.response?.status === 401 && onNavigate) {
-            onNavigate('login');
-        }
-    } finally {
-        setLoading(false);
-    }
+        if (err.response?.status === 401 && onNavigate) onNavigate('login');
+    } finally { setLoading(false); }
   }, [onNavigate]);
 
-  useEffect(() => { 
-    fetchBugs(); 
-  }, [fetchBugs]);
+  useEffect(() => { fetchBugs(); }, [fetchBugs]);
 
-  // FIX 2: Standardized helper to match your SQLAlchemy models.py
   const getField = (bug, field) => {
-    if (field === 'id') return bug.bug_id || bug.id;
-    if (bug[field] !== undefined && bug[field] !== null) return bug[field];
-    
-    // Check JSON data column if it exists
-    if (bug.data && bug.data[field]) return bug.data[field];
-    return "";
+    if (field === 'id') return bug.bug_id || bug.id || 0;
+    let val = bug[field];
+    if ((val === undefined || val === null) && bug.data) val = bug.data[field];
+    return val || "";
   };
 
   const filtered = bugs.filter(b => {
       const term = search.toLowerCase();
-      const idStr = String(b.bug_id || "");
-      const line = (
-          (b.summary || "") + 
-          (b.component || "") + 
-          idStr + 
-          (b.severity || "") + 
-          (b.status || "")
-      ).toLowerCase();
+      const idStr = String(b.bug_id || b.id || "");
+      const line = ((b.summary||"") + (b.component||"") + idStr + (b.severity||"") + (b.status||"")).toLowerCase();
       return line.includes(term);
   });
 
   const sortedBugs = [...filtered].sort((a, b) => {
     let valA, valB;
-    if (sortConfig.key === 'id') { 
-        valA = a.bug_id || 0; 
-        valB = b.bug_id || 0; 
-    }
-    else { 
-        valA = getField(a, sortConfig.key).toString().toLowerCase(); 
-        valB = getField(b, sortConfig.key).toString().toLowerCase(); 
-    }
+    if (sortConfig.key === 'id') { valA = a.bug_id || a.id || 0; valB = b.bug_id || b.id || 0; }
+    else { valA = getField(a, sortConfig.key).toString().toLowerCase(); valB = getField(b, sortConfig.key).toString().toLowerCase(); }
     if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
@@ -103,25 +76,13 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
   return (
     <div className="page-content fade-in">
       <div className="explorer-header">
-        <div>
-            <h1 style={{fontSize:24, fontWeight:800, margin:0, color:'var(--text-main)'}}>DATABASE</h1>
-            <span style={{fontSize:13, color:'#64748b'}}>Total Records: {sortedBugs.length.toLocaleString()}</span>
-        </div>
-
+        <div><h1 style={{fontSize:24, fontWeight:800, margin:0, color:'var(--text-main)'}}>EXPLORER</h1><span style={{fontSize:13, color:'#64748b'}}>Viewing {sortedBugs.length.toLocaleString()} Firefox Records</span></div>
         <div style={{display:'flex', gap:10, alignItems: 'center'}}>
            <div style={{position: 'relative', width: 300}}>
                <Search size={16} color="#94a3b8" style={{position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)'}}/>
-               <input
-                  className="sys-input"
-                  placeholder="Filter ID, Sev, Component..."
-                  value={search}
-                  onChange={e=>{setSearch(e.target.value); setPage(1);}}
-                  style={{marginBottom: 0, paddingLeft: 36, height: 42}}
-               />
+               <input className="sys-input" placeholder="Filter ID, Sev, Component..." value={search} onChange={e=>{setSearch(e.target.value); setPage(1);}} style={{marginBottom: 0, paddingLeft: 36, height: 42}}/>
            </div>
-           <button className="sys-btn outline" onClick={handleExport} style={{padding:'0 16px', height: 42}}>
-               <Download size={14}/> Export
-           </button>
+           <button className="sys-btn outline" onClick={handleExport} style={{padding:'0 16px', height: 42}}><Download size={14}/> CSV</button>
         </div>
       </div>
 
@@ -140,40 +101,24 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
             <tbody>
               {displayedBugs.map(b => {
                 const bugId = b.bug_id || b.id;
-                const summary = b.summary || "No Summary";
-                const component = b.component || "General";
-                const severity = b.severity || "S3";
                 const status = b.status || "Active";
-
                 return (
                     <tr key={bugId}>
                         <td style={{fontFamily:'var(--font-mono)', color:'var(--accent)', fontWeight:600}}>#{bugId}</td>
-                        <td><span className={`pill ${severity}`}>{severity}</span></td>
-                        <td><span style={{background:'#f1f5f9', padding:'4px 8px', borderRadius:6, fontSize:12, fontWeight:600, color:'#475569'}}>{component}</span></td>
-                        <td className="summary-cell">
-                            <div style={{maxWidth:400, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} title={summary}>
-                                {summary}
-                            </div>
-                        </td>
+                        <td><span className={`pill ${b.severity}`}>{b.severity || "S3"}</span></td>
+                        <td><span style={{background:'#f1f5f9', padding:'4px 8px', borderRadius:6, fontSize:12, fontWeight:600, color:'#475569'}}>{b.component || "General"}</span></td>
+                        <td className="summary-cell"><div style={{maxWidth:400, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}} title={b.summary}>{b.summary}</div></td>
                         <td style={{textAlign:'right'}}>
-                            <span style={{color: status==='Fixed'?'#16a34a':'#e11d48', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
-                                <div style={{width:6, height:6, borderRadius:'50%', background: status==='Fixed'?'#16a34a':'#e11d48'}}></div>
+                            <span style={{color: status.toLowerCase().includes('fix')?'#16a34a':'#e11d48', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
+                                <div style={{width:6, height:6, borderRadius:'50%', background: status.toLowerCase().includes('fix')?'#16a34a':'#e11d48'}}></div>
                                 {status}
                             </span>
                         </td>
                     </tr>
                 );
               })}
-              {displayedBugs.length === 0 && !loading && (
-                  <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>
-                      No records found matching "{search}".
-                  </td></tr>
-              )}
-              {loading && (
-                  <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>
-                      Loading...
-                  </td></tr>
-              )}
+              {displayedBugs.length === 0 && !loading && (<tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>No records found matching "{search}".</td></tr>)}
+              {loading && (<tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>Loading Data...</td></tr>)}
             </tbody>
           </table>
         </div>

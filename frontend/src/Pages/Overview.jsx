@@ -1,15 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Database, Activity, Server, AlertTriangle, ExternalLink, Zap 
-} from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer 
-} from 'recharts';
+import { Database, Activity, Server, AlertTriangle, ExternalLink, Zap } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ScrollSection, SkeletonLoader } from '../Components/LayoutUtils';
 
-
-// --- LIVE FEED COMPONENT ---
 function LiveFeedRow({ bug }) {
     return (
         <div className="live-feed-item">
@@ -29,39 +23,21 @@ export default function Overview({ user, onNavigate }) {
 
   useEffect(() => {
     const fetchData = () => {
-        // 1. Get the token from storage
         const token = localStorage.getItem("token");
-
-        // 2. Remove the query param and add the Header
-        axios.get(`/api/hub/overview`, { 
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        })
-             .then(res => {
-                setData(res.data);
-                setError(false); // Reset error if request succeeds
-             })
-             .catch(err => {
-                console.error("Overview Error:", err);
-                // If we get a 401, it means the token expired or is missing
-                if (err.response?.status === 401) {
-                    console.warn("Unauthorized! Please log in again.");
-                }
-                setError(true);
-             });
+        axios.get(`/api/hub/overview`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => { setData(res.data); setError(false); })
+        .catch(err => { console.error("Overview Error:", err); setError(true); });
     };
 
-    fetchData(); 
-    const interval = setInterval(fetchData, 5000); // Changed to 5s to be kinder to the server
-
+    fetchData();
+    const interval = setInterval(fetchData, 15000); // 15 second refresh (smoother)
     return () => clearInterval(interval);
-  }, []); // Removed user.company_id dependency since we use the token now
+  }, []);
 
-  if (error) return <div className="page-content" style={{textAlign:'center', marginTop:50}}> Error loading stats. Is backend running?</div>;
+  if (error) return <div className="page-content" style={{textAlign:'center', marginTop:50, color:'#ef4444'}}>Backend Error: Ensure server is running.</div>;
   if (!data) return <div className="page-content"><SkeletonLoader /></div>;
 
-  const cardStyle = { cursor: 'pointer', transition: 'all 0.2s ease' };
+  const topComponent = data.charts?.components?.[0]?.name || 'Unknown';
 
   return (
     <div className="scroll-container">
@@ -74,45 +50,27 @@ export default function Overview({ user, onNavigate }) {
       </section>
 
       <ScrollSection className="stats-row">
-         {/* 1. DATABASE CARD */}
-         <div className="sys-card big-stat" style={cardStyle} onClick={() => onNavigate('database', '')}>
-            <div className="stat-top-row">
-                <span className="stat-label" style={{color:'#64748b'}}>DATABASE</span>
-                <ExternalLink size={14} color="#94a3b8"/>
-            </div>
+         <div className="sys-card big-stat" onClick={() => onNavigate('database', '')} style={{cursor:'pointer'}}>
+            <div className="stat-top-row"><span className="stat-label" style={{color:'#64748b'}}>DATABASE</span><ExternalLink size={14} color="#94a3b8"/></div>
             <div className="stat-main-content">
                <Database size={40} strokeWidth={1} color="#64748b" />
-               <div>
-                   <div className="stat-value">{data.stats.total_db.toLocaleString()}</div>
-                   <div className="stat-sub">TOTAL RECORDS</div>
-               </div>
+               <div><div className="stat-value">{data.stats.total_db.toLocaleString()}</div><div className="stat-sub">TOTAL RECORDS</div></div>
             </div>
          </div>
 
-         {/* 2. PROCESSED CARD */}
-         <div className="sys-card big-stat" style={cardStyle} onClick={() => onNavigate('database', 'Fixed')}>
-            <div className="stat-top-row">
-                <span className="stat-label" style={{color:'#64748b'}}>PROCESSED</span>
-                <ExternalLink size={14} color="#94a3b8"/>
-            </div>
+         <div className="sys-card big-stat" onClick={() => onNavigate('database', 'Fixed')} style={{cursor:'pointer'}}>
+            <div className="stat-top-row"><span className="stat-label" style={{color:'#64748b'}}>PROCESSED</span><ExternalLink size={14} color="#94a3b8"/></div>
             <div className="stat-main-content">
                <Server size={40} strokeWidth={1} color="#3b82f6" />
-               <div>
-                   <div className="stat-value">{data.stats.analyzed.toLocaleString()}</div>
-                   <div className="stat-sub">ACTION TAKEN</div>
-               </div>
+               <div><div className="stat-value">{data.stats.analyzed.toLocaleString()}</div><div className="stat-sub">ACTION TAKEN</div></div>
             </div>
          </div>
 
-         {/* 3. CRITICAL CARD - Click filters for 'S1' */}
-         <div className="sys-card big-stat highlight-blue" style={cardStyle} onClick={() => onNavigate('database', 'S1')}>
+         <div className="sys-card big-stat highlight-blue" onClick={() => onNavigate('database', 'S1')} style={{cursor:'pointer'}}>
             <div className="stat-top-row"><span className="stat-label" style={{color:'#94a3b8'}}>CRITICAL</span><AlertTriangle size={18} color="#fff"/></div>
             <div className="stat-main-content">
                <Activity size={40} strokeWidth={1} color="#fff" />
-               <div>
-                   <div className="stat-value">{data.stats.critical}</div>
-                   <div className="stat-sub" style={{color:'#cbd5e1'}}>ACTION REQUIRED</div>
-               </div>
+               <div><div className="stat-value">{data.stats.critical}</div><div className="stat-sub" style={{color:'#cbd5e1'}}>ACTION REQUIRED</div></div>
             </div>
          </div>
       </ScrollSection>
@@ -126,11 +84,7 @@ export default function Overview({ user, onNavigate }) {
         </div>
         <div className="feature-visual">
            <div className="sys-card feed-card">
-             <div className="feed-header">
-                <span style={{fontSize:11, fontWeight:800, color:'#64748b', textTransform:'uppercase'}}>Recent Analysis</span>
-                <div className="pulse-dot"></div>
-             </div>
-             {/* [FIX] Added custom-scrollbar class here */}
+             <div className="feed-header"><span style={{fontSize:11, fontWeight:800, color:'#64748b', textTransform:'uppercase'}}>Recent Analysis</span><div className="pulse-dot"></div></div>
              <div className="feed-list custom-scrollbar">
                 {(data.recent || []).map((bug, i) => <LiveFeedRow key={i} bug={bug} />)}
              </div>
@@ -147,7 +101,9 @@ export default function Overview({ user, onNavigate }) {
                   <XAxis type="number" hide />
                   <YAxis dataKey="name" type="category" width={120} tick={{fontSize: 11, fill: '#64748b', fontWeight: 600}} />
                   <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: 8, border:'none', boxShadow:'0 10px 15px -3px rgba(0,0,0,0.1)'}}/>
-                  <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
+                    {data.charts.components.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#3b82f6'} />))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -155,7 +111,7 @@ export default function Overview({ user, onNavigate }) {
          <div className="feature-text">
             <h2>COMPONENT CHART</h2>
             <div className="divider-line"></div>
-            <p>Real-time analysis of failing components. Currently, <strong>{data.charts.components[0]?.name || 'a component'}</strong> is reporting the highest volume of defects.</p>
+            <p>Real-time analysis of failing components. Currently, <strong>{topComponent}</strong> is reporting the highest volume of defects.</p>
          </div>
       </ScrollSection>
     </div>

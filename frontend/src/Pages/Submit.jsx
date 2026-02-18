@@ -3,22 +3,44 @@ import axios from 'axios';
 import { 
   UploadCloud, RotateCcw, AlertCircle, FileText, PenTool, 
   Cpu, Activity, Layers, BarChart3, Database, CheckCircle,
-  Sparkles, ChevronRight, Send, ShieldAlert 
+  Sparkles, ChevronRight, Send, ShieldAlert, Trash2, X
 } from 'lucide-react';
 
+// --- SLEEK TOAST COMPONENT ---
+function Toast({ msg, onClose }) {
+    if (!msg.text) return null;
+    const isError = msg.type === 'error';
+    return (
+        <div className="toast-notification fade-in-up" style={{
+            position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)',
+            background: isError ? '#ef4444' : '#1e293b', color: '#fff',
+            padding: '12px 24px', borderRadius: 50, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+            display: 'flex', alignItems: 'center', gap: 12, zIndex: 9999, fontWeight: 500
+        }}>
+            {isError ? <AlertCircle size={18}/> : <CheckCircle size={18}/>}
+            {msg.text}
+            <button onClick={onClose} style={{background:'none', border:'none', color:'#fff', opacity:0.7, cursor:'pointer', padding:0, marginLeft: 10}}>
+                <X size={14}/>
+            </button>
+        </div>
+    );
+}
+
 export default function Submit({ user, onNavigate }) {
-  // UI State
   const [mode, setMode] = useState('single');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState({ text: "", type: "" });
-  
-  // Single Entry / AI State
+
+  // Single Entry
   const [summary, setSummary] = useState('');
   const [component, setComponent] = useState('Core');
   const [severity, setSeverity] = useState('S3');
   const [aiResult, setAiResult] = useState(null);
 
-  // Bulk / Training State
+  // NEW: Track recently submitted bugs for manual deletion
+  const [recentBugs, setRecentBugs] = useState([]);
+
+  // Bulk / Training
   const [file, setFile] = useState(null);
   const [batches, setBatches] = useState([]);
 
@@ -40,8 +62,8 @@ export default function Submit({ user, onNavigate }) {
     setLoading(true);
     try {
       const res = await axios.post(
-        `/api/analyze_bug?bug_text=${encodeURIComponent(summary)}`, 
-        {}, 
+        `/api/analyze_bug?bug_text=${encodeURIComponent(summary)}`,
+        {},
         getHeaders()
       );
       setAiResult(res.data);
@@ -58,16 +80,49 @@ export default function Submit({ user, onNavigate }) {
             company_id: user.company_id
         };
         const response = await axios.post("/api/bug", payload, getHeaders());
+
         if (response.status === 200) {
-            setMsg({ text: "Bug Logged Successfully!", type: "success" });
-            setTimeout(() => {
-                setMsg({ text: "", type: "" });
-                onNavigate('database');
-            }, 2000); 
+            setMsg({ text: "Bug Logged Successfully", type: "success" });
+
+            // Add to "Recent" list so user can undo if needed
+            const newBug = { ...response.data, summary };
+            setRecentBugs([newBug, ...recentBugs]);
+
+            // Reset Form
+            setSummary('');
+            setAiResult(null);
+
+            // Auto hide toast
+            setTimeout(() => setMsg({ text: "", type: "" }), 3000);
         }
     } catch (err) {
         setMsg({ text: "Failed to save to database.", type: "error" });
     }
+  };
+
+  // NEW: Delete a single bug
+  const handleDeleteBug = async (bugId) => {
+      try {
+          await axios.delete(`/api/bug/${bugId}`, getHeaders());
+          setRecentBugs(recentBugs.filter(b => b.bug_id !== bugId));
+          setMsg({ text: "Bug Deleted", type: "success" });
+          setTimeout(() => setMsg({ text: "", type: "" }), 3000);
+      } catch (err) {
+          setMsg({ text: "Could not delete bug", type: "error" });
+      }
+  };
+
+  // NEW: Delete a training batch (Undo Ledger)
+  const handleDeleteBatch = async (batchId) => {
+      if(!window.confirm("Are you sure you want to remove this training record?")) return;
+      try {
+          await axios.delete(`/api/batch/${batchId}`, getHeaders());
+          setBatches(batches.filter(b => b.id !== batchId));
+          setMsg({ text: "Record Removed", type: "success" });
+          setTimeout(() => setMsg({ text: "", type: "" }), 3000);
+      } catch (err) {
+          setMsg({ text: "Could not remove batch", type: "error" });
+      }
   };
 
   const handleBulkUpload = async () => {
@@ -83,6 +138,7 @@ export default function Submit({ user, onNavigate }) {
       setMsg({ text: "Model Retrained Successfully", type: "success" });
       setFile(null);
       fetchBatches();
+      setTimeout(() => setMsg({ text: "", type: "" }), 3000);
     } catch (err) {
       setMsg({ text: "Training Failed", type: "error" });
     } finally { setLoading(false); }
@@ -90,7 +146,8 @@ export default function Submit({ user, onNavigate }) {
 
   return (
     <div className="page-content centered-page" style={{alignItems:'flex-start', gap: 30, padding: 40}}>
-      
+      <Toast msg={msg} onClose={() => setMsg({ text: "", type: "" })} />
+
       {/* LEFT: ACTION STATION */}
       <div className="sys-card" style={{flex: 1.6, padding: 0, overflow:'hidden', minHeight: 600, display:'flex', flexDirection:'column'}}>
         <div style={{padding: 30, borderBottom: '1px solid var(--border)', background: '#f8fafc'}}>
@@ -111,8 +168,8 @@ export default function Submit({ user, onNavigate }) {
             {mode === 'single' ? (
                 <div className="fade-in">
                     <label className="tiny-label">BUG SUMMARY</label>
-                    <textarea 
-                        className="sys-input" 
+                    <textarea
+                        className="sys-input"
                         placeholder="Describe the issue..."
                         value={summary}
                         onChange={e => setSummary(e.target.value)}
@@ -128,16 +185,36 @@ export default function Submit({ user, onNavigate }) {
                                 <span className="tiny-label">PREDICTED SEVERITY</span>
                                 <span className={`predicted-sev ${aiResult.severity.label}`}>{aiResult.severity.label}</span>
                             </div>
-
-                            {msg.text && (
-                                <div className={`alert-banner-modern ${msg.type}`} style={{marginTop: 15, padding: '10px', borderRadius: '8px', textAlign: 'center', fontSize: '13px', fontWeight: '600'}}>
-                                    {msg.text}
-                                </div>
-                            )}
-
-                            <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop: 20, background: '#10b981'}} disabled={msg.type === 'success'}>
+                            <button className="sys-btn full success" onClick={handleFinalSubmit} style={{marginTop: 20, background: '#10b981'}}>
                                 CONFIRM & SAVE <Send size={16}/>
                             </button>
+                        </div>
+                    )}
+
+                    {/* RECENT SUBMISSIONS LIST (Manual Delete) */}
+                    {recentBugs.length > 0 && (
+                        <div style={{marginTop: 40, borderTop:'1px solid #e2e8f0', paddingTop: 20}}>
+                            <label className="tiny-label" style={{marginBottom:10, display:'block'}}>RECENT SUBMISSIONS (SESSION)</label>
+                            <div style={{display:'flex', flexDirection:'column', gap: 10}}>
+                                {recentBugs.map((b, i) => (
+                                    <div key={i} className="fade-in" style={{
+                                        display:'flex', justifyContent:'space-between', alignItems:'center',
+                                        padding: '10px 15px', background:'#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0'
+                                    }}>
+                                        <div style={{display:'flex', gap: 10, alignItems:'center', overflow:'hidden'}}>
+                                            <span className={`pill ${b.severity} tiny`}>{b.severity}</span>
+                                            <span style={{fontSize:13, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth: 200}}>
+                                                {b.summary}
+                                            </span>
+                                        </div>
+                                        <button onClick={() => handleDeleteBug(b.bug_id)} style={{
+                                            background:'none', border:'none', color:'#ef4444', cursor:'pointer', padding: 5
+                                        }} title="Delete Bug">
+                                            <Trash2 size={14}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -168,14 +245,26 @@ export default function Submit({ user, onNavigate }) {
           </div>
           <div className="ledger-list" style={{overflowY:'auto', maxHeight: 500}}>
               {batches.map((b) => (
-                  <div key={b.batch_id} style={{padding: 20, borderBottom: '1px solid #f1f5f9', display:'flex', justifyContent:'space-between'}}>
+                  <div key={b.id} style={{padding: 20, borderBottom: '1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                       <div>
-                          <div style={{fontSize: 13, fontWeight: 700}}>{b.filename}</div>
-                          <div style={{fontSize: 11, color: '#94a3b8'}}>{b.record_count} records • {b.upload_time}</div>
+                          <div style={{fontSize: 13, fontWeight: 700}}>{b.batch_name || b.filename}</div>
+                          <div style={{fontSize: 11, color: '#94a3b8'}}>{b.bug_count} records • {new Date(b.upload_time).toLocaleDateString()}</div>
                       </div>
-                      <div style={{fontSize: 13, fontWeight: 800, color: '#16a34a'}}>{Math.round(b.accuracy || 0)}%</div>
+                      <div style={{display:'flex', alignItems:'center', gap: 15}}>
+                          <div style={{fontSize: 13, fontWeight: 800, color: '#16a34a'}}>100%</div>
+                          {/* UNDO BUTTON */}
+                          <button onClick={() => handleDeleteBatch(b.id)} style={{
+                              background:'#fee2e2', border:'none', borderRadius: 6, width: 28, height: 28,
+                              display:'flex', alignItems:'center', justifyContent:'center', color:'#ef4444', cursor:'pointer'
+                          }} title="Undo Batch">
+                              <Trash2 size={14}/>
+                          </button>
+                      </div>
                   </div>
               ))}
+              {batches.length === 0 && (
+                  <div style={{padding:40, textAlign:'center', color:'#94a3b8', fontSize:13}}>No training history found.</div>
+              )}
           </div>
       </div>
     </div>
