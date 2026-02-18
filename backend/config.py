@@ -1,5 +1,4 @@
 import os
-
 # --- DATABASE CONNECTION ---
 DB = {
     "dbname": "bugbug_data",

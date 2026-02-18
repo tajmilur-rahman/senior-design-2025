@@ -6,7 +6,6 @@ from database import get_db, engine, supabase
 from pydantic import BaseModel
 import models, auth, time, os, json
 from collections import Counter
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
 VECTOR_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")

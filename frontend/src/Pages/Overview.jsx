@@ -27,7 +27,6 @@ export default function Overview({ user, onNavigate }) {
         .then(res => { setData(res.data); setError(false); })
         .catch(err => { console.error("Overview Error:", err); setError(true); });
     };
-
     fetchData();
     const interval = setInterval(fetchData, 15000); // 15 second refresh (smoother)
     return () => clearInterval(interval);

@@ -23,7 +23,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         if (err.response?.status === 401 && onNavigate) onNavigate('login');
     } finally { setLoading(false); }
   }, [onNavigate]);
-
   useEffect(() => { fetchBugs(); }, [fetchBugs]);
 
   const getField = (bug, field) => {

@@ -9,7 +9,6 @@ from database import get_db
 import models
 from pydantic import BaseModel
 from database import supabase
-
 class LoginRequest(BaseModel):
     username: str
     password: str

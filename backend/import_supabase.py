@@ -15,7 +15,6 @@ if sys.platform == "win32":
         mmap.PROT_READ = 0x01
     _original_mmap = mmap.mmap
 
-
     def _mmap_windows_wrapper(*args, **kwargs):
         if "prot" in kwargs:
             if kwargs["prot"] == mmap.PROT_READ: kwargs["access"] = mmap.ACCESS_READ

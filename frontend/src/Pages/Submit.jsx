@@ -5,7 +5,6 @@ import {
   Cpu, Activity, Layers, BarChart3, Database, CheckCircle,
   Sparkles, ChevronRight, Send, ShieldAlert, Trash2, X
 } from 'lucide-react';
-
 // --- SLEEK TOAST COMPONENT ---
 function Toast({ msg, onClose }) {
     if (!msg.text) return null;
