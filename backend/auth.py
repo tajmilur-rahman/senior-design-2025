@@ -14,7 +14,6 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-# Configuration
 SECRET_KEY = "YOUR_SURE_SECRET_KEY_FOR_DEMO" # Keep this consistent
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600 

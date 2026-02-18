@@ -16,7 +16,6 @@ function LiveFeedRow({ bug }) {
         </div>
     )
 }
-
 export default function Overview({ user, onNavigate }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);

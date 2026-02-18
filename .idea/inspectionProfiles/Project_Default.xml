@@ -1,0 +1,55 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="amqp" />
+          <option value="beautifulsoup4" />
+          <option value="boto3" />
+          <option value="imbalanced-learn" />
+          <option value="langchain" />
+          <option value="langchain-anthropic" />
+          <option value="langchain-community" />
+          <option value="langchain-google-genai" />
+          <option value="langchain-mistralai" />
+          <option value="langchain-openai" />
+          <option value="libmozdata" />
+          <option value="llama-cpp-python" />
+          <option value="lmdb" />
+          <option value="lxml-html-clean" />
+          <option value="markdown2" />
+          <option value="matplotlib" />
+          <option value="mercurial" />
+          <option value="microannotate" />
+          <option value="mozci" />
+          <option value="numpy" />
+          <option value="orjson" />
+          <option value="ortools" />
+          <option value="pandas" />
+          <option value="psutil" />
+          <option value="pyOpenSSL" />
+          <option value="python-dateutil" />
+          <option value="python-hglib" />
+          <option value="qdrant-client" />
+          <option value="ratelimit" />
+          <option value="requests" />
+          <option value="requests-html" />
+          <option value="rs_parsepatch" />
+          <option value="scikit-learn" />
+          <option value="scipy" />
+          <option value="sendgrid" />
+          <option value="shap" />
+          <option value="tabulate" />
+          <option value="taskcluster" />
+          <option value="tenacity" />
+          <option value="tqdm" />
+          <option value="unidiff" />
+          <option value="xgboost" />
+          <option value="zstandard" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

@@ -25,7 +25,6 @@ function Toast({ msg, onClose }) {
         </div>
     );
 }
-
 export default function Submit({ user, onNavigate }) {
   const [mode, setMode] = useState('single');
   const [loading, setLoading] = useState(false);

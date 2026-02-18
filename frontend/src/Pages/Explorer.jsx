@@ -9,7 +9,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const itemsPerPage = 10;
-
   useEffect(() => { setSearch(initialQuery); }, [initialQuery]);
 
   const fetchBugs = useCallback(async () => {

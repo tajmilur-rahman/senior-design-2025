@@ -10,9 +10,6 @@ from psycopg2 import extras
 DATABASE_URL = "postgresql://postgres.ofthvbabxgzsjercdjmo:GannonUniversity2026%24@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
 TARGET_TABLE = "firefox_table"
 
-# ==========================================
-# 1. WINDOWS COMPATIBILITY PATCH
-# ==========================================
 if sys.platform == "win32":
     if not hasattr(mmap, "PROT_READ"):
         mmap.PROT_READ = 0x01

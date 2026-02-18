@@ -8,7 +8,6 @@ DB = {
     "host": "127.0.0.1", # Changed from localhost
     "port": "5432"
 }
-
 # --- ML ARTIFACT PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # FIX: Go up one level (..) to find the folder in the root directory
