@@ -5,13 +5,13 @@ DB = {
     "dbname": "bugbug_data",
     "user": "postgres",
     "password": "2331",
-    "host": "127.0.0.1", # Changed from localhost
+    "host": "127.0.0.1",
     "port": "5432"
 }
 # --- ML ARTIFACT PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # FIX: Go up one level (..) to find the folder in the root directory
-ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "Random Forest ML"))
+ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "random_forest_ml"))
 
 ART_RF = {
     "model": os.path.join(ML_DIR, "rf_model.pkl"),
