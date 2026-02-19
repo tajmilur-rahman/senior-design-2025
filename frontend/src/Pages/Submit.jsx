@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  UploadCloud, RotateCcw, AlertCircle, FileText, PenTool, 
+import {
+  UploadCloud, RotateCcw, AlertCircle, FileText, PenTool,
   Cpu, Activity, Layers, BarChart3, Database, CheckCircle,
   Sparkles, ChevronRight, Send, ShieldAlert, Trash2, X
 } from 'lucide-react';
-// --- SLEEK TOAST COMPONENT ---
+
 function Toast({ msg, onClose }) {
     if (!msg.text) return null;
     const isError = msg.type === 'error';
@@ -29,16 +29,12 @@ export default function Submit({ user, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState({ text: "", type: "" });
 
-  // Single Entry
   const [summary, setSummary] = useState('');
   const [component, setComponent] = useState('Core');
   const [severity, setSeverity] = useState('S3');
   const [aiResult, setAiResult] = useState(null);
 
-  // NEW: Track recently submitted bugs for manual deletion
   const [recentBugs, setRecentBugs] = useState([]);
-
-  // Bulk / Training
   const [file, setFile] = useState(null);
   const [batches, setBatches] = useState([]);
 
@@ -81,16 +77,10 @@ export default function Submit({ user, onNavigate }) {
 
         if (response.status === 200) {
             setMsg({ text: "Bug Logged Successfully", type: "success" });
-
-            // Add to "Recent" list so user can undo if needed
             const newBug = { ...response.data, summary };
             setRecentBugs([newBug, ...recentBugs]);
-
-            // Reset Form
             setSummary('');
             setAiResult(null);
-
-            // Auto hide toast
             setTimeout(() => setMsg({ text: "", type: "" }), 3000);
         }
     } catch (err) {
@@ -98,7 +88,6 @@ export default function Submit({ user, onNavigate }) {
     }
   };
 
-  // NEW: Delete a single bug
   const handleDeleteBug = async (bugId) => {
       try {
           await axios.delete(`/api/bug/${bugId}`, getHeaders());
@@ -110,7 +99,6 @@ export default function Submit({ user, onNavigate }) {
       }
   };
 
-  // NEW: Delete a training batch (Undo Ledger)
   const handleDeleteBatch = async (batchId) => {
       if(!window.confirm("Are you sure you want to remove this training record?")) return;
       try {
@@ -146,7 +134,6 @@ export default function Submit({ user, onNavigate }) {
     <div className="page-content centered-page" style={{alignItems:'flex-start', gap: 30, padding: 40}}>
       <Toast msg={msg} onClose={() => setMsg({ text: "", type: "" })} />
 
-      {/* LEFT: ACTION STATION */}
       <div className="sys-card" style={{flex: 1.6, padding: 0, overflow:'hidden', minHeight: 600, display:'flex', flexDirection:'column'}}>
         <div style={{padding: 30, borderBottom: '1px solid var(--border)', background: '#f8fafc'}}>
             <h2 style={{display:'flex', alignItems:'center', gap: 10, fontSize: 20}}>
@@ -189,7 +176,6 @@ export default function Submit({ user, onNavigate }) {
                         </div>
                     )}
 
-                    {/* RECENT SUBMISSIONS LIST (Manual Delete) */}
                     {recentBugs.length > 0 && (
                         <div style={{marginTop: 40, borderTop:'1px solid #e2e8f0', paddingTop: 20}}>
                             <label className="tiny-label" style={{marginBottom:10, display:'block'}}>RECENT SUBMISSIONS (SESSION)</label>
@@ -234,7 +220,6 @@ export default function Submit({ user, onNavigate }) {
         </div>
       </div>
 
-      {/* RIGHT: MODEL LEDGER */}
       <div className="sys-card" style={{flex: 1, padding: 0, minHeight: 600}}>
           <div style={{padding: 25, borderBottom: '1px solid var(--border)'}}>
               <h2 style={{fontSize: 16, fontWeight: 800, display:'flex', alignItems:'center', gap: 10}}>
@@ -250,7 +235,6 @@ export default function Submit({ user, onNavigate }) {
                       </div>
                       <div style={{display:'flex', alignItems:'center', gap: 15}}>
                           <div style={{fontSize: 13, fontWeight: 800, color: '#16a34a'}}>100%</div>
-                          {/* UNDO BUTTON */}
                           <button onClick={() => handleDeleteBatch(b.id)} style={{
                               background:'#fee2e2', border:'none', borderRadius: 6, width: 28, height: 28,
                               display:'flex', alignItems:'center', justifyContent:'center', color:'#ef4444', cursor:'pointer'

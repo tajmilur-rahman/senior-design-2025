@@ -1,19 +1,23 @@
 import mmap
 import sys
-import json
 import psycopg2
 import bcrypt
 import time
 from psycopg2 import extras
+from bugbug import bugzilla, db
 
 # --- CONFIGURATION ---
 DATABASE_URL = "postgresql://postgres.ofthvbabxgzsjercdjmo:GannonUniversity2026%24@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
 TARGET_TABLE = "firefox_table"
 
+# ==========================================
+# 1. WINDOWS COMPATIBILITY PATCH
+# ==========================================
 if sys.platform == "win32":
     if not hasattr(mmap, "PROT_READ"):
         mmap.PROT_READ = 0x01
     _original_mmap = mmap.mmap
+
 
     def _mmap_windows_wrapper(*args, **kwargs):
         if "prot" in kwargs:
@@ -25,9 +29,10 @@ if sys.platform == "win32":
 
     mmap.mmap = _mmap_windows_wrapper
 
-from bugbug import bugzilla, db
 
-
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
 
@@ -54,6 +59,25 @@ def map_severity(bug):
     return 'S3'
 
 
+def insert_batch(cursor, batch_data):
+    query = f"""
+            INSERT INTO {TARGET_TABLE} (bug_id, summary, component, severity, status, data, company_id)
+            VALUES %s
+            ON CONFLICT (bug_id)
+            DO UPDATE SET
+            summary = EXCLUDED.summary,
+            component = EXCLUDED.component,
+            severity = EXCLUDED.severity,
+            status = EXCLUDED.status,
+            data = EXCLUDED.data,
+            company_id = EXCLUDED.company_id;
+            """
+    extras.execute_values(cursor, query, batch_data, template="(%s, %s, %s, %s, %s, %s, %s)")
+
+
+# ==========================================
+# MAIN EXECUTION
+# ==========================================
 def main():
     print(f"🚀 Starting Import into '{TARGET_TABLE}'...")
 
@@ -66,6 +90,7 @@ def main():
     print("✅ Connected to Supabase Cloud!")
 
     # --- RESET TABLE SCHEMA ---
+    # This automatically deletes the old table and clears the storage before starting
     print(f"--- MAINTENANCE: Refreshing '{TARGET_TABLE}' schema ---")
     cur.execute(f"DROP TABLE IF EXISTS {TARGET_TABLE} CASCADE;")
     cur.execute(f"""
@@ -83,8 +108,6 @@ def main():
 
     # --- RESOLVE COMPANY ID (STRICTLY ADMIN) ---
     print("--- SETUP: Resolving Admin Company ---")
-
-    # UPDATED QUERY: Look ONLY for 'admin'
     cur.execute("SELECT company_id, username FROM users WHERE username = 'admin' LIMIT 1")
     user_row = cur.fetchone()
 
@@ -92,7 +115,6 @@ def main():
         TARGET_COMPANY_ID = user_row[0]
         print(f"✅ Found user '{user_row[1]}'. Importing for Company ID: {TARGET_COMPANY_ID}")
     else:
-        # Fallback: If admin doesn't exist, create it
         print("⚠️ 'admin' user not found. Creating default admin...")
         TARGET_COMPANY_ID = int(time.time())
         cur.execute("INSERT INTO companies (id, name) VALUES (%s, 'Default Corporation') ON CONFLICT DO NOTHING",
@@ -108,7 +130,7 @@ def main():
     conn.commit()
 
     # --- BATCH INSERT ---
-    print(f"🚀 Streaming bugs to Supabase table '{TARGET_TABLE}'...")
+    print(f"🚀 Streaming bugs to Supabase table '{TARGET_TABLE}' (Optimized for 200k+ records)...")
 
     BATCH_SIZE = 1000
     batch = []
@@ -116,14 +138,21 @@ def main():
 
     try:
         for i, bug in enumerate(bugzilla.get_bugs()):
-
             if not bug.get('id'): continue
 
             cleaned_bug = clean_obj(bug)
             s_code = map_severity(cleaned_bug)
             cleaned_bug['severity'] = s_code
 
-            json_wrapper = extras.Json(cleaned_bug)
+            # ⚡ EXTREME STORAGE OPTIMIZATION:
+            # Instead of saving the entire 3KB raw payload, we only save the 50 bytes we actually need.
+            # This prevents Supabase Free Tier from crashing when loading 200,000 rows.
+            minimal_data = {
+                "platform": cleaned_bug.get("platform", "Windows"),
+                "type": cleaned_bug.get("type", "defect")
+            }
+            json_wrapper = extras.Json(minimal_data)
+
             summary = cleaned_bug.get('summary', '')[:500]
             component = cleaned_bug.get('product', '')
             status = cleaned_bug.get('status', '')
@@ -137,9 +166,9 @@ def main():
                 print(f"  -> Uploaded {total_inserted} bugs...", end='\r')
                 batch = []
 
-            if total_inserted >= 20000:
-                break
+            # ⚡ REMOVED THE 20,000 LIMIT. IT WILL NOW PROCESS THE FULL DATABASE.
 
+        # Insert any remaining bugs in the last batch
         if batch:
             insert_batch(cur, batch)
             total_inserted += len(batch)
@@ -158,22 +187,6 @@ def main():
     finally:
         cur.close()
         conn.close()
-
-
-def insert_batch(cursor, batch_data):
-    query = f"""
-            INSERT INTO {TARGET_TABLE} (bug_id, summary, component, severity, status, data, company_id)
-            VALUES %s
-            ON CONFLICT (bug_id)
-            DO UPDATE SET
-            summary = EXCLUDED.summary,
-            component = EXCLUDED.component,
-            severity = EXCLUDED.severity,
-            status = EXCLUDED.status,
-            data = EXCLUDED.data,
-            company_id = EXCLUDED.company_id;
-            """
-    extras.execute_values(cursor, query, batch_data, template="(%s, %s, %s, %s, %s, %s, %s)")
 
 
 if __name__ == "__main__":

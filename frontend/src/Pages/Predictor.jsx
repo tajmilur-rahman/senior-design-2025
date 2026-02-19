@@ -14,7 +14,6 @@ export default function MLPredictor({ user }) {
   const components = ["Frontend", "Backend", "Database", "Networking", "Security", "DevTools", "Core"];
   const platforms = ["Windows", "MacOS", "Linux", "Android", "iOS"];
 
-  // Helper to get token
   const getAuthHeader = () => {
     const token = localStorage.getItem("token");
     return { Authorization: `Bearer ${token}` };
@@ -26,7 +25,6 @@ export default function MLPredictor({ user }) {
 
     try {
         const payload = { summary, component, platform };
-        // FIX 1: Use relative path for Vite Proxy and add Auth header
         const r = await axios.post('/api/predict', payload, {
             headers: getAuthHeader()
         });
@@ -41,37 +39,25 @@ export default function MLPredictor({ user }) {
   const saveToDb = async () => {
       if (!res) return;
       try {
-          // Matches your CreateBugRequest Pydantic model
           const bugPayload = {
-              bug: {
-                  summary,
-                  component,
-                  severity: res.prediction, // Predicted severity from AI
-                  status: "NEW",
-                  platform: platform
-              },
+              bug: { summary, component, severity: res.prediction, status: "NEW", platform },
               company_id: user.company_id
           };
-          
-          // FIX 2: Correct endpoint and attach token
+
           await axios.post('/api/bug', bugPayload, {
               headers: getAuthHeader()
           });
           setSaved(true);
-      } catch (e) { 
+      } catch (e) {
           console.error("Save Error:", e);
-          alert("Error saving bug to database."); 
+          alert("Error saving bug to database.");
       }
   };
 
   const sendFeedback = async (actual) => {
       try {
-          // FIX 3: Matches Feedback model in models.py
           await axios.post('/api/feedback', {
-              summary, 
-              predicted_severity: res.prediction, 
-              actual_severity: actual, 
-              company_id: user.company_id
+              summary, predicted_severity: res.prediction, actual_severity: actual, company_id: user.company_id
           }, {
               headers: getAuthHeader()
           });

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import {
   AlertTriangle, Search, History, Bug, ThumbsUp,
   ThumbsDown, Sparkles, ArrowRight, RefreshCw,
@@ -24,7 +25,6 @@ const BugAnalysis = () => {
     const textToAnalyze = overrideQuery || query;
     if (!textToAnalyze) return;
 
-    // --- UX IMPROVEMENT: INSTANT RESET ---
     setAnalyzing(true);
     setError(null);
     setPrediction(null);
@@ -34,18 +34,14 @@ const BugAnalysis = () => {
     if (overrideQuery) setQuery(overrideQuery);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/analyze_bug`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bug_text: textToAnalyze })
-      });
+      // FIX: Use relative endpoint and authentication header
+      const token = localStorage.getItem("token");
+      const response = await axios.post(`/api/analyze_bug`,
+        { bug_text: textToAnalyze },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.detail || "Failed to connect to backend");
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       if (data.severity) {
           setPrediction(data.severity);
@@ -63,7 +59,6 @@ const BugAnalysis = () => {
     }
   };
 
-  // UX IMPROVEMENT: Reset the entire workspace
   const handleClear = () => {
     setQuery('');
     setPrediction(null);
@@ -93,7 +88,6 @@ const BugAnalysis = () => {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
         />
-        {/* CLEAR BUTTON */}
         {query && !analyzing && (
             <button onClick={handleClear} className="icon-btn" style={{marginRight: 8, color: '#94a3b8'}}>
                 <XCircle size={18} />
@@ -104,8 +98,6 @@ const BugAnalysis = () => {
         </button>
       </div>
 
-      {/* --- UX IMPROVEMENT: PERSISTENT SAMPLE CHIPS --- */}
-      {/* These stay visible now so you can compare multiple samples quickly */}
       <div className="fade-in" style={{marginTop: 30, textAlign: 'center', marginBottom: prediction ? 20 : 0}}>
           <p style={{fontSize: 11, fontWeight: 800, color: '#94a3b8', marginBottom: 16, display:'flex', alignItems:'center', justifyContent:'center', gap:6, letterSpacing: 0.5}}>
               <Sparkles size={14} color="var(--accent)"/> TRY A DIFFERENT REPORT
@@ -128,7 +120,6 @@ const BugAnalysis = () => {
 
       {prediction && (
         <div className="ba-grid fade-in">
-           {/* LEFT CARD: PREDICTION */}
            <div className="ba-card">
             <div className="ba-card-header"><AlertTriangle size={16} /> Predicted Severity</div>
 
@@ -144,7 +135,6 @@ const BugAnalysis = () => {
               <p className="ba-confidence">Confidence Score <strong>{prediction.confidence || 0}%</strong></p>
             </div>
 
-            {/* PRESERVING OLD RECOMMENDED ACTION LOGIC */}
             <div className="ba-action-box">
               <p className="ba-action-label">Recommended Action</p>
               <p className="ba-action-text">{prediction.action || "No recommendation available."}</p>
@@ -183,7 +173,6 @@ const BugAnalysis = () => {
             )}
           </div>
 
-          {/* RIGHT CARD: SIMILAR BUGS */}
           <div className="ba-card">
             <div className="ba-card-header"><History size={16} /> Similar Past Bugs</div>
             <div className="custom-scrollbar" style={{maxHeight: 400, overflowY: 'auto', paddingRight: 4}}>
