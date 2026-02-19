@@ -6,7 +6,6 @@ class Company(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True)
 
-
 class Batch(Base):
     """
     Stores history of uploads AND the model's accuracy at that point in time.

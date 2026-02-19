@@ -18,7 +18,6 @@ ART_RF = {
     "enc": os.path.join(ML_DIR, "label_encoders.pkl"),
     "met": os.path.join(ML_DIR, "rf_metrics.json")
 }
-
 # --- ML CONSTANTS ---
 META = ["component", "product", "priority", "platform", "op_sys", "type", "resolution", "status"]
 FLAGS = ["has_crash", "is_accessibility", "is_regression", "is_intermittent", "has_patch"]

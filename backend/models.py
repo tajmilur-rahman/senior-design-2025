@@ -13,7 +13,6 @@ class User(Base):
     password_hash = Column(String)
     role = Column(String)
     company_id = Column(Integer, ForeignKey("companies.id"))
-
 class Bug(Base):
     __tablename__ = "bugs"
     bug_id = Column(Integer, primary_key=True, index=True) 

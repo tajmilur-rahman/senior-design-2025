@@ -15,8 +15,7 @@ class LoginRequest(BaseModel):
 
 SECRET_KEY = "YOUR_SURE_SECRET_KEY_FOR_DEMO" # Keep this consistent
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 600 
-
+ACCESS_TOKEN_EXPIRE_MINUTES = 600
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
