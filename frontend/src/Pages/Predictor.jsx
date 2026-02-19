@@ -128,7 +128,6 @@ export default function MLPredictor({ user }) {
                      <button className="sys-btn outline" onClick={() => {const c=prompt("Correct Severity?"); if(c) sendFeedback(c.toUpperCase())}} style={{flex:1, color:'#ef4444', borderColor:'#ef4444'}}>✕ Wrong</button>
                  </div>
              )}
-
              {!saved && (
                  <button className="sys-btn full" onClick={saveToDb} style={{background:'#10b981', marginTop:15, color:'white'}}>
                     <CheckCircle size={16}/> SUBMIT TO DATABASE

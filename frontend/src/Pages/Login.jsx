@@ -16,7 +16,6 @@ export default function Login({ onLogin }) {
   const handleAuth = async (e) => {
     e.preventDefault();
     setMsg("");
-
     if ((mode === 'register' || mode === 'reset') && p !== cp) {
         setMsg("Passwords do not match.");
         return;

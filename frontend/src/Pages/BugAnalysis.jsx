@@ -201,5 +201,4 @@ const BugAnalysis = () => {
     </div>
   );
 };
-
 export default BugAnalysis;

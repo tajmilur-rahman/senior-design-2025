@@ -115,7 +115,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
            </button>
         </div>
       </div>
-
       <div className="sys-card table-card">
         <div className="table-scroll-wrapper">
           <table className="sleek-table">

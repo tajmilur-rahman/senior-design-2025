@@ -89,7 +89,6 @@ export default function Overview({ user, onNavigate }) {
            </div>
         </div>
       </ScrollSection>
-
       <ScrollSection className="feature-section left-align">
          <div className="feature-visual">
             <div className="sys-card" style={{width:'100%', padding:20, height:320}}>

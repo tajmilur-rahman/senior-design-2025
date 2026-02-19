@@ -219,7 +219,6 @@ export default function Submit({ user, onNavigate }) {
             )}
         </div>
       </div>
-
       <div className="sys-card" style={{flex: 1, padding: 0, minHeight: 600}}>
           <div style={{padding: 25, borderBottom: '1px solid var(--border)'}}>
               <h2 style={{fontSize: 16, fontWeight: 800, display:'flex', alignItems:'center', gap: 10}}>
