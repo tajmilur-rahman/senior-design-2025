@@ -35,26 +35,29 @@ export default function Submit({ user, onNavigate }) {
     } catch (err) { console.error("History error", err); }
   };
 
-  const handleAnalyze = async () => {
+const handleAnalyze = async () => {
     if (!summary) return;
     setLoading(true);
     try {
-      const res = await axios.post(
-        `/api/analyze_bug?bug_text=${encodeURIComponent(summary)}`, 
-        {}, 
-        getHeaders()
-      );
-      setAiResult(res.data);
-      if (res.data.severity) setSeverity(res.data.severity.label);
+        const res = await axios.post(
+            `/api/analyze_bug?bug_text=${encodeURIComponent(summary)}`, 
+            {}, 
+            getHeaders()
+        );
+        setAiResult(res.data);
+        if (res.data.severity) setSeverity(res.data.severity.label);
     } catch (err) {
-      setMsg({ text: "AI Analysis Failed", type: "error" });
+        setMsg({ text: "AI Analysis Failed", type: "error" });
     } finally { setLoading(false); }
-  };
+};
 
   const handleFinalSubmit = async () => {
     try {
         const payload = {
-            bug: { summary, component, severity, status: "NEW" },
+            summary: summary,
+            component: component,
+            severity: severity,
+            status: "NEW",
             company_id: user.company_id
         };
         const response = await axios.post("/api/bug", payload, getHeaders());
@@ -68,7 +71,7 @@ export default function Submit({ user, onNavigate }) {
     } catch (err) {
         setMsg({ text: "Failed to save to database.", type: "error" });
     }
-  };
+};
 
   const handleBulkUpload = async () => {
     if(!file) return;
@@ -76,6 +79,7 @@ export default function Submit({ user, onNavigate }) {
     setMsg({ text: "Retraining Neural Network...", type: "loading" });
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("batch_name", file.name); // Required by your backend
     fd.append("company_id", user.company_id);
 
     try {
@@ -86,8 +90,7 @@ export default function Submit({ user, onNavigate }) {
     } catch (err) {
       setMsg({ text: "Training Failed", type: "error" });
     } finally { setLoading(false); }
-  };
-
+};
   return (
     <div className="page-content centered-page" style={{alignItems:'flex-start', gap: 30, padding: 40}}>
       

@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import joblib
 import argparse
@@ -7,7 +8,8 @@ import shutil
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
 # --- CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # If your CSV is in a specific folder, adjust this path
@@ -36,11 +38,24 @@ def run_training_pipeline(fast_mode=False):
         N_ESTIMATORS = 50 if fast_mode else 100
         
         # --- 2. LOAD DATA ---
-        print(f"📂 Loading data from {CSV_FILE}...")
-        if not os.path.exists(CSV_FILE):
-            raise Exception(f"File {CSV_FILE} not found! Please ensure data.csv is in {BASE_DIR}")
-            
-        df = pd.read_csv(CSV_FILE)
+        try:
+            from database import supabase
+        except ImportError:
+            print("❌ Still couldn't find database.py. Ensure the path to the backend folder is correct.")
+            return False
+        # 1. Get Firefox Data
+        fx_res = supabase.table("firefox_table").select("summary, severity").execute()
+        # 2. Get your own Bugs Data
+        bg_res = supabase.table("bugs").select("summary, severity").execute()
+
+        # Combine them into one DataFrame
+        df_fx = pd.DataFrame(fx_res.data)
+        df_bg = pd.DataFrame(bg_res.data)
+        df = pd.concat([df_fx, df_bg], ignore_index=True)
+
+        if df.empty:
+            raise Exception("No data found in Supabase! Training cannot proceed.")
+        print(f"   -> Loaded {len(df)} total rows for Universal Training.")
         
         # Standardize column names
         # We only care about TWO columns: The Text (summary) and the Label (severity)

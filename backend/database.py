@@ -6,7 +6,7 @@ from supabase import create_client, Client
 # Project URL: Use your Project ID to form this
 SUPABASE_URL = "https://ofthvbabxgzsjercdjmo.supabase.co"
 # Anon Key: Copy the long string from your "anon public" box in the last screenshot
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdGh2YmFieGd6c2plcmNkam1vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0MzA1OTYsImV4cCI6MjA4NzAwNjU5Nn0.yjNcaOg6zpVpH33vAC0cHB77OfPCjH6w_qiN84RrW10" 
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdGh2YmFieGd6c2plcmNkam1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTQzMDU5NiwiZXhwIjoyMDg3MDA2NTk2fQ.k5_V15ObyBwdsjf_qO5x-n1yCOVNIiFHX1spilAA_Vg"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 

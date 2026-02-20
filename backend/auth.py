@@ -10,6 +10,10 @@ import models
 from pydantic import BaseModel
 from database import supabase
 
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
 class LoginRequest(BaseModel):
     username: str
     password: str
