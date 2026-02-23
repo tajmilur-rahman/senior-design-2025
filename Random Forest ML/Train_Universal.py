@@ -6,15 +6,14 @@ import argparse
 import time
 import shutil
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+
 # --- CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# If your CSV is in a specific folder, adjust this path
-CSV_FILE = os.path.join(BASE_DIR, "data.csv") 
-
 ARTIFACTS = {
     "model": os.path.join(BASE_DIR, "../backend/rf_model.pkl"),
     "vectorizer": os.path.join(BASE_DIR, "../backend/tfidf_vectorizer.pkl"),
@@ -23,7 +22,6 @@ ARTIFACTS = {
 
 def backup_for_revert():
     """Save current model as '.old' before overwriting."""
-    print("🛡️ Creating Revert Point (saving .old files)...")
     for name, path in ARTIFACTS.items():
         if os.path.exists(path):
             shutil.copy(path, path + ".old")
@@ -32,98 +30,89 @@ def run_training_pipeline(fast_mode=False):
     backup_for_revert()
 
     try:
-        # --- 1. CONFIG ---
-        # Demo Mode: Faster training. Production: More detailed (5000 words).
-        MAX_FEATURES = 1000 if fast_mode else 5000
-        N_ESTIMATORS = 50 if fast_mode else 100
+        # 1. PARAMETER TUNING
+        # Increase vocabulary to capture specific Firefox technical terms
+        MAX_FEATURES = 15000 if not fast_mode else 2000
+        N_ESTIMATORS = 200 # More trees improve the stability of minority class predictions
         
-        # --- 2. LOAD DATA ---
+        # 2. LOAD DATA
         try:
             from database import supabase
         except ImportError:
-            print("❌ Still couldn't find database.py. Ensure the path to the backend folder is correct.")
-            return False
-        # 1. Get Firefox Data
+            sys.path.append(os.path.abspath(os.path.join(BASE_DIR, '../backend')))
+            from database import supabase
+
         fx_res = supabase.table("firefox_table").select("summary, severity").execute()
-        # 2. Get your own Bugs Data
         bg_res = supabase.table("bugs").select("summary, severity").execute()
 
-        # Combine them into one DataFrame
         df_fx = pd.DataFrame(fx_res.data)
         df_bg = pd.DataFrame(bg_res.data)
         df = pd.concat([df_fx, df_bg], ignore_index=True)
 
         if df.empty:
-            raise Exception("No data found in Supabase! Training cannot proceed.")
-        print(f"   -> Loaded {len(df)} total rows for Universal Training.")
+            raise Exception("Dataset is empty.")
         
-        # Standardize column names
-        # We only care about TWO columns: The Text (summary) and the Label (severity)
-        if "description" in df.columns:
-            df.rename(columns={"description": "summary"}, inplace=True)
-        
-        # Validation: Ensure we have the basics
-        if "summary" not in df.columns or "severity" not in df.columns:
-            raise Exception("CSV is missing 'description' (or summary) or 'severity' columns.")
-        
-        print(f"   -> Loaded {len(df)} rows.")
-
-        # --- 3. PREPROCESS (UNIVERSAL LOGIC) ---
-        print("⚙️ Processing Text (Universal Mode)...")
-        # Convert all text to lowercase strings to handle messy input
+        # 3. DATA CLEANING & LABEL NORMALIZATION
         df['summary'] = df['summary'].fillna("").astype(str).str.lower()
         
-        # Normalize Severity Labels (Universal S-Ranking)
-        # This maps company-specific terms like "Blocker" to our universal "S1"
         severity_map = {
             "blocker": "S1", "critical": "S1", "s1": "S1",
             "major": "S2", "s2": "S2",
-            "normal": "S3", "minor": "S3", "trivial": "S3", "enhancement": "S4", "s3": "S3", "s4": "S4"
+            "normal": "S3", "minor": "S3", "trivial": "S3", "s3": "S3",
+            "enhancement": "S4", "s4": "S4"
         }
-        df["severity"] = df["severity"].str.lower().map(severity_map).fillna("S3") # Default to S3 if unknown
+        df["severity"] = df["severity"].str.lower().map(severity_map).fillna("S3")
 
-        # VECTORIZATION (The Translator)
-        # We use TF-IDF to turn words into numbers. 
-        # stop_words='english' removes useless words like "the", "and", "is".
-        print("   -> converting text to mathematical vectors...")
-        vectorizer = TfidfVectorizer(max_features=MAX_FEATURES, stop_words="english")
+        # 4. VECTORIZATION (Learning phrases)
+        # ngram_range(1, 2) ensures phrases like 'memory leak' are learned as single units.
+        # min_df=5 prevents the model from learning noise/typos that only appear once.
+        vectorizer = TfidfVectorizer(
+            max_features=MAX_FEATURES,
+            stop_words="english",
+            ngram_range=(1, 2), 
+            min_df=5,
+            sublinear_tf=True
+        )
+        
         X = vectorizer.fit_transform(df["summary"])
         y = df["severity"]
 
-        # --- 4. TRAIN (THE BRAIN) ---
-        print(f"🚀 Training Random Forest (Trees={N_ESTIMATORS})...")
-        # class_weight="balanced" helps if you have way more S3s than S1s (common in real life)
-        rf = RandomForestClassifier(n_estimators=N_ESTIMATORS, class_weight="balanced", random_state=42, n_jobs=-1)
+        # 5. COST-SENSITIVE TRAINING
+        # Using 'balanced_subsample' calculates weights at the tree level, 
+        # which is more effective for high-volume imbalanced data like 220k rows.
+        rf = RandomForestClassifier(
+            n_estimators=N_ESTIMATORS,
+            class_weight="balanced_subsample", 
+            max_depth=None,
+            min_samples_split=5,
+            random_state=42,
+            n_jobs=-1
+        )
+        
         rf.fit(X, y)
 
-        # --- 5. SAVE ARTIFACTS ---
-        print("💾 Saving the brain...")
+        # 6. SAVE ARTIFACTS
         joblib.dump(rf, ARTIFACTS["model"])
         joblib.dump(vectorizer, ARTIFACTS["vectorizer"])
 
-        # Calculate Real Accuracy Score
-        acc = rf.score(X, y)
-        print(f"✅ Training Complete. Model Accuracy: {round(acc * 100, 2)}%")
-
-        # Save metadata for the dashboard
+        # Generate metrics
+        accuracy = rf.score(X, y)
         metrics = {
-            "accuracy": round(acc, 2),
+            "accuracy": round(accuracy, 4),
             "last_trained": time.ctime(),
-            "status": "Universal Model Ready"
+            "sample_size": len(df),
+            "features_learned": MAX_FEATURES
         }
+        
         with open(ARTIFACTS["metrics"], "w") as f:
             json.dump(metrics, f)
 
+        print(f"Training successful. Accuracy: {accuracy:.2%}")
         return True
 
     except Exception as e:
-        print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Pipeline failed: {str(e)}")
         return False
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, help="Limit training size for speed testing")
-    args = parser.parse_args()
-    run_training_pipeline(fast_mode=(args.limit is not None))
+    run_training_pipeline()
