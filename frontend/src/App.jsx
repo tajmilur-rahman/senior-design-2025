@@ -1,42 +1,30 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import BugAnalysis from './Pages/BugAnalysis';
-import { ScrollSection, Background, SkeletonLoader } from './Components/LayoutUtils';
 import Overview from './Pages/Overview';
 import Explorer from "./Pages/Explorer";
 import SubmitTab from "./Pages/Submit";
 import Login from "./Pages/Login";
+import Directory from "./Pages/Directory";
 
-import {
-  Database, BrainCircuit, LogOut, Search,
-  ShieldCheck, UploadCloud, Activity,
-  Download, ArrowUpDown, ChevronLeft, ChevronRight,
-  Terminal, AlertTriangle, Trash2, CheckCircle, ExternalLink,
-  Cpu, Zap, Server, RotateCcw
-} from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts';
+import { ShieldCheck, LogOut, Moon, Sun } from 'lucide-react';
 import './App.css';
 
-// Add this in App.jsx
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// --- DASHBOARD CONTAINER ---
-function Dashboard({ user, onLogout }) {
+function Dashboard({ user, onLogout, theme, toggleTheme }) {
   const [tab, setTab] = useState('overview');
   const [externalQuery, setExternalQuery] = useState("");
+  const [submitPrefill, setSubmitPrefill] = useState(null);
 
-  const handleNavigation = (targetTab, query = "") => {
+  const handleNavigation = (targetTab, query = "", prefill = null) => {
       setTab(targetTab);
       setExternalQuery(query);
+      if (prefill) setSubmitPrefill(prefill);
   };
 
   return (
@@ -50,21 +38,16 @@ function Dashboard({ user, onLogout }) {
              BUG<span style={{color:'var(--accent)'}}>PRIORITY</span>
           </div>
           <div className="nav-center">
-             {/* UPDATED: Added 'Analysis' to this list */}
-             {['Overview', 'Database', 'Analysis', 'Submit'].map(t => (
-                 <button
-                    key={t}
-                    className={`nav-link ${tab===t.toLowerCase()?'active':''}`}
-                    onClick={()=>{
-                        setTab(t.toLowerCase());
-                        setExternalQuery("");
-                    }}
-                 >
+             {['Overview', 'Directory', 'Database', 'Analysis', 'Submit'].map(t => (
+                 <button key={t} className={`nav-link ${tab===t.toLowerCase()?'active':''}`} onClick={()=>{ setTab(t.toLowerCase()); setExternalQuery(""); }}>
                     {t}
                  </button>
              ))}
           </div>
           <div className="nav-right">
+             <button className="icon-btn" onClick={toggleTheme} style={{marginRight: 10}}>
+                 {theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}
+             </button>
              <div className="user-pill">
                 <div className="user-avatar-sm">{user.username[0].toUpperCase()}</div>
                 <span className="user-name">{user.username}</span>
@@ -77,26 +60,26 @@ function Dashboard({ user, onLogout }) {
       </nav>
       <main className="main-scroll">
          {tab === 'overview' && <Overview user={user} onNavigate={handleNavigation}/>}
-         {tab === 'database' && <Explorer user={user} initialQuery={externalQuery}/>}
+         {tab === 'directory' && <Directory onNavigate={handleNavigation}/>}
+         {tab === 'database' && <Explorer user={user} initialQuery={externalQuery} onNavigate={handleNavigation}/>}
          {tab === 'analysis' && <BugAnalysis />}
-         
-         {tab === 'submit' && <SubmitTab user={user}/>}
+         {tab === 'submit' && <SubmitTab user={user} prefill={submitPrefill} onClearPrefill={() => setSubmitPrefill(null)}/>}
       </main>
     </div>
   );
 }
 
-// ==========================================
-// 👇 THE MAIN APP SWITCH
-// ==========================================
 export default function App() {
   const [user, setUser] = useState(null);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
-  // 1. If no user is logged in, show Login
-  if (!user) {
-    return <Login onLogin={(loggedInUser) => setUser(loggedInUser)} />;
-  }
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
-  // 2. If user IS logged in, show Dashboard
-  return <Dashboard user={user} onLogout={() => setUser(null)} />;
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+  if (!user) return <Login onLogin={(u) => setUser(u)} theme={theme} toggleTheme={toggleTheme} />;
+  return <Dashboard user={user} onLogout={() => setUser(null)} theme={theme} toggleTheme={toggleTheme} />;
 }

@@ -23,3 +23,6 @@ rag_db/
 # --- Media & Large Data Assets ---
 *.mp4
 *.csv
+*.pkl
+*.pkl.old
+*.json.old

@@ -31,7 +31,7 @@ const BugAnalysis = () => {
       const token = localStorage.getItem("token");
 
       // We use the relative path '/analyze_bug' to utilize the Vite Proxy
-      const response = await fetch(`/analyze_bug?bug_text=${encodeURIComponent(textToAnalyze)}`, {
+      const response = await fetch(`/api/analyze_bug?bug_text=${encodeURIComponent(textToAnalyze)}`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
