@@ -14,6 +14,7 @@ from database import supabase
 class UserCreate(BaseModel):
     username: str
     password: str
+    company_id: int
 class LoginRequest(BaseModel):
     username: str
     password: str

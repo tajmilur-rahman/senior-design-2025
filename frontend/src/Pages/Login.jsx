@@ -30,7 +30,12 @@ export default function Login({ onLogin, theme, toggleTheme }) {
         if (token) localStorage.setItem("token", token);
         onLogin(r.data);
       } else if(mode === 'register'){
-        await axios.post(`${API_URL}/users`, { username: u, password: p, role: role, company_name: cn });
+        // Calls /api/register which creates the company AND admin user in one shot
+        await axios.post(`${API_URL}/register`, {
+          company_name: cn,   // maps to RegisterRequest.company_name
+          username: u,        // maps to RegisterRequest.username
+          password: p         // maps to RegisterRequest.password
+        });
         setViewState('success');
       } else if(mode === 'reset'){
          await axios.put(`${API_URL}/users`, { username: u, new_password: p });
@@ -111,13 +116,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                                 <div className="input-group fade-in">
                                     <ShieldCheck size={20} className="input-icon"/>
                                     <input className="sys-input login-input" placeholder="Company Name" value={cn} onChange={e=>setCn(e.target.value)} required/>
-                                </div>
-                                <div className="input-group fade-in">
-                                    <Users size={20} className="input-icon" style={{zIndex: 1}}/>
-                                    <select className="sys-input login-input" value={role} onChange={e=>setRole(e.target.value)} required>
-                                        <option value="user">Standard User</option>
-                                        <option value="admin">Administrator</option>
-                                    </select>
                                 </div>
                             </>
                         )}
