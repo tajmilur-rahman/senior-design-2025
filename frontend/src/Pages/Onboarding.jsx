@@ -7,7 +7,7 @@ const STEPS = [
   {
     id: "welcome",
     icon: <ShieldCheck size={40} color="#3b82f6" />,
-    title: "Welcome to SmartSort",
+    title: "Welcome to Apex System",
     subtitle: "AI-powered bug triage for your team",
   },
   {
@@ -51,7 +51,7 @@ function WelcomeStep() {
   return (
     <div className="onboarding-step-content">
       <p className="onboarding-desc">
-        SmartSort uses a <strong>Random Forest ML model</strong> trained on 220,000+ real-world bugs
+        Apex System uses a <strong>Random Forest ML model</strong> trained on 220,000+ real-world bugs
         to instantly predict the severity of any bug your team submits — so you stop guessing and start triaging faster.
       </p>
       <div className="onboarding-feature-grid">
@@ -70,7 +70,7 @@ function WelcomeStep() {
         <div className="onboarding-info-title">How it works in 3 steps</div>
         <div className="onboarding-info-body">
           1. Describe a bug in plain English<br />
-          2. SmartSort's AI predicts the severity instantly<br />
+          2. Apex System's AI predicts the severity instantly<br />
           3. Confirm or correct — the model learns from your feedback
         </div>
       </div>

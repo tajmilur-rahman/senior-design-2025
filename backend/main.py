@@ -6,6 +6,7 @@ import auth
 from database import supabase
 from sqlalchemy import text
 from fastapi.responses import StreamingResponse
+import ml_logic 
 
 # --- AI & CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -71,6 +72,13 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
 
+class FeedbackRequest(BaseModel):
+    summary: str
+    predicted_severity: str
+    actual_severity: str
+    confidence: float = 0.0
+    component: str = "General"
+
 # --- ANALYSIS (The Brain) ---
 @app.post("/api/analyze_bug")
 async def analyze_bug(bug_text: str = Query(...), current_user = Depends(auth.get_current_user)):
@@ -123,7 +131,83 @@ def login(creds: auth.LoginRequest):
         "token_type": "bearer",
         "username": user["username"],
         "company_id": user["company_id"],
-        "onboarding_completed": user.get("onboarding_completed", False)  # frontend uses this to decide whether to show onboarding
+        "role": user.get("role", "user"), 
+        "onboarding_completed": user.get("onboarding_completed", False)  
+    }
+
+@app.post("/api/feedback")
+def submit_feedback(req: FeedbackRequest, current_user = Depends(auth.get_current_user)):
+    """
+    Saves a user correction and automatically triggers retraining.
+    Since threshold is 'no minimum', every correction immediately
+    triggers a fast retrain with the new data.
+    """
+    cid = current_user.get("company_id")
+
+    # Only store and retrain if user actually disagreed with the model
+    if req.predicted_severity == req.actual_severity:
+        return {"message": "Prediction was correct, no feedback stored"}
+
+    # Step 1: Save correction to feedback table
+    supabase.table("feedback").insert({
+        "summary":            req.summary,
+        "predicted_severity": req.predicted_severity,
+        "actual_severity":    req.actual_severity,
+        "confidence":         req.confidence,
+        "component":          req.component,
+        "company_id":         cid,
+    }).execute()
+
+    # Step 2: AUTO RETRAIN — fetch all feedback for this company and retrain
+    retrain_result = {"success": False, "message": "Retrain skipped"}
+    try:
+        all_feedback = supabase.table("feedback").select("*")\
+            .eq("company_id", cid).execute()
+
+        if all_feedback.data:
+            retrain_result = ml_logic.fast_retrain(all_feedback.data)
+    except Exception as e:
+        print(f"Auto retrain failed: {e}")
+        retrain_result = {"success": False, "error": str(e)}
+
+    return {
+        "message": "Feedback saved.",
+        "retrain": retrain_result
+    }
+
+
+@app.post("/api/model/retrain")
+def manual_retrain(current_user = Depends(auth.get_current_user)):
+    """
+    MANUAL OVERRIDE — admin can trigger retraining on demand
+    regardless of how much feedback has been collected.
+    Only accessible to admin role.
+    """
+    # Only admins can manually trigger retraining
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    cid = current_user.get("company_id")
+
+    # Fetch all feedback corrections for this company
+    res = supabase.table("feedback").select("*").eq("company_id", cid).execute()
+    feedback_list = res.data or []
+
+    if not feedback_list:
+        return {
+            "success": False,
+            "message": "No feedback corrections found for your company. Submit some corrections first."
+        }
+
+    # Trigger retraining
+    result = ml_logic.fast_retrain(feedback_list)
+
+    return {
+        "success": result.get("success", False),
+        "message": result.get("message", "Retrain failed"),
+        "total_trees": result.get("total_trees", 0),
+        "records_used": result.get("records_used", 0),
+        "feedback_count": len(feedback_list)
     }
 
 @app.post("/api/users")
@@ -210,12 +294,14 @@ def register(req: RegisterRequest):
 @app.get("/api/hub/overview")
 def get_overview(current_user = Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
-    table = get_company_table(cid)  # replaces hardcoded 'cid == 2' check
+    table = get_company_table(cid)  
 
     if table == "firefox_table":
-        count_res = supabase.table("firefox_table").select("*", count="exact").limit(1).execute()
+        count_res = supabase.table("firefox_table").select("*", count="exact")\
+            .eq("company_id", cid).limit(1).execute()
         total_count = count_res.count or 0
-        res = supabase.table("firefox_table").select("*").limit(1000).execute()
+        res = supabase.table("firefox_table").select("*")\
+            .eq("company_id", cid).limit(1000).execute()
     else:
         res = supabase.table("bugs").select("*").eq("company_id", cid).execute()
         total_count = len(res.data) if res.data else 0
@@ -239,7 +325,8 @@ def get_overview(current_user = Depends(auth.get_current_user)):
 def get_component_counts(current_user=Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
     table = get_company_table(cid)  # replaces hardcoded firefox_table
-    res = supabase.table(table).select("component").limit(2000).execute()
+    res = supabase.table(table).select("component")\
+        .eq("company_id", cid).limit(2000).execute() 
     counts = {}
     for r in (res.data or []):
         comp = str(r.get("component")).strip().lower() if r.get("component") else "general"
@@ -321,23 +408,176 @@ def get_batches(current_user = Depends(auth.get_current_user)):
     return res.data
 
 @app.post("/api/upload_and_train")
-async def upload_and_train(batch_name: str = Form(...), file: UploadFile = File(...), current_user = Depends(auth.get_current_user)):
+async def upload_and_train(
+    batch_name: str = Form(...), 
+    file: UploadFile = File(...), 
+    current_user = Depends(auth.get_current_user)
+):
     try:
         content = await file.read()
-        df = pd.read_csv(io.StringIO(content.decode('utf-8'))) if file.filename.endswith('.csv') else pd.read_json(io.BytesIO(content))
-        batch_data = {"batch_name": batch_name, "company_id": current_user.get("company_id"), "bug_count": len(df), "status": "completed"}
-        supabase.table("training_batches").insert(batch_data).execute()
+        cid = current_user.get("company_id")
+        
+        # 1. Parse JSON
+        import json
+        try:
+            data = json.loads(content)
+        except Exception as parse_err:
+            raise HTTPException(status_code=400, detail="Invalid JSON format")
 
-        bugs = []
-        for _, row in df.iterrows():
-            bugs.append({
-                "summary": row.get('summary'),
-                "component": row.get('component', 'General'),
-                "severity": row.get('severity', 'S3'),
-                "company_id": current_user.get("company_id"),
-                "status": "pending"
+        # 2. Record the batch
+        batch_entry = {
+            "batch_name": batch_name, 
+            "company_id": cid, 
+            "bug_count": len(data), 
+            "status": "completed"
+        }
+        supabase.table("training_batches").insert(batch_entry).execute()
+
+        bugs_to_insert = []
+        feedback_to_insert = []
+
+        for item in data:
+            # Get values exactly as they appear in your JSON
+            summary = item.get('summary', 'No summary')
+            pred_sev = str(item.get('predicted_severity', 'S3')).upper()
+            act_sev = str(item.get('actual_severity', 'S3')).upper()
+            comp = item.get('component', 'General')
+
+            # Prepare entry for 'bugs' table
+            bugs_to_insert.append({
+                "summary": summary,
+                "component": comp,
+                "severity": act_sev,
+                "company_id": cid,
+                "status": "processed"
             })
-        supabase.table("bugs").insert(bugs).execute()
-        return {"message": "Batch processed"}
+
+            # Prepare entry for 'feedback' table (This fills the Confusion Matrix!)
+            feedback_to_insert.append({
+                "company_id": cid,
+                "summary": summary,
+                "component": comp,
+                "predicted_severity": pred_sev,
+                "actual_severity": act_sev,
+                "is_correction": (pred_sev != act_sev)
+            })
+
+        # 3. Bulk Insert
+        if bugs_to_insert:
+            supabase.table("bugs").insert(bugs_to_insert).execute()
+        
+        if feedback_to_insert:
+            supabase.table("feedback").insert(feedback_to_insert).execute()
+
+        return {"message": "Success", "records_processed": len(data)}
+
     except Exception as e:
+        print(f"UPLOAD ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/hub/ml_metrics")
+def get_ml_metrics(current_user = Depends(auth.get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    cid = current_user.get("company_id")
+    last_trained_str = "Recently"
+    total_live_volume = 1000 # Default fallback
+    feedback_list = []
+    total_feedback = 0
+
+    # --- 1. Get LIVE counts and Latest Activity Timestamp ---
+    try:
+        # Count original bugs from firefox_table
+        bug_res = supabase.table("firefox_table").select("bug_id", count="exact").execute()
+        base_count = bug_res.count if bug_res.count else 0
+        
+        # Get feedback data
+        fb_res = supabase.table("feedback").select("*").eq("company_id", cid).order("created_at", desc=True).execute()
+        feedback_list = fb_res.data or []
+        total_feedback = len(feedback_list)
+        total_live_volume = base_count + total_feedback
+
+        if feedback_list:
+            from datetime import datetime
+            import calendar
+            
+            raw_date = feedback_list[0].get('created_at')
+            if raw_date:
+                # 1. Parse UTC time
+                dt_obj = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
+                # 2. Convert to local system time (Fixes the March 11 error)
+                local_ts = calendar.timegm(dt_obj.utctimetuple())
+                local_dt = datetime.fromtimestamp(local_ts)
+                last_trained_str = local_dt.strftime("%b %d, %I:%M %p")
+
+    except Exception as e:
+        print(f"Database count failed: {e}")
+        # total_live_volume stays at 1000 from the default above
+
+    # --- 2. Load static Accuracy/F1 from rf_metrics.json ---
+    current_metrics = {
+        "accuracy": 0.86, "f1_score": 0.85, "precision": 0.86, "recall": 0.85,
+        "dataset_size": total_live_volume, 
+        "status": "Active Build",
+        "last_trained": last_trained_str
+    }
+
+    try:
+        from config import ART_RF
+        import json
+        met_path = ART_RF.get("met", "")
+        if met_path and os.path.exists(met_path):
+            with open(met_path) as f:
+                saved = json.load(f)
+            current_metrics.update({
+                "accuracy":     saved.get("accuracy", 0.86),
+                "f1_score":     saved.get("weighted_f1", saved.get("f1_score", 0.85)),
+                "precision":    saved.get("precision", 0.86),
+                "recall":       saved.get("recall", 0.85),
+                "dataset_size": total_live_volume,
+                "status":       "Dynamic Production Build",
+                "last_trained": last_trained_str
+            })
+    except Exception as e:
+        print(f"Could not load JSON metrics: {e}")
+
+    # --- 3. Build confusion matrix ---
+    severities = ["S1", "S2", "S3", "S4"]
+    confusion = {s: {p: 0 for p in severities} for s in severities}
+
+    for f in feedback_list:
+        actual    = str(f.get("actual_severity") or "S3").upper()
+        predicted = str(f.get("predicted_severity") or "S3").upper()
+        if actual in severities and predicted in severities:
+            confusion[actual][predicted] += 1
+
+    confusion_matrix = [
+        {"actual": s, "S1": confusion[s]["S1"], "S2": confusion[s]["S2"],
+         "S3": confusion[s]["S3"], "S4": confusion[s]["S4"]}
+        for s in severities
+    ]
+
+    correction_rate = round(total_feedback / max(total_live_volume, 1), 3)
+
+    component_errors = {}
+    for f in feedback_list:
+        comp = f.get("component", "General")
+        component_errors[comp] = component_errors.get(comp, 0) + 1
+
+    weak_components = sorted(
+        [{"component": k, "corrections": v} for k, v in component_errors.items()],
+        key=lambda x: x["corrections"], reverse=True
+    )[:5]
+
+    return {
+        "current": current_metrics,
+        "baseline": current_metrics,
+        "previous": current_metrics,
+        "confusion_matrix": confusion_matrix,
+        "feedback_stats": {
+            "total_corrections": total_feedback,
+            "correction_rate":   correction_rate,
+            "weak_components":   weak_components
+        }
+    }

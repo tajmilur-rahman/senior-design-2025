@@ -1,23 +1,22 @@
-{
-  "schema_version": "1.0",
-  "source": "jira|bugzilla|manual",
-  "bugs": [
-    {
-      "external_id": "BUG-1234",
-      "summary": "Short description",
-      "description": "Detailed repro and context",
-      "component": "Authentication",
-      "severity": "S1|S2|S3|S4",
-      "priority": "P0|P1|P2|P3",
-      "status": "NEW|OPEN|IN_PROGRESS|RESOLVED|CLOSED",
-      "platform": "Windows|Linux|macOS|Web|Mobile",
-      "environment": "Browser/OS/version",
-      "repro_steps": ["step 1", "step 2"],
-      "expected_result": "What should happen",
-      "actual_result": "What happened",
-      "tags": ["ui", "regression"],
-      "created_at": "2026-02-22T10:30:00Z",
-      "reporter": "user_or_team"
-    }
-  ]
-}
+[
+  { "summary": "System crash on login page", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Memory leak in kernel", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Button color is slightly off", "predicted_severity": "S3", "actual_severity": "S5", "company_id": 2 },
+  { "summary": "User cannot reset password", "predicted_severity": "S2", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Database connection timeout", "predicted_severity": "S1", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Typo in footer text", "predicted_severity": "S3", "actual_severity": "S5", "company_id": 2 },
+  { "summary": "API returning 500 error", "predicted_severity": "S2", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Slow loading on mobile", "predicted_severity": "S3", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "Security vulnerability in SSL", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Logo is pixelated", "predicted_severity": "S3", "actual_severity": "S4", "company_id": 2 },
+  { "summary": "Search bar not working", "predicted_severity": "S2", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Dark mode toggle fails", "predicted_severity": "S3", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "CSV export missing columns", "predicted_severity": "S2", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "Null pointer exception on checkout", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Font size too small on tablet", "predicted_severity": "S3", "actual_severity": "S4", "company_id": 2 },
+  { "summary": "Payment gateway timeout", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Header disappears on scroll", "predicted_severity": "S3", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "Broken link in help docs", "predicted_severity": "S3", "actual_severity": "S5", "company_id": 2 },
+  { "summary": "Incorrect tax calculation", "predicted_severity": "S1", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Translation missing for Spanish", "predicted_severity": "S3", "actual_severity": "S4", "company_id": 2 }
+]

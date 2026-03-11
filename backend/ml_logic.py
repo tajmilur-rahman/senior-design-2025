@@ -1,7 +1,8 @@
 import os, json, joblib, numpy as np, pandas as pd
 import random, re
 from config import META, FLAGS, ART_RF
-
+from scipy.sparse import hstack, csr_matrix        
+from sklearn.preprocessing import LabelEncoder   
 
 # --- 1. CORE LOGIC ---
 def load_pack(s=ART_RF):
@@ -166,3 +167,122 @@ def predict_severity(summary: str, component: str = "General", platform: str = "
         "team": team,
         "keywords": keywords
     }
+
+def safe_transform(encoder, values):
+    """Handles unseen labels by mapping them to the first known class."""
+    if not hasattr(encoder, 'classes_'):
+        return np.zeros(len(values))
+    safe_vals = [x if x in encoder.classes_ else encoder.classes_[0] for x in values]
+    return encoder.transform(safe_vals)
+
+
+def fast_retrain(feedback_data: list) -> dict:
+    """
+    Incrementally retrains the Random Forest using user feedback corrections.
+    Uses warm_start to add new trees without discarding existing knowledge.
+    Called automatically after feedback is saved, or manually by admin.
+
+    feedback_data: list of dicts with keys:
+        summary, actual_severity, component (from feedback table)
+    """
+    global _loaded_pack
+    print("Starting fast retrain from feedback data...")
+
+    # Step 1: Load current model artifacts
+    if _loaded_pack is None:
+        _loaded_pack = load_pack()
+    rf_model, tfidf, encoders, metrics = _loaded_pack
+
+    if not rf_model:
+        return {"success": False, "error": "Base model not found. Run full training first."}
+
+    if not feedback_data:
+        return {"success": False, "error": "No feedback data provided."}
+
+    try:
+        # Step 2: Convert feedback list to DataFrame
+        df = pd.DataFrame(feedback_data)
+
+        # Step 3: Standardize severity labels to match training format
+        sev_map = {
+            "blocker": "S1", "critical": "S1", "s1": "S1",
+            "major":   "S2", "s2": "S2",
+            "normal":  "S3", "s3": "S3",
+            "trivial": "S4", "s4": "S4",
+        }
+        df["severity"] = df["actual_severity"].str.lower().map(sev_map).fillna("S3")
+        df["summary"]  = df["summary"].fillna("").astype(str)
+
+        # Step 4: Fill all required metadata columns with defaults
+        # Feedback only has summary + severity + component, so we
+        # default everything else to match the training schema
+        cat_cols = ["component", "priority", "status", "product",
+                    "platform", "op_sys", "type", "resolution"]
+        defaults = {
+            "component":  df.get("component", pd.Series(["General"] * len(df))),
+            "priority":   "--",
+            "status":     "NEW",
+            "product":    "Firefox",
+            "platform":   "All",
+            "op_sys":     "Windows",
+            "type":       "defect",
+            "resolution": "---",
+        }
+        for c in cat_cols:
+            if c not in df.columns:
+                df[c] = defaults.get(c, "UNKNOWN")
+            df[c] = df[c].fillna("UNKNOWN").astype(str)
+
+        # Boolean flag columns — derive from summary text
+        extra_cols = ["has_crash", "is_accessibility", "is_regression",
+                      "is_intermittent", "has_patch"]
+        for c in extra_cols:
+            df[c] = 0  # default all to 0 for feedback data
+
+        # Step 5: Vectorize text using the LOCKED vocabulary
+        # We use transform() not fit_transform() to keep vocab consistent
+        X_text = tfidf.transform(df["summary"])
+
+        # Step 6: Encode metadata using existing encoders
+        all_meta = cat_cols + extra_cols
+        X_meta_list = []
+        for c in all_meta:
+            enc = encoders.get(c)
+            if enc:
+                col_vector = safe_transform(enc, df[c])
+                X_meta_list.append(col_vector)
+            else:
+                X_meta_list.append(np.zeros(len(df)))
+
+        X_meta = np.vstack(X_meta_list).T
+        X_meta_sparse = csr_matrix(X_meta)
+
+        # Step 7: Combine features — must match training structure exactly
+        X_new = hstack([X_meta_sparse, X_text])
+        y_new = safe_transform(encoders["severity"], df["severity"])
+
+        # Step 8: Incremental training using warm_start
+        # warm_start=True keeps all existing trees and adds new ones
+        rf_model.warm_start = True
+        old_tree_count = rf_model.n_estimators
+        rf_model.n_estimators += 10  # add 10 new trees per retrain
+
+        print(f"Adding 10 new trees. Total: {old_tree_count} → {rf_model.n_estimators}")
+        rf_model.fit(X_new, y_new)
+
+        # Step 9: Save updated model and force reload
+        from config import ART_RF
+        joblib.dump(rf_model, ART_RF["model"])
+        _loaded_pack = load_pack()  # force reload so next prediction uses new model
+
+        return {
+            "success": True,
+            "message": f"Model retrained on {len(df)} feedback corrections. Added 10 new trees.",
+            "total_trees": rf_model.n_estimators,
+            "records_used": len(df)
+        }
+
+    except Exception as e:
+        print(f"Retrain failed: {e}")
+        return {"success": False, "error": str(e)}
+

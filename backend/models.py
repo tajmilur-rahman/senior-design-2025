@@ -41,3 +41,6 @@ class Feedback(Base):
     predicted_severity = Column(String)
     actual_severity = Column(String)
     company_id = Column(Integer, ForeignKey("companies.id"))
+    confidence = Column(Float)           
+    component = Column(String)           
+    created_at = Column(DateTime, default=datetime.utcnow) 

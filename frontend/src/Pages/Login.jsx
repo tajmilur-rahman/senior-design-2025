@@ -64,8 +64,8 @@ export default function Login({ onLogin, theme, toggleTheme }) {
             <div className="floating-shape shape-3"></div>
             <div className="brand-content">
                 <div className="logo-box-large"><ShieldCheck size={48} color="white"/></div>
-                <h1>BUG PRIORITY <span style={{color:'#3b82f6'}}>OS</span></h1>
-                <p>Enterprise-grade AI infrastructure for defect classification, automated triage, and intelligent telemetry routing.</p>
+                <h1>Apex System<span style={{color:'#3b82f6'}}>OS</span></h1>
+                <p>ML-driven defect classification that gets smarter with every bug you submit</p>
                 <div className="brand-stat-ent">
                     <Activity size={16} /> <span>System Operational</span>
                 </div>
