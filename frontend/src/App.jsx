@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from './supabaseClient';
 import BugAnalysis from './Pages/BugAnalysis';
 import Overview from './Pages/Overview';
 import Explorer from "./Pages/Explorer";
@@ -10,10 +10,14 @@ import Onboarding from "./Pages/Onboarding";
 import Performance from "./Pages/Performance";
 import { ShieldCheck, LogOut, Moon, Sun } from 'lucide-react';
 import './App.css';
+import axios from 'axios';
 
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+// Axios Interceptor for Backend Auth
+axios.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
+  }
   return config;
 });
 
@@ -22,13 +26,14 @@ function Dashboard({ user, onLogout, theme, toggleTheme }) {
   const [externalQuery, setExternalQuery] = useState("");
   const [submitPrefill, setSubmitPrefill] = useState(null);
 
+  console.log("Current User Role:", user?.role);
+
   const handleNavigation = (targetTab, query = "", prefill = null) => {
     setTab(targetTab);
     setExternalQuery(query);
     if (prefill) setSubmitPrefill(prefill);
   };
 
-  // Base nav tabs visible to all users
   const baseTabs = ['Overview', 'Directory', 'Database', 'Analysis', 'Submit'];
 
   return (
@@ -42,7 +47,6 @@ function Dashboard({ user, onLogout, theme, toggleTheme }) {
             APEX<span style={{color:'var(--accent)'}}>SYSTEM</span>
           </div>
           <div className="nav-center">
-            {/* Standard tabs — visible to all users */}
             {baseTabs.map(t => (
               <button
                 key={t}
@@ -52,8 +56,8 @@ function Dashboard({ user, onLogout, theme, toggleTheme }) {
                 {t}
               </button>
             ))}
-            {/* Performance tab — admin only */}
-            {user.role === 'admin' && (
+            {/* Safe Role Check */}
+            {user?.role === 'admin' && (
               <button
                 className={`nav-link ${tab === 'performance' ? 'active' : ''}`}
                 onClick={() => { setTab('performance'); setExternalQuery(""); }}
@@ -67,8 +71,11 @@ function Dashboard({ user, onLogout, theme, toggleTheme }) {
               {theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}
             </button>
             <div className="user-pill">
-              <div className="user-avatar-sm">{user.username[0].toUpperCase()}</div>
-              <span className="user-name">{user.username}</span>
+              {/* FIX: Optional chaining added here to prevent 'undefined' crash */}
+              <div className="user-avatar-sm">
+                {user?.username?.[0]?.toUpperCase() || 'U'}
+              </div>
+              <span className="user-name">{user?.username || 'User'}</span>
             </div>
             <button
               className="sys-btn outline"
@@ -86,8 +93,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme }) {
         {tab === 'database'     && <Explorer user={user} initialQuery={externalQuery} onNavigate={handleNavigation}/>}
         {tab === 'analysis'     && <BugAnalysis />}
         {tab === 'submit'       && <SubmitTab user={user} prefill={submitPrefill} onClearPrefill={() => setSubmitPrefill(null)}/>}
-        {/* Performance only renders if user is admin — double protection */}
-        {tab === 'performance'  && user.role === 'admin' && <Performance user={user}/>}
+        {tab === 'performance'  && user?.role === 'admin' && <Performance user={user}/>}
       </main>
     </div>
   );
@@ -95,40 +101,72 @@ function Dashboard({ user, onLogout, theme, toggleTheme }) {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session) {
+      console.log("DEBUG: Checking DB for UUID:", session.user.id);
 
-  // Called when login succeeds — checks onboarding_completed from login response
-  const handleLogin = (userData) => {
-    setUser(userData);
-    // Show onboarding only if this user has never completed it
-    if (!userData.onboarding_completed) {
-      setShowOnboarding(true);
+      const { data: dbUserList, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('uuid', session.user.id);
+
+      if (error) console.error("DB Error:", error.message);
+
+      if (dbUserList && dbUserList.length > 0) {
+        const dbUser = dbUserList[0];
+        console.log("DEBUG: Found User in DB! Role is:", dbUser.role);
+
+        const currentUser = {
+          id: session.user.id,
+          email: session.user.email,
+          username: dbUser.username || session.user.email.split('@')[0], 
+          role: dbUser.role // THIS must be 'admin'
+        };
+        setUser(currentUser);
+      } else {
+        console.log("DEBUG: No row found in 'users' table for this UUID.");
+        // Fallback for new users
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+          username: session.user.email.split('@')[0],
+          role: 'user'
+        });
+      }
+    } else {
+      setUser(null);
     }
-  };
+    setLoading(false);
+  });
+  return () => subscription.unsubscribe();
+}, []);
 
-  // Called when user finishes or skips onboarding
   const handleOnboardingComplete = async () => {
-    try {
-      // Flip onboarding_completed = true in the database
-      await axios.post('/api/users/complete_onboarding');
-    } catch (err) {
-      console.error("Could not save onboarding status:", err);
-    }
-    // Always proceed to dashboard even if the API call fails
+    // 1. Update DB
+    await supabase.from('users').update({ onboarding_completed: true }).eq('uuid', user.id);
+    // 2. Update Auth Metadata
+    await supabase.auth.updateUser({
+      data: { onboarding_completed: true }
+    });
     setShowOnboarding(false);
   };
 
-  // Three possible states: not logged in → onboarding → dashboard
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+  if (loading) return <div className="loading-screen">INITIALIZING APEX OS...</div>;
+
   if (!user) {
-    return <Login onLogin={handleLogin} theme={theme} toggleTheme={toggleTheme} />;
+    return <Login onLogin={setUser} theme={theme} toggleTheme={toggleTheme} />;
   }
 
   if (showOnboarding) {
@@ -138,7 +176,7 @@ export default function App() {
   return (
     <Dashboard
       user={user}
-      onLogout={() => { setUser(null); setShowOnboarding(false); }}
+      onLogout={() => supabase.auth.signOut()}
       theme={theme}
       toggleTheme={toggleTheme}
     />

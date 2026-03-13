@@ -117,24 +117,6 @@ async def analyze_bug(bug_text: str = Query(...), current_user = Depends(auth.ge
         print(f"Analysis failure: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- AUTH ENDPOINTS ---
-@app.post("/api/login")
-def login(creds: auth.LoginRequest):
-    response = supabase.table("users").select("*").eq("username", creds.username).execute()
-    user = response.data[0] if response.data else None
-    if not user or not auth.verify_password(creds.password, user["password_hash"]):
-        raise HTTPException(401, "Invalid credentials")
-
-    token = auth.create_access_token(data={"sub": user["username"], "company_id": user["company_id"], "role": user.get("role", "user")})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "username": user["username"],
-        "company_id": user["company_id"],
-        "role": user.get("role", "user"), 
-        "onboarding_completed": user.get("onboarding_completed", False)  
-    }
-
 @app.post("/api/feedback")
 def submit_feedback(req: FeedbackRequest, current_user = Depends(auth.get_current_user)):
     """
@@ -179,37 +161,48 @@ def submit_feedback(req: FeedbackRequest, current_user = Depends(auth.get_curren
 @app.post("/api/model/retrain")
 def manual_retrain(current_user = Depends(auth.get_current_user)):
     """
-    MANUAL OVERRIDE — admin can trigger retraining on demand
-    regardless of how much feedback has been collected.
-    Only accessible to admin role.
+    MANUAL OVERRIDE — Apex Sentinel can trigger retraining on demand.
+    Optimized to only learn from human-verified corrections.
     """
-    # Only admins can manually trigger retraining
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # 1. Precise Security Check
+    # We check the boolean is_admin for maximum security
+    if not current_user.get("is_admin"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Unauthorized: Only the Apex Sentinel can trigger AI retraining."
+        )
 
     cid = current_user.get("company_id")
 
-    # Fetch all feedback corrections for this company
-    res = supabase.table("feedback").select("*").eq("company_id", cid).execute()
+    # 2. Strategic Data Fetching
+    # We only pull rows where a human actually corrected the AI (is_correction = true)
+    res = supabase.table("feedback") \
+        .select("*") \
+        .eq("company_id", cid) \
+        .eq("is_correction", True) \
+        .execute()
+    
     feedback_list = res.data or []
 
+    # 3. Guard Rail: Don't retrain on empty data
     if not feedback_list:
         return {
             "success": False,
-            "message": "No feedback corrections found for your company. Submit some corrections first."
+            "message": "AI is already up to date. No new human corrections found."
         }
 
-    # Trigger retraining
+    # 4. Trigger the Intelligence Module
     result = ml_logic.fast_retrain(feedback_list)
 
+    # 5. Return detailed system health
     return {
         "success": result.get("success", False),
-        "message": result.get("message", "Retrain failed"),
-        "total_trees": result.get("total_trees", 0),
-        "records_used": result.get("records_used", 0),
-        "feedback_count": len(feedback_list)
+        "status": "Apex AI Knowledge Updated",
+        "new_knowledge_points": len(feedback_list),
+        "total_trees_in_forest": result.get("total_trees", 0),
+        "timestamp": datetime.utcnow().isoformat()
     }
-
 @app.post("/api/users")
 def create_user(req: auth.UserCreate):
     # Adds a new user to an EXISTING company (used by admin to invite teammates)
@@ -225,10 +218,9 @@ def create_user(req: auth.UserCreate):
 
 @app.post("/api/users/complete_onboarding")
 def complete_onboarding(current_user = Depends(auth.get_current_user)):
-    # Called when a user finishes or skips the onboarding flow.
-    # Flips the flag to true so they never see it again on future logins.
+    # Use 'id' instead of 'username' to match Supabase logic
     supabase.table("users").update({"onboarding_completed": True})\
-        .eq("username", current_user.get("username")).execute()
+        .eq("id", current_user.get("id")).execute()
     return {"message": "Onboarding complete"}
 
 # --- COMPANY & REGISTRATION ---
