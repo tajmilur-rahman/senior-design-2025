@@ -1,26 +1,26 @@
-# Core Backend Framework
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-pydantic==2.9.0
+# Web Framework & Server
+fastapi
+uvicorn
+python-multipart
+gunicorn
 
-# Database
-psycopg2-binary==2.9.10
-sqlalchemy==2.0.35
+# Security & Authentication
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
 
-# Authentication & Security
-bcrypt==4.2.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.12
+# Database & Environment
+supabase
+sqlalchemy
+psycopg2-binary
+python-dotenv
 
-# Machine Learning & AI
-scikit-learn==1.5.2
-numpy==2.1.0
-pandas==2.2.3
-joblib==1.4.2
-scipy==1.14.1
-sentence-transformers==3.0.1
-chromadb==0.5.5
+# Machine Learning & Data Processing
+scikit-learn
+pandas
+joblib
+numpy<2.0.0
 
-# Environment & Configuration
-python-dotenv==1.0.1
+# Utilities
+pydantic
+requests
