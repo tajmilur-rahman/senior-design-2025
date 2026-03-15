@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Form, File, UploadFile, Query
+from fastapi import FastAPI, HTTPException, Depends, status, Form, File, UploadFile, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os, joblib, pandas as pd, io, time
@@ -8,6 +8,9 @@ from sqlalchemy import text
 from fastapi.responses import StreamingResponse
 import ml_logic
 
+# Import our new background sync script
+from bugzilla_sync import sync_latest_bugs
+
 # --- AI & CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
@@ -15,6 +18,7 @@ VECTOR_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")
 
 rf_model = None
 vectorizer = None
+
 
 def load_models():
     global rf_model, vectorizer
@@ -43,12 +47,11 @@ app.add_middleware(
 
 # --- HELPER FUNCTIONS ---
 def get_company_table(cid: int) -> str:
-    # Looks up which table this company's data lives in from the companies table.
     try:
         res = supabase.table("companies").select("data_table").eq("id", cid).single().execute()
         return res.data.get("data_table", "bugs") if res.data else "bugs"
     except Exception:
-        return "bugs"  # Safe fallback — always default to bugs table
+        return "bugs"
 
 
 # --- DATA MODELS ---
@@ -73,7 +76,6 @@ class RegisterRequest(BaseModel):
     password: str
 
 
-# ADDED: Data Model for Password Resets
 class PasswordResetRequest(BaseModel):
     username: str
     new_password: str
@@ -91,7 +93,6 @@ class FeedbackRequest(BaseModel):
 @app.post("/api/analyze_bug")
 async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_current_user)):
     try:
-        # 1. ACTUAL ML PREDICTION
         sev_label = "S3"
         confidence = 0.85
         if rf_model is not None and vectorizer is not None:
@@ -99,7 +100,6 @@ async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_
             prediction = rf_model.predict(vectorized_text)[0]
             sev_label = str(prediction)
 
-        # 2. RAG Logic (Fuzzy Search in Cloud)
         similar_bugs = []
         cid = current_user.get("company_id")
         search_table = get_company_table(cid)
@@ -128,11 +128,14 @@ async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_
 
 # --- AUTH ENDPOINTS ---
 @app.post("/api/login")
-def login(creds: auth.LoginRequest):
+def login(creds: auth.LoginRequest, background_tasks: BackgroundTasks):
     response = supabase.table("users").select("*").eq("username", creds.username).execute()
     user = response.data[0] if response.data else None
     if not user or not auth.verify_password(creds.password, user["password_hash"]):
         raise HTTPException(401, "Invalid credentials")
+
+    # TRIGGER THE BACKGROUND BUGZILLA SYNC ON LOGIN
+    background_tasks.add_task(sync_latest_bugs, user["company_id"])
 
     token = auth.create_access_token(
         data={"sub": user["username"], "company_id": user["company_id"], "role": user.get("role", "user")})
@@ -219,7 +222,6 @@ def create_user(req: auth.UserCreate):
     return {"message": "User created successfully"}
 
 
-# ADDED: Password Reset Endpoint
 @app.put("/api/users")
 def reset_password(req: PasswordResetRequest):
     response = supabase.table("users").select("*").eq("username", req.username).execute()
@@ -300,17 +302,13 @@ def get_overview(current_user=Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
     table = get_company_table(cid)
 
-    if table == "firefox_table":
-        count_res = supabase.table("firefox_table").select("*", count="exact") \
-            .eq("company_id", cid).limit(1).execute()
-        total_count = count_res.count or 0
-        res = supabase.table("firefox_table").select("*") \
-            .eq("company_id", cid).limit(1000).execute()
-    else:
-        res = supabase.table("bugs").select("*").eq("company_id", cid).execute()
-        total_count = len(res.data) if res.data else 0
+    # EXTREMELY FAST EXACT COUNT
+    count_res = supabase.table(table).select("bug_id", count="exact").eq("company_id", cid).limit(1).execute()
+    total_count = count_res.count or 0
 
+    res = supabase.table(table).select("*").eq("company_id", cid).order("bug_id", desc=True).limit(1000).execute()
     bugs = res.data or []
+
     critical_count = len([b for b in bugs if b.get("severity") in ["S1", "CRITICAL"]])
     components = {}
     for b in bugs:
@@ -475,13 +473,14 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     cid = current_user.get("company_id")
+    table = get_company_table(cid)
     last_trained_str = "Recently"
-    total_live_volume = 1000
+    total_live_volume = 0
     feedback_list = []
     total_feedback = 0
 
     try:
-        bug_res = supabase.table("firefox_table").select("bug_id", count="exact").execute()
+        bug_res = supabase.table(table).select("bug_id", count="exact").eq("company_id", cid).limit(1).execute()
         base_count = bug_res.count if bug_res.count else 0
 
         fb_res = supabase.table("feedback").select("*").eq("company_id", cid).order("created_at", desc=True).execute()

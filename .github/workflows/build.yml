@@ -1,0 +1,31 @@
+name: CI Build Pipeline
+
+on:
+  push:
+    branches:
+      - 'amar-branch'
+      - 'stage'
+      - 'main'
+      - 'production'
+  pull_request:
+    branches:
+      - 'stage'
+      - 'main'
+      - 'production'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Dummy Environment File
+        run: |
+          mkdir -p backend
+          echo "SUPABASE_URL=dummy_url" > backend/.env
+          echo "SUPABASE_KEY=dummy_key" >> backend/.env
+
+      - name: Build Docker Images
+        run: docker compose build
