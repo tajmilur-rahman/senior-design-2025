@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'amar-branch'
+      - 'anu-local-branch'
       - 'stage'
       - 'main'
       - 'production'
