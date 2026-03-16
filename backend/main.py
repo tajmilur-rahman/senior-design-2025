@@ -1,15 +1,12 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Form, File, UploadFile, Query, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, status, Form, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import os, joblib, pandas as pd, io, time
+import os, joblib, pandas as pd, io, time, csv
 import auth
 from database import supabase
 from sqlalchemy import text
 from fastapi.responses import StreamingResponse
 import ml_logic
-
-# Import our new background sync script
-from bugzilla_sync import sync_latest_bugs
 
 # --- AI & CONFIG ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -76,11 +73,6 @@ class RegisterRequest(BaseModel):
     password: str
 
 
-class PasswordResetRequest(BaseModel):
-    username: str
-    new_password: str
-
-
 class FeedbackRequest(BaseModel):
     summary: str
     predicted_severity: str
@@ -126,29 +118,6 @@ async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- AUTH ENDPOINTS ---
-@app.post("/api/login")
-def login(creds: auth.LoginRequest, background_tasks: BackgroundTasks):
-    response = supabase.table("users").select("*").eq("username", creds.username).execute()
-    user = response.data[0] if response.data else None
-    if not user or not auth.verify_password(creds.password, user["password_hash"]):
-        raise HTTPException(401, "Invalid credentials")
-
-    # TRIGGER THE BACKGROUND BUGZILLA SYNC ON LOGIN
-    background_tasks.add_task(sync_latest_bugs, user["company_id"])
-
-    token = auth.create_access_token(
-        data={"sub": user["username"], "company_id": user["company_id"], "role": user.get("role", "user")})
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "username": user["username"],
-        "company_id": user["company_id"],
-        "role": user.get("role", "user"),
-        "onboarding_completed": user.get("onboarding_completed", False)
-    }
-
-
 @app.post("/api/feedback")
 def submit_feedback(req: FeedbackRequest, current_user=Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
@@ -184,28 +153,37 @@ def submit_feedback(req: FeedbackRequest, current_user=Depends(auth.get_current_
 
 @app.post("/api/model/retrain")
 def manual_retrain(current_user=Depends(auth.get_current_user)):
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not current_user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized: Only the Apex Sentinel can trigger AI retraining."
+        )
 
     cid = current_user.get("company_id")
 
-    res = supabase.table("feedback").select("*").eq("company_id", cid).execute()
+    res = supabase.table("feedback") \
+        .select("*") \
+        .eq("company_id", cid) \
+        .eq("is_correction", True) \
+        .execute()
+
     feedback_list = res.data or []
 
     if not feedback_list:
         return {
             "success": False,
-            "message": "No feedback corrections found for your company. Submit some corrections first."
+            "message": "AI is already up to date. No new human corrections found."
         }
 
     result = ml_logic.fast_retrain(feedback_list)
 
+    from datetime import datetime
     return {
         "success": result.get("success", False),
-        "message": result.get("message", "Retrain failed"),
-        "total_trees": result.get("total_trees", 0),
-        "records_used": result.get("records_used", 0),
-        "feedback_count": len(feedback_list)
+        "status": "Apex AI Knowledge Updated",
+        "new_knowledge_points": len(feedback_list),
+        "total_trees_in_forest": result.get("total_trees", 0),
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 
@@ -222,26 +200,10 @@ def create_user(req: auth.UserCreate):
     return {"message": "User created successfully"}
 
 
-@app.put("/api/users")
-def reset_password(req: PasswordResetRequest):
-    response = supabase.table("users").select("*").eq("username", req.username).execute()
-
-    if not response.data:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    hashed_pwd = auth.get_password_hash(req.new_password)
-
-    try:
-        supabase.table("users").update({"password_hash": hashed_pwd}).eq("username", req.username).execute()
-        return {"message": "Password reset successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-
 @app.post("/api/users/complete_onboarding")
 def complete_onboarding(current_user=Depends(auth.get_current_user)):
     supabase.table("users").update({"onboarding_completed": True}) \
-        .eq("username", current_user.get("username")).execute()
+        .eq("id", current_user.get("id")).execute()
     return {"message": "Onboarding complete"}
 
 
@@ -295,35 +257,65 @@ def register(req: RegisterRequest):
         "role": "admin"
     }
 
-
 # --- DASHBOARD & OVERVIEW ---
 @app.get("/api/hub/overview")
-def get_overview(current_user=Depends(auth.get_current_user)):
+def get_overview(current_user = Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
     table = get_company_table(cid)
 
-    # EXTREMELY FAST EXACT COUNT
-    count_res = supabase.table(table).select("bug_id", count="exact").eq("company_id", cid).limit(1).execute()
-    total_count = count_res.count or 0
+    # 1. Get EXACT TOTAL count from the database engine
+    query_total = supabase.table(table).select("*", count="exact").limit(1)
+    if table == "bugs":
+        query_total = query_total.eq("company_id", cid)
+    count_res = query_total.execute()
+    total_count = count_res.count if count_res.count is not None else 0
 
-    res = supabase.table(table).select("*").eq("company_id", cid).order("bug_id", desc=True).limit(1000).execute()
+    # 2. Get EXACT CRITICAL count directly from the database
+    # FIX: We now strictly query "S1" to perfectly sync with the Database table's filter
+    query_crit = supabase.table(table).select("*", count="exact").eq("severity", "S1").limit(1)
+    if table == "bugs":
+        query_crit = query_crit.eq("company_id", cid)
+    crit_res = query_crit.execute()
+    critical_count = crit_res.count if crit_res.count is not None else 0
+
+    # 3. Fetch the latest 1000 bugs to build the Component Chart and Recent Feed
+    query_recent = supabase.table(table).select("*").order("bug_id", desc=True).limit(1000)
+    if table == "bugs":
+        query_recent = query_recent.eq("company_id", cid)
+    res = query_recent.execute()
+
     bugs = res.data or []
 
-    critical_count = len([b for b in bugs if b.get("severity") in ["S1", "CRITICAL"]])
+    # Map the top 5 components for the chart
     components = {}
     for b in bugs:
         comp = b.get("component", "General")
         components[comp] = components.get(comp, 0) + 1
 
     top_5 = sorted([{"name": k, "value": v} for k, v in components.items()], key=lambda x: x['value'], reverse=True)[:5]
+
+    # Map the 5 most recent bugs for the live feed
+    recent_feed = [
+        {
+            "id": b.get("bug_id") or b.get("id"),
+            "summary": b.get("summary"),
+            "severity": b.get("severity"),
+            "status": b.get("status")
+        } for b in bugs[:5]
+    ]
+
     return {
-        "stats": {"total_db": total_count, "analyzed": total_count, "critical": critical_count},
-        "recent": [{"id": b.get("bug_id") or b.get("id"), "summary": b.get("summary"), "severity": b.get("severity"),
-                    "status": b.get("status")} for b in bugs[:5]],
+        "stats": {
+            "total_db": total_count,
+            "analyzed": total_count,
+            "critical": critical_count
+        },
+        "recent": recent_feed,
         "charts": {"components": top_5}
     }
 
 
+# --- DIRECTORY & EXPLORER ---
 @app.get("/api/hub/component_counts")
 def get_component_counts(current_user=Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
@@ -337,15 +329,93 @@ def get_component_counts(current_user=Depends(auth.get_current_user)):
     return counts
 
 
+@app.get("/api/hub/component_inspector")
+def component_inspector(component: str, team: str = "", current_user=Depends(auth.get_current_user)):
+    """NEW: Provides total count and recent critical bugs for a specific component"""
+    cid = current_user.get("company_id")
+    table = get_company_table(cid)
+
+    # 1. Total records for this component
+    query_total = supabase.table(table).select("bug_id", count="exact")
+    if table == "bugs":
+        query_total = query_total.eq("company_id", cid)
+    res_total = query_total.eq("component", component).execute()
+    total = res_total.count if res_total.count is not None else 0
+
+    # 2. Recent Critical Failures
+    query_crit = supabase.table(table).select("*")
+    if table == "bugs":
+        query_crit = query_crit.eq("company_id", cid)
+    res_crit = query_crit.eq("component", component) \
+        .in_("severity", ["S1", "CRITICAL"]) \
+        .order("bug_id", desc=True) \
+        .limit(5).execute()
+
+    recent_critical = [
+        {"id": r.get("bug_id") or r.get("id"), "summary": r.get("summary"), "severity": r.get("severity")}
+        for r in (res_crit.data or [])
+    ]
+
+    return {
+        "component": component,
+        "team": team,
+        "total": total,
+        "recent_critical": recent_critical
+    }
+
+
+# --- DIRECTORY & EXPLORER ---
 @app.get("/api/hub/explorer")
 def get_bugs(page: int = 1, limit: int = 10, search: str = "", sort_key: str = "id", sort_dir: str = "desc",
              sev: str = "", status: str = "", comp: str = "", current_user=Depends(auth.get_current_user)):
+
     cid = current_user.get("company_id")
     table = get_company_table(cid)
     db_sort = "bug_id" if sort_key == "id" else sort_key
-    offset = (page - 1) * limit
 
     query = supabase.table(table).select("*", count="exact")
+    if table == "bugs":
+        query = query.eq("company_id", cid)
+
+    # SMART INTERCEPTOR: Routes search to ID or Summary based on input type
+    clean_search = search.strip()
+    if clean_search.isdigit():
+        query = query.eq("bug_id", int(clean_search))
+    elif clean_search:
+        query = query.ilike("summary", f"%{clean_search}%")
+
+    if sev:    query = query.ilike("severity", f"%{sev}%")
+    if status: query = query.ilike("status", f"%{status}%")
+    if comp:   query = query.ilike("component", f"%{comp}%")
+
+    offset = (page - 1) * limit
+    res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).range(offset, offset + limit - 1).execute()
+
+    return {
+        "total": res.count or 0,
+        "bugs": [{"id": r.get("bug_id") or r.get("id"), "summary": r.get("summary"), "component": r.get("component"), "severity": r.get("severity"), "status": r.get("status")} for r in (res.data or [])]
+    }
+
+
+@app.get("/api/hub/export")
+def export_bugs_csv(search: str = "", sort_key: str = "id", sort_dir: str = "desc",
+                    sev: str = "", status: str = "", comp: str = "", current_user=Depends(auth.get_current_user)):
+    """Exports the currently filtered bugs to a CSV file"""
+    cid = current_user.get("company_id")
+    table = get_company_table(cid)
+
+    db_sort = "bug_id" if sort_key == "id" else sort_key
+
+    # Apply the exact same smart interceptor for exports so the CSV matches the UI
+    clean_search = search.strip().upper()
+    if clean_search in ["S1", "S2", "S3", "S4", "CRITICAL"]:
+        sev = clean_search
+        search = ""
+    elif clean_search in ["FIXED", "PENDING", "PROCESSED", "NEW"]:
+        status = search.strip()
+        search = ""
+
+    query = supabase.table(table).select("*")
     if table == "bugs":
         query = query.eq("company_id", cid)
 
@@ -354,45 +424,64 @@ def get_bugs(page: int = 1, limit: int = 10, search: str = "", sort_key: str = "
     if status: query = query.ilike("status", f"%{status}%")
     if comp:   query = query.ilike("component", f"%{comp}%")
 
-    res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).range(offset, offset + limit - 1).execute()
+    # Fetch up to 10,000 rows for the export
+    res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).limit(10000).execute()
+    bugs = res.data or []
 
-    return {
-        "total": res.count or 0,
-        "bugs": [
-            {
-                "id": r.get("bug_id"),
-                "summary": r.get("summary"),
-                "component": r.get("component"),
-                "severity": r.get("severity"),
-                "status": r.get("status")
-            } for r in (res.data or [])
-        ]
-    }
+    # Generate CSV in memory
+    import io, csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Summary", "Component", "Severity", "Status"])
 
+    for b in bugs:
+        writer.writerow([
+            b.get("bug_id") or b.get("id"),
+            b.get("summary", ""),
+            b.get("component", ""),
+            b.get("severity", ""),
+            b.get("status", "")
+        ])
+
+    output.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=apex_bug_export.csv"}
+    )
 
 # --- BUG OPERATIONS ---
 @app.post("/api/bug")
-async def create_bug(request: CreateBugRequest, current_user=Depends(auth.get_current_user)):
+async def create_bug(request: BugPayload, current_user=Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
+    uid = current_user.get("id")
+
     new_bug = {
-        "summary": request.bug.summary,
-        "component": request.bug.component,
-        "severity": request.bug.severity,
-        "status": request.bug.status,
+        "summary": request.summary,
+        "component": request.component,
+        "severity": request.severity,
+        "status": "NEW",  # Force status to NEW for consistent UI classification
         "company_id": cid,
-        "user_id": current_user.get("id")
+        "user_id": uid
     }
 
-    res = supabase.table("bugs").insert(new_bug).execute()
-    return res.data
-
+    try:
+        # Use return='minimal' to avoid fetching data back if not needed,
+        # or just execute to get the created record
+        res = supabase.table("bugs").insert(new_bug).execute()
+        return res.data
+    except Exception as e:
+        print(f"Database Insert Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to log bug.")
 
 @app.delete("/api/bug/{bug_id}")
-async def delete_bug(bug_id: int, current_user=Depends(auth.get_current_user)):
+async def delete_bug(bug_id: int, current_user = Depends(auth.get_current_user)):
     try:
         cid = current_user.get("company_id")
+        # Ensure user can only delete bugs belonging to their company
         supabase.table("bugs").delete().eq("bug_id", bug_id).eq("company_id", cid).execute()
-        return {"message": "Purged"}
+        return {"message": "Bug purged from system."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -404,6 +493,15 @@ def get_batches(current_user=Depends(auth.get_current_user)):
         "upload_time", desc=True).execute()
     return res.data
 
+@app.delete("/api/batches/{batch_id}")
+async def delete_batch(batch_id: int, current_user = Depends(auth.get_current_user)):
+    try:
+        cid = current_user.get("company_id")
+        # Deletes the specific batch from the ledger
+        supabase.table("training_batches").delete().eq("id", batch_id).eq("company_id", cid).execute()
+        return {"message": "Batch purged"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload_and_train")
 async def upload_and_train(
@@ -414,6 +512,7 @@ async def upload_and_train(
     try:
         content = await file.read()
         cid = current_user.get("company_id")
+
         import json
         try:
             data = json.loads(content)
@@ -473,14 +572,13 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     cid = current_user.get("company_id")
-    table = get_company_table(cid)
     last_trained_str = "Recently"
-    total_live_volume = 0
+    total_live_volume = 1000
     feedback_list = []
     total_feedback = 0
 
     try:
-        bug_res = supabase.table(table).select("bug_id", count="exact").eq("company_id", cid).limit(1).execute()
+        bug_res = supabase.table("firefox_table").select("bug_id", count="exact").execute()
         base_count = bug_res.count if bug_res.count else 0
 
         fb_res = supabase.table("feedback").select("*").eq("company_id", cid).order("created_at", desc=True).execute()

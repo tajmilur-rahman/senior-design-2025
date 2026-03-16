@@ -10,23 +10,36 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+
+  // Search & Filter State
   const [search, setSearch] = useState(initialQuery);
   const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
   const [sevFilter, setSevFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [compFilter, setCompFilter] = useState("");
+
+  // Table State
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedBug, setSelectedBug] = useState(null);
 
-  useEffect(() => { setSearch(initialQuery); }, [initialQuery]);
-
+  // Synchronize initial search query from external navigation (e.g., clicking Overview cards)
   useEffect(() => {
-    const handler = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
+    setSearch(initialQuery);
+    setPage(1);
+  }, [initialQuery]);
+
+  // Debounce search input to prevent excessive API calls and reset to page 1 to find new results
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
     return () => clearTimeout(handler);
   }, [search]);
 
+  // Main data fetching function
   const fetchBugs = useCallback(async () => {
     setLoading(true);
     try {
@@ -34,9 +47,14 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         const response = await axios.get("/api/hub/explorer", {
             headers: { Authorization: `Bearer ${token}` },
             params: {
-                page, limit: itemsPerPage, search: debouncedSearch,
-                sort_key: sortConfig.key, sort_dir: sortConfig.direction,
-                sev: sevFilter, status: statusFilter, comp: compFilter
+                page,
+                limit: itemsPerPage,
+                search: debouncedSearch,
+                sort_key: sortConfig.key,
+                sort_dir: sortConfig.direction,
+                sev: sevFilter,
+                status: statusFilter,
+                comp: compFilter
             }
         });
         setBugs(response.data.bugs || []);
@@ -63,13 +81,28 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         const token = localStorage.getItem("token");
         const response = await axios.get("/api/hub/export", {
             headers: { Authorization: `Bearer ${token}` },
-            params: { search: debouncedSearch, sort_key: sortConfig.key, sort_dir: sortConfig.direction, sev: sevFilter, status: statusFilter, comp: compFilter },
+            params: {
+              search: debouncedSearch,
+              sort_key: sortConfig.key,
+              sort_dir: sortConfig.direction,
+              sev: sevFilter,
+              status: statusFilter,
+              comp: compFilter
+            },
             responseType: 'blob'
         });
         const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a'); link.href = url; link.setAttribute('download', 'bug_export.csv');
-        document.body.appendChild(link); link.click(); link.remove();
-    } catch (err) { alert("Export failed."); } finally { setExporting(false); }
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `bug_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (err) {
+        alert("Export failed.");
+    } finally {
+        setExporting(false);
+    }
   };
 
   const applyQuickFilter = (type) => {

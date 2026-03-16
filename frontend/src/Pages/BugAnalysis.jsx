@@ -9,9 +9,9 @@ const BugAnalysis = () => {
   const [duplicates, setDuplicates] = useState([]);
   const [error, setError] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState(false);
-  const [showCorrection, setShowCorrection] = useState(false); // NEW: shows correction dropdown
-  const [correctedSev, setCorrectedSev] = useState("S2");      // NEW: user's actual severity
-  const [submittingFeedback, setSubmittingFeedback] = useState(false); // NEW: loading state
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [correctedSev, setCorrectedSev] = useState("S2");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   const SAMPLE_BUGS = [
     "Firefox crashes when opening 50+ tabs on macOS",
@@ -28,65 +28,54 @@ const BugAnalysis = () => {
     setError(null);
     setPrediction(null);
     setFeedbackSent(false);
-    setShowCorrection(false); // reset correction panel on new analysis
+    setShowCorrection(false);
 
     if (overrideQuery) setQuery(overrideQuery);
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`/api/analyze_bug?bug_text=${encodeURIComponent(textToAnalyze)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-      });
+      // Changed to axios to automatically use the Supabase auth interceptor defined in App.jsx
+      const response = await axios.post(`/api/analyze_bug?bug_text=${encodeURIComponent(textToAnalyze)}`);
 
-      if (!response.ok) throw new Error("Failed to connect to backend");
-
-      const data = await response.json();
+      const data = response.data;
       setPrediction(data.severity);
       setDuplicates(data.similar_bugs);
 
     } catch (err) {
       console.error(err);
-      setError("Could not connect to the server. Is the backend running?");
+      if (err.response?.status === 401) {
+        setError("Session expired or unauthorized. Please log in again.");
+      } else {
+        setError("Could not connect to the server. Is the backend running?");
+      }
     } finally {
       setAnalyzing(false);
     }
   };
 
-  // Called when user clicks "Yes" — prediction was correct, no correction needed
   const sendPositiveFeedback = () => {
     setFeedbackSent(true);
     setShowCorrection(false);
-    // No API call needed — correct predictions don't need to be stored
   };
 
-  // Called when user clicks "No" — show correction dropdown
   const handleNegativeFeedback = () => {
     setShowCorrection(true);
   };
 
-  // Called when user submits their correction
   const submitCorrection = async () => {
     if (!prediction) return;
     setSubmittingFeedback(true);
     try {
-      // POST to /api/feedback — saves the correction to the feedback table
-      // This data is used later to retrain the model (Stage 2 & 3)
       await axios.post('/api/feedback', {
         summary:            query,
         predicted_severity: prediction.label,
         actual_severity:    correctedSev,
         confidence:         prediction.confidence || 0.85,
-        component:          "General" // can be enhanced later if component is selected
+        component:          "General"
       });
       setFeedbackSent(true);
       setShowCorrection(false);
     } catch (err) {
       console.error("Feedback submission failed:", err);
-      // Still mark as sent so user isn't stuck — fail silently
       setFeedbackSent(true);
       setShowCorrection(false);
     } finally {
@@ -116,7 +105,6 @@ const BugAnalysis = () => {
         </button>
       </div>
 
-      {/* SAMPLE CHIPS */}
       {!prediction && !analyzing && (
         <div className="fade-in" style={{marginTop: 40, textAlign: 'center'}}>
           <p style={{fontSize: 11, fontWeight: 800, color: '#94a3b8', marginBottom: 16, display:'flex', alignItems:'center', justifyContent:'center', gap:6, letterSpacing: 0.5}}>
@@ -156,7 +144,6 @@ const BugAnalysis = () => {
               <p className="ba-action-text">{prediction.action}</p>
             </div>
 
-            {/* FEEDBACK SECTION */}
             {!feedbackSent && !showCorrection && (
               <div style={{marginTop: 24, paddingTop: 20, borderTop: '1px dashed var(--border)'}}>
                 <p style={{fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5}}>
@@ -175,7 +162,6 @@ const BugAnalysis = () => {
               </div>
             )}
 
-            {/* CORRECTION DROPDOWN — shown when user clicks No */}
             {showCorrection && !feedbackSent && (
               <div className="fade-in" style={{marginTop: 24, paddingTop: 20, borderTop: '1px dashed var(--border)'}}>
                 <p style={{fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5}}>
@@ -207,7 +193,6 @@ const BugAnalysis = () => {
               </div>
             )}
 
-            {/* SUCCESS STATE */}
             {feedbackSent && (
               <div className="fade-in" style={{marginTop: 20, padding: 12, background: '#f0fdf4', borderRadius: 8, textAlign: 'center', fontSize: '13px', color: '#16a34a', fontWeight: '700', display: 'flex', alignItems:'center', justifyContent:'center', gap: 8}}>
                 <CheckCircle size={16}/> Feedback Received
