@@ -22,14 +22,13 @@ export default function Performance() {
       baseline:         null,
       current:          null,
       previous:         null,
-      confusion_matrix: null,  // real data from feedback table
-      feedback_stats:   null,  // correction rate + weak components
+      confusion_matrix: null,
+      feedback_stats:   null,
   });
   const [viewVersion, setViewVersion] = useState('enterprise');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fallback values shown when API is unavailable
   const fallbackCurrent = {
       accuracy: 0.863, f1_score: 0.858, precision: 0.860, recall: 0.855,
       dataset_size: null, status: "Active Model (Demo Batch)",
@@ -41,7 +40,7 @@ export default function Performance() {
       last_trained: "Previous Epoch", total_trees: 190
   };
 
-const fetchMetrics = async () => {
+  const fetchMetrics = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -50,10 +49,8 @@ const fetchMetrics = async () => {
               headers: { Authorization: `Bearer ${token}` }
           });
 
-          // 1. Check if the response has the 'current' metrics we need
           if (res.data && res.data.current) {
               const { current, baseline, previous, confusion_matrix, feedback_stats } = res.data;
-
               setModelData({
                   baseline:         baseline || current,
                   current:          current,
@@ -62,18 +59,15 @@ const fetchMetrics = async () => {
                   feedback_stats:   feedback_stats || null,
               });
           } else {
-              console.warn("API responded but 'current' metrics are missing.");
               setModelData({
                   baseline: fallbackCurrent, current: fallbackCurrent,
                   previous: fallbackPrevious, confusion_matrix: null, feedback_stats: null
               });
           }
       } catch (e) {
-          console.error("Fetch Metrics Error:", e);
           if (e.response?.status === 403) {
               setError("Admin access required to view model performance.");
           } else {
-              // Only show fallback if the server is literally unreachable
               setModelData({
                   baseline: fallbackCurrent, current: fallbackCurrent,
                   previous: fallbackPrevious, confusion_matrix: null, feedback_stats: null
@@ -86,7 +80,6 @@ const fetchMetrics = async () => {
 
   useEffect(() => { fetchMetrics(); }, []);
 
-  // ── Derived values ──────────────────────────────────────────────────────────
   const baseMetrics = modelData.baseline || fallbackCurrent;
   const currMetrics = modelData.current  || fallbackCurrent;
   const prevMetrics = modelData.previous || fallbackPrevious;
@@ -103,7 +96,6 @@ const fetchMetrics = async () => {
       { name: 'Recall',    Enterprise: baseMetrics.recall    * 100, Previous: prevMetrics.recall    * 100, Active: currMetrics.recall    * 100 },
   ];
 
-  // Real confusion matrix from feedback table — falls back to empty grid
   const realConfusionMatrix = modelData.confusion_matrix || [
       { actual: 'S1', S1: 0, S2: 0, S3: 0, S4: 0 },
       { actual: 'S2', S1: 0, S2: 0, S3: 0, S4: 0 },
@@ -111,9 +103,8 @@ const fetchMetrics = async () => {
       { actual: 'S4', S1: 0, S2: 0, S3: 0, S4: 0 },
   ];
 
-  // Dynamic max value so heatmap scales to real data
   const MAX_MATRIX_VAL = Math.max(
-      1, // prevent division by zero
+      1,
       ...realConfusionMatrix.flatMap(row => [row.S1, row.S2, row.S3, row.S4])
   );
 
@@ -145,7 +136,6 @@ const fetchMetrics = async () => {
       );
   };
 
-  // ── Early states ────────────────────────────────────────────────────────────
   if (loading) {
       return (
           <div className="page-content fade-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
@@ -168,11 +158,8 @@ const fetchMetrics = async () => {
       );
   }
 
-  // ── Main render ─────────────────────────────────────────────────────────────
   return (
     <div className="page-content fade-in" style={{ position: 'relative' }}>
-
-      {/* Header */}
       <div className="explorer-header" style={{ marginBottom: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
            <h1 style={{fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 10}}>
@@ -208,7 +195,6 @@ const fetchMetrics = async () => {
         </div>
       </div>
 
-      {/* Stat cards — now includes real correction rate */}
       <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: 30 }}>
          <div className="sys-card" style={{ padding: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', marginBottom: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -242,7 +228,6 @@ const fetchMetrics = async () => {
                 {formatPct(metricsToUse.recall)} {getDelta('recall')}
             </div>
          </div>
-         {/* NEW — real correction rate from feedback table */}
          <div className="sys-card" style={{ padding: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', marginBottom: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <AlertCircle size={14}/> CORRECTION RATE
@@ -256,7 +241,6 @@ const fetchMetrics = async () => {
          </div>
       </div>
 
-      {/* Cross-build bar chart + Radar */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
           <div className="sys-card" style={{ padding: 24, transition: '0.3s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -283,7 +267,6 @@ const fetchMetrics = async () => {
               </ResponsiveContainer>
           </div>
 
-          {/* Radar — still uses static classMetrics, noted above */}
           <div className="sys-card" style={{ padding: 24, transition: '0.3s' }}>
               <h3 style={{fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 0, textTransform: 'uppercase', letterSpacing: 1}}>
                   Class Distribution
@@ -304,14 +287,12 @@ const fetchMetrics = async () => {
           </div>
       </div>
 
-      {/* Confusion matrix (real data) + Training metadata */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
           <div className="sys-card" style={{ padding: 24, transition: '0.3s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
                   <h3 style={{fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', margin: 0, textTransform: 'uppercase', letterSpacing: 1}}>
                       Confusion Matrix
                   </h3>
-                  {/* Show data source so supervisor knows it's real */}
                   <span style={{ fontSize: 10, color: 'var(--text-sec)', background: 'var(--hover-bg)', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
                       {feedbackStats.total_corrections > 0 ? `${feedbackStats.total_corrections} real corrections` : 'Submit corrections to populate'}
                   </span>
@@ -327,7 +308,6 @@ const fetchMetrics = async () => {
                           {['S1','S2','S3','S4'].map(l => (
                               <div key={l} style={{textAlign: 'center', fontSize: 12, fontWeight: 800, color: 'var(--text-sec)', marginBottom: 8}}>{l}</div>
                           ))}
-                          {/* Uses realConfusionMatrix — real feedback data */}
                           {realConfusionMatrix.map(row => (
                               <React.Fragment key={row.actual}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 10, fontSize: 12, fontWeight: 800, color: 'var(--text-sec)' }}>
@@ -404,7 +384,6 @@ const fetchMetrics = async () => {
           </div>
       </div>
 
-      {/* NEW — Weak components chart, only shown when real feedback exists */}
       {feedbackStats.weak_components.length > 0 && (
           <div className="sys-card" style={{ padding: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
