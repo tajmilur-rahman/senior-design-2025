@@ -492,3 +492,527 @@ body{margin:0;background-color:var(--bg);color:var(--text-main);font-family:var(
   color: var(--accent);
   display: block;
 }
+/* ── Nav refinements ── */
+.sys-nav {
+  height: 60px;
+}
+.nav-logo {
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  gap: 8px;
+}
+.nav-link {
+  font-size: 12.5px;
+  padding: 5px 11px;
+  letter-spacing: 0;
+}
+
+/* ── Softer card shadows ── */
+.sys-card {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px var(--border);
+  border: none; /* let the box-shadow handle the border */
+}
+[data-theme="dark"] .sys-card {
+  box-shadow: 0 1px 6px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+}
+.sys-card.big-stat:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 0 0 1.5px var(--accent);
+  transform: translateY(-3px);
+}
+.sys-card.highlight-blue {
+  box-shadow: 0 4px 16px rgba(37,99,235,0.25);
+}
+
+/* ── Stat value size ── */
+.stat-value {
+  font-size: 38px;
+}
+
+/* ── Feed card ── */
+.feed-card {
+  width: 320px;
+  height: 290px;
+}
+.live-feed-item {
+  padding: 10px 18px;
+  font-size: 12.5px;
+}
+
+/* ── Button micro-polish ── */
+.sys-btn {
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  border-radius: 8px;
+  text-transform: none;
+  font-weight: 700;
+}
+.sys-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.sys-btn.outline:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Input focus ring ── */
+.sys-input:focus {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* ── Table refinements ── */
+.sleek-table th {
+  font-size: 10.5px;
+  padding: 13px 20px;
+  letter-spacing: 0.4px;
+}
+.sleek-table td {
+  padding: 13px 20px;
+  font-size: 13px;
+}
+
+/* ── Explorer header ── */
+.explorer-header {
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+}
+
+/* ── Hero section ── */
+.hero-section {
+  padding: 16px 0 40px;
+  margin-bottom: 36px;
+}
+.hero-content h1 {
+  font-size: 48px;
+  letter-spacing: -2px;
+  margin: 14px 0 8px;
+  text-transform: none;
+}
+.subtitle {
+  font-size: 14px;
+  opacity: 0.75;
+}
+.live-pill {
+  font-size: 10.5px;
+  padding: 5px 12px;
+}
+
+/* ── Feature section spacing ── */
+.feature-section {
+  gap: 48px;
+  padding: 48px 0;
+}
+.feature-text h2 {
+  font-size: 24px;
+  letter-spacing: -0.5px;
+  text-transform: none;
+}
+
+/* ── BA (Bug Analysis) container ── */
+.ba-container {
+  padding: 32px;
+  min-height: calc(100vh - 100px);
+}
+.ba-title {
+  font-size: 26px;
+  gap: 10px;
+}
+.ba-subtitle {
+  font-size: 14px;
+  margin-top: 4px;
+}
+.ba-input-wrapper {
+  max-width: 640px;
+}
+.ba-input {
+  font-size: 14px;
+}
+.ba-card-header {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.ba-analyze-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Password eye toggle positioning ── */
+.input-group {
+  position: relative;
+}
+
+/* ── Login card polish ── */
+.login-title {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+}
+.login-sub {
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+.login-btn-ent {
+  height: 48px;
+}
+.brand-content h1 {
+  font-size: 34px;
+  letter-spacing: -1px;
+}
+.brand-content p {
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.brand-stat-ent {
+  font-size: 12px;
+  padding: 8px 16px;
+}
+
+/* ── Directory card ── */
+.dir-title {
+  font-size: 16px;
+}
+.dir-body {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+/* ── Segmented control ── */
+.segment-btn {
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+
+/* ── Pill badges ── */
+.pill {
+  font-size: 10.5px;
+  padding: 3px 10px;
+  letter-spacing: 0.2px;
+}
+
+/* ── Toast ── */
+/* Already handled inline — no change needed */
+
+/* ── Scrollbar global refinement ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-sec);
+}
+
+/* ── Performance page header ── */
+/* Make "MODEL PERFORMANCE" less shouted */
+.page-content h1 {
+  text-transform: none;
+  letter-spacing: -0.5px;
+}
+
+/* ── Onboarding polish ── */
+.onboarding-title {
+  font-size: 20px;
+}
+.onboarding-subtitle {
+  font-size: 13.5px;
+}
+.onboarding-feature-title {
+  font-size: 12.5px;
+}
+
+/* ── User pill ── */
+.user-pill {
+  padding: 3px 10px 3px 3px;
+  gap: 8px;
+}
+.user-name {
+  font-size: 12.5px;
+}
+.user-avatar-sm {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  border-radius: 50%;
+}
+
+/* ── Sign out button ── */
+/* Shrink it slightly so it doesn't compete with nav links */
+.nav-right .sys-btn.outline {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
+}
+
+/* ── Nav refinements ── */
+.sys-nav {
+  height: 60px;
+}
+.nav-logo {
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  gap: 8px;
+}
+.nav-link {
+  font-size: 12.5px;
+  padding: 5px 11px;
+  letter-spacing: 0;
+}
+
+/* ── Softer card shadows ── */
+.sys-card {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px var(--border);
+  border: none; /* let the box-shadow handle the border */
+}
+[data-theme="dark"] .sys-card {
+  box-shadow: 0 1px 6px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+}
+.sys-card.big-stat:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 0 0 1.5px var(--accent);
+  transform: translateY(-3px);
+}
+.sys-card.highlight-blue {
+  box-shadow: 0 4px 16px rgba(37,99,235,0.25);
+}
+
+/* ── Stat value size ── */
+.stat-value {
+  font-size: 38px;
+}
+
+/* ── Feed card ── */
+.feed-card {
+  width: 320px;
+  height: 290px;
+}
+.live-feed-item {
+  padding: 10px 18px;
+  font-size: 12.5px;
+}
+
+/* ── Button micro-polish ── */
+.sys-btn {
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  border-radius: 8px;
+  text-transform: none;
+  font-weight: 700;
+}
+.sys-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.sys-btn.outline:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Input focus ring ── */
+.sys-input:focus {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* ── Table refinements ── */
+.sleek-table th {
+  font-size: 10.5px;
+  padding: 13px 20px;
+  letter-spacing: 0.4px;
+}
+.sleek-table td {
+  padding: 13px 20px;
+  font-size: 13px;
+}
+
+/* ── Explorer header ── */
+.explorer-header {
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+}
+
+/* ── Hero section ── */
+.hero-section {
+  padding: 16px 0 40px;
+  margin-bottom: 36px;
+}
+.hero-content h1 {
+  font-size: 48px;
+  letter-spacing: -2px;
+  margin: 14px 0 8px;
+  text-transform: none;
+}
+.subtitle {
+  font-size: 14px;
+  opacity: 0.75;
+}
+.live-pill {
+  font-size: 10.5px;
+  padding: 5px 12px;
+}
+
+/* ── Feature section spacing ── */
+.feature-section {
+  gap: 48px;
+  padding: 48px 0;
+}
+.feature-text h2 {
+  font-size: 24px;
+  letter-spacing: -0.5px;
+  text-transform: none;
+}
+
+/* ── BA (Bug Analysis) container ── */
+.ba-container {
+  padding: 32px;
+  min-height: calc(100vh - 100px);
+}
+.ba-title {
+  font-size: 26px;
+  gap: 10px;
+}
+.ba-subtitle {
+  font-size: 14px;
+  margin-top: 4px;
+}
+.ba-input-wrapper {
+  max-width: 640px;
+}
+.ba-input {
+  font-size: 14px;
+}
+.ba-card-header {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.ba-analyze-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Password eye toggle positioning ── */
+.input-group {
+  position: relative;
+}
+
+/* ── Login card polish ── */
+.login-title {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+}
+.login-sub {
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+.login-btn-ent {
+  height: 48px;
+}
+.brand-content h1 {
+  font-size: 34px;
+  letter-spacing: -1px;
+}
+.brand-content p {
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.brand-stat-ent {
+  font-size: 12px;
+  padding: 8px 16px;
+}
+
+/* ── Directory card ── */
+.dir-title {
+  font-size: 16px;
+}
+.dir-body {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+/* ── Segmented control ── */
+.segment-btn {
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+
+/* ── Pill badges ── */
+.pill {
+  font-size: 10.5px;
+  padding: 3px 10px;
+  letter-spacing: 0.2px;
+}
+
+/* ── Toast ── */
+/* Already handled inline — no change needed */
+
+/* ── Scrollbar global refinement ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-sec);
+}
+
+/* ── Performance page header ── */
+/* Make "MODEL PERFORMANCE" less shouted */
+.page-content h1 {
+  text-transform: none;
+  letter-spacing: -0.5px;
+}
+
+/* ── Onboarding polish ── */
+.onboarding-title {
+  font-size: 20px;
+}
+.onboarding-subtitle {
+  font-size: 13.5px;
+}
+.onboarding-feature-title {
+  font-size: 12.5px;
+}
+
+/* ── User pill ── */
+.user-pill {
+  padding: 3px 10px 3px 3px;
+  gap: 8px;
+}
+.user-name {
+  font-size: 12.5px;
+}
+.user-avatar-sm {
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  border-radius: 50%;
+}
+
+/* ── Sign out button ── */
+/* Shrink it slightly so it doesn't compete with nav links */
+.nav-right .sys-btn.outline {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
+}
+

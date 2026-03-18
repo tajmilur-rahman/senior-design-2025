@@ -82,7 +82,6 @@ class FeedbackRequest(BaseModel):
 
 
 # --- ANALYSIS (The Brain) ---
-# FIX: Accept both GET and POST so axios.post() from frontend works
 @app.get("/api/analyze_bug")
 @app.post("/api/analyze_bug")
 async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_current_user)):
@@ -96,7 +95,7 @@ async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_
             sev_label = str(prediction)
             confidence = round(float(max(probas)) * 100, 1)
         else:
-            # Heuristic fallback with proper confidence
+            # Heuristic fallback
             text_lower = bug_text.lower()
             if any(k in text_lower for k in ["crash", "security", "data loss", "exploit"]):
                 sev_label, confidence = "S1", 92.0
@@ -114,7 +113,6 @@ async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_
         try:
             search_query = bug_text.strip()
             if len(search_query) > 2:
-                # Use first 30 chars for similarity search
                 response = supabase.table(search_table) \
                     .select("*") \
                     .ilike('summary', f'%{search_query[:30]}%') \
@@ -303,6 +301,7 @@ def get_overview(current_user=Depends(auth.get_current_user)):
     crit_res = query_crit.execute()
     critical_count = crit_res.count if crit_res.count is not None else 0
 
+    # Always sort by bug_id desc so newest appear first in the stream
     query_recent = supabase.table(table).select("*").order("bug_id", desc=True).limit(1000)
     if table == "bugs":
         query_recent = query_recent.eq("company_id", cid)
@@ -317,6 +316,7 @@ def get_overview(current_user=Depends(auth.get_current_user)):
 
     top_5 = sorted([{"name": k, "value": v} for k, v in components.items()], key=lambda x: x['value'], reverse=True)[:5]
 
+    # Recent feed: take the 5 newest bugs
     recent_feed = [
         {
             "id": b.get("bug_id") or b.get("id"),
@@ -384,7 +384,6 @@ def get_bugs(
     page: int = 1, limit: int = 10,
     search: str = "", sort_key: str = "id", sort_dir: str = "desc",
     sev: str = "", status: str = "", comp: str = "",
-    exact: bool = False,   # NEW: exact-match flag
     current_user=Depends(auth.get_current_user)
 ):
     cid = current_user.get("company_id")
@@ -398,13 +397,9 @@ def get_bugs(
     clean_search = search.strip()
     if clean_search:
         if clean_search.isdigit():
-            # Numeric → exact ID match
             query = query.eq("bug_id", int(clean_search))
-        elif exact:
-            # Exact-match mode: case-insensitive equality
-            query = query.ilike("summary", clean_search)
         else:
-            # Fuzzy / contains match (default)
+            # Standard fuzzy/contains search — clean, no toggle needed
             query = query.ilike("summary", f"%{clean_search}%")
 
     if sev:    query = query.ilike("severity", f"%{sev}%")
@@ -534,9 +529,12 @@ async def upload_and_train(
         import json
         try:
             data = json.loads(content)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON format")
+            if not isinstance(data, list):
+                raise ValueError("JSON must be an array of bug objects")
+        except Exception as parse_err:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(parse_err)}")
 
+        # FIX: Use 'bug_count' to match the TrainingBatch model (not 'record_count')
         batch_entry = {
             "batch_name": batch_name,
             "company_id": cid,
@@ -551,19 +549,48 @@ async def upload_and_train(
         for item in data:
             summary = item.get('summary', 'No summary')
             pred_sev = str(item.get('predicted_severity', 'S3')).upper()
-            act_sev = str(item.get('actual_severity', 'S3')).upper()
+            act_sev = str(item.get('actual_severity', item.get('severity', 'S3'))).upper()
             comp = item.get('component', 'General')
 
-            bugs_to_insert.append({"summary": summary, "component": comp, "severity": act_sev, "company_id": cid, "status": "processed"})
-            feedback_to_insert.append({"company_id": cid, "summary": summary, "component": comp, "predicted_severity": pred_sev, "actual_severity": act_sev, "is_correction": (pred_sev != act_sev)})
+            # Normalise severity values
+            sev_map = {"BLOCKER":"S1","CRITICAL":"S1","MAJOR":"S2","NORMAL":"S3","MINOR":"S3","TRIVIAL":"S4","ENHANCEMENT":"S4"}
+            act_sev = sev_map.get(act_sev, act_sev) if act_sev not in ["S1","S2","S3","S4"] else act_sev
+            pred_sev = sev_map.get(pred_sev, pred_sev) if pred_sev not in ["S1","S2","S3","S4"] else pred_sev
 
-        if bugs_to_insert:
-            supabase.table("bugs").insert(bugs_to_insert).execute()
-        if feedback_to_insert:
-            supabase.table("feedback").insert(feedback_to_insert).execute()
+            bugs_to_insert.append({
+                "summary": summary,
+                "component": comp,
+                "severity": act_sev,
+                "company_id": cid,
+                "status": "processed"
+            })
+            feedback_to_insert.append({
+                "company_id": cid,
+                "summary": summary,
+                "component": comp,
+                "predicted_severity": pred_sev,
+                "actual_severity": act_sev,
+                "is_correction": (pred_sev != act_sev)
+            })
+
+        # Insert in batches to avoid request size limits
+        BATCH_SIZE = 500
+        for i in range(0, len(bugs_to_insert), BATCH_SIZE):
+            supabase.table("bugs").insert(bugs_to_insert[i:i+BATCH_SIZE]).execute()
+        for i in range(0, len(feedback_to_insert), BATCH_SIZE):
+            supabase.table("feedback").insert(feedback_to_insert[i:i+BATCH_SIZE]).execute()
+
+        # Trigger incremental model retrain on the new feedback
+        try:
+            retrain_result = ml_logic.fast_retrain(feedback_to_insert)
+            print(f"Retrain after bulk upload: {retrain_result}")
+        except Exception as retrain_err:
+            print(f"Retrain skipped after bulk upload: {retrain_err}")
 
         return {"message": "Success", "records_processed": len(data)}
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"UPLOAD ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -576,7 +603,7 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
 
     cid = current_user.get("company_id")
     last_trained_str = "Recently"
-    total_live_volume = 1000
+    total_live_volume = 0
     feedback_list = []
     total_feedback = 0
 
@@ -601,11 +628,13 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
     except Exception as e:
         print(f"Database count failed: {e}")
 
+    # Read actual metrics from the saved JSON file (produced by Train_Universal.py)
     current_metrics = {
         "accuracy": 0.86, "f1_score": 0.85, "precision": 0.86, "recall": 0.85,
         "dataset_size": total_live_volume,
         "status": "Active Build",
-        "last_trained": last_trained_str
+        "last_trained": last_trained_str,
+        "total_trees": 200
     }
 
     try:
@@ -616,13 +645,14 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
             with open(met_path) as f:
                 saved = json.load(f)
             current_metrics.update({
-                "accuracy": saved.get("accuracy", 0.86),
-                "f1_score": saved.get("weighted_f1", saved.get("f1_score", 0.85)),
-                "precision": saved.get("precision", 0.86),
-                "recall": saved.get("recall", 0.85),
-                "dataset_size": total_live_volume,
+                "accuracy":   round(saved.get("accuracy", 0.86), 4),
+                "f1_score":   round(saved.get("weighted_f1", saved.get("f1_score", 0.85)), 4),
+                "precision":  round(saved.get("precision", 0.86), 4),
+                "recall":     round(saved.get("recall", 0.85), 4),
+                "dataset_size": total_live_volume or saved.get("sample_size", 0),
                 "status": "Dynamic Production Build",
-                "last_trained": last_trained_str
+                "last_trained": saved.get("last_trained", last_trained_str),
+                "total_trees": saved.get("n_estimators", 200)
             })
     except Exception as e:
         print(f"Could not load JSON metrics: {e}")
@@ -654,7 +684,7 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
     )[:5]
 
     return {
-        "current": current_metrics,
+        "current":  current_metrics,
         "baseline": current_metrics,
         "previous": current_metrics,
         "confusion_matrix": confusion_matrix,
