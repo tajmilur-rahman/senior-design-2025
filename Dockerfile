@@ -10,9 +10,10 @@ RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/
 
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-ENV PATH=/root/.local/bin:$PATH
 
+ENV PATH=/usr/local/bin:$PATH
 COPY . .
+
 ENV PYTHONPATH=/app/backend
 EXPOSE 8000
 

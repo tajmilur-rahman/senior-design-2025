@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Database, Activity, Server, AlertTriangle, ExternalLink, Zap } from 'lucide-react';
+import { Database, Activity, Server, AlertTriangle, ExternalLink, Zap, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 function LiveFeedRow({ bug }) {
@@ -15,32 +15,66 @@ function LiveFeedRow({ bug }) {
         </div>
     )
 }
+
 export default function Overview({ user, onNavigate }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
+  const fetchData = async () => {
+      try {
+          // Relies on the Axios Interceptor in App.jsx to attach Auth token automatically
+          const res = await axios.get(`/api/hub/overview`);
+          setData(res.data);
+          setError(false);
+      } catch (err) {
+          console.error("Overview Connection Dropped:", err);
+          setError(true);
+      }
+  };
+
   useEffect(() => {
-    const fetchData = () => {
-        const token = localStorage.getItem("token");
-        axios.get(`/api/hub/overview`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(res => { setData(res.data); setError(false); })
-        .catch(err => { console.error("Overview Error:", err); setError(true); });
-    };
     fetchData();
+    // Standard 15-second polling when everything is healthy
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  if (error) return <div className="page-content" style={{textAlign:'center', marginTop:50, color:'var(--danger)'}}>Backend Error: Ensure server is running.</div>;
+  // NEW: Fast-Recovery Polling!
+  // If PyCharm stops the backend, check every 3 seconds so it instantly recovers when restarted.
+  useEffect(() => {
+      let fastPoll;
+      if (error) {
+          fastPoll = setInterval(() => {
+              fetchData();
+          }, 3000);
+      }
+      return () => clearInterval(fastPoll);
+  }, [error]);
+
+  // NEW: Graceful Reconnecting UI
+  if (error && !data) {
+      return (
+          <div className="page-content centered-page" style={{flexDirection: 'column', gap: 16, color: 'var(--text-sec)', minHeight: '60vh'}}>
+              <RefreshCw size={36} className="spin" color="var(--accent)"/>
+              <div style={{fontWeight: 700, fontSize: 16, color: 'var(--text-main)'}}>Waiting for Backend Server...</div>
+              <div style={{fontSize: 14}}>Apex OS is attempting to reconnect to your local environment.</div>
+          </div>
+      );
+  }
+
   if (!data) return <div className="page-content" style={{textAlign:'center', marginTop:50, color:'var(--text-sec)'}}>Loading Dashboards...</div>;
 
   const topComponent = data.charts?.components?.[0]?.name || 'Unknown';
 
   return (
-    <div className="scroll-container">
+    <div className="scroll-container fade-in">
       <section className="hero-section">
         <div className="hero-content">
-          <div className="live-pill"><span className="pulse-dot"></span> SYSTEM ACTIVE</div>
+          {/* Subtle indicator if connection drops while data is already loaded */}
+          <div className="live-pill" style={{ borderColor: error ? 'rgba(239,68,68,0.3)' : '', color: error ? 'var(--danger)' : '' }}>
+            <span className={error ? "" : "pulse-dot"} style={{ background: error ? 'var(--danger)' : '', width: 8, height: 8, borderRadius: '50%', display: 'inline-block' }}></span>
+            {error ? 'RECONNECTING...' : 'SYSTEM ACTIVE'}
+          </div>
           <h1>BUG PRIORITY <span style={{color:'var(--accent)'}}>OS</span></h1>
           <p className="subtitle">Real-time Intelligence & Defect Classification</p>
         </div>
@@ -81,7 +115,7 @@ export default function Overview({ user, onNavigate }) {
         </div>
         <div className="feature-visual">
            <div className="sys-card feed-card">
-             <div className="feed-header"><span style={{fontSize:11, fontWeight:800, color:'var(--text-sec)', textTransform:'uppercase'}}>Recent Analysis</span><div className="pulse-dot"></div></div>
+             <div className="feed-header"><span style={{fontSize:11, fontWeight:800, color:'var(--text-sec)', textTransform:'uppercase'}}>Recent Analysis</span><div className={error ? "" : "pulse-dot"} style={{background: error ? 'var(--danger)' : ''}}></div></div>
              <div className="feed-list custom-scrollbar">
                 {(data.recent || []).map((bug, i) => <LiveFeedRow key={i} bug={bug} />)}
              </div>
