@@ -28,6 +28,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
   const [companyName, setCompanyName]       = useState('');
   const [username, setUsername]             = useState('');
   const [mfaCode, setMfaCode]               = useState('');
+  const [selectedRole, setSelectedRole]     = useState(localStorage.getItem('user_context_role') || 'user');
   const [msg, setMsg]                       = useState('');
   const [isLoading, setIsLoading]           = useState(false);
   const [isRecovery, setIsRecovery]         = useState(false);
@@ -64,7 +65,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
         if (factors?.totp?.length > 0) {
           setViewState('mfa_challenge');
         } else {
-          onLogin(data.user);
+          onLogin(data.user, selectedRole);
         }
 
       } else if (mode === 'register') {
@@ -123,7 +124,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
       const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: mfaCode });
       if (error) throw error;
       const { data: { user } } = await supabase.auth.getUser();
-      onLogin(user);
+      onLogin(user, selectedRole);
     } catch { setMsg('Invalid verification code. Please try again.'); }
     finally { setIsLoading(false); }
   };
@@ -131,7 +132,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
   const switchTo = (newMode) => {
     setMode(newMode); setViewState('form'); setIsRecovery(false);
     setMsg(''); setEmail(''); setPassword(''); setConfirmPassword('');
-    setCompanyName(''); setUsername(''); setMfaCode('');
+    setCompanyName(''); setUsername(''); setMfaCode(''); setSelectedRole('user');
   };
 
   const headings    = { login: 'Welcome back', register: 'Create your account', reset: isRecovery ? 'Set a new password' : 'Reset your password' };
@@ -184,6 +185,25 @@ export default function Login({ onLogin, theme, toggleTheme }) {
               <h2 className="login-title">{headings[mode]}</h2>
               <p className="login-sub">{subheadings[mode]}</p>
               <form onSubmit={handleAuth} className="modern-form">
+                {mode === 'login' && (
+                  <div className="input-group fade-in" style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 8, textTransform: 'uppercase' }}>
+                      Access Context
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <ShieldCheck size={18} className="input-icon" style={{ opacity: 0.5 }} />
+                      <select
+                        className="sys-input login-input"
+                        value={selectedRole}
+                        onChange={e => setSelectedRole(e.target.value)}
+                        style={{ appearance: 'auto', paddingLeft: 40, cursor: 'pointer' }}>
+                        <option value="user">Regular User</option>
+                        <option value="admin">Company Admin</option>
+                        <option value="super_admin">System Super Admin</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
                 <div className="input-group">
                   <Mail size={18} className="input-icon" style={{ opacity: 0.5 }} />
                   <input className="sys-input login-input" type="email" placeholder="Work email"

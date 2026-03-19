@@ -111,6 +111,14 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [theme,          setTheme]          = useState(localStorage.getItem('theme') || 'dark');
 
+  const resolveContextRole = (dbRole) => {
+    const saved = localStorage.getItem('user_context_role');
+    if (dbRole === 'super_admin') {
+      return ['user', 'admin', 'super_admin'].includes(saved) ? saved : 'super_admin';
+    }
+    return dbRole || 'user';
+  };
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -131,6 +139,7 @@ export default function App() {
             email:    session.user.email || db.email,
             username: db.username || session.user.email?.split('@')[0],
             role:     db.role || 'user',
+            context_role: resolveContextRole(db.role || 'user'),
             company_id:           db.company_id,
             is_admin:             db.is_admin || false,
             onboarding_completed: db.onboarding_completed || false,
@@ -141,7 +150,7 @@ export default function App() {
             id: session.user.id, uuid: session.user.id,
             email: session.user.email,
             username: session.user.email?.split('@')[0],
-            role: 'user', company_id: null, onboarding_completed: false,
+            role: 'user', context_role: 'user', company_id: null, onboarding_completed: false,
           });
           setShowOnboarding(true);
         }
@@ -179,7 +188,15 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem('user_context_role');
     setUser(null); setShowOnboarding(false);
+  };
+
+  const handleLogin = (loginUser, selectedRole) => {
+    const contextRole = selectedRole || 'user';
+    const enrichedUser = { ...loginUser, role: contextRole, context_role: contextRole };
+    localStorage.setItem('user_context_role', contextRole);
+    setUser(enrichedUser);
   };
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
@@ -191,7 +208,7 @@ export default function App() {
     </div>
   );
 
-  if (!user)          return <Login      onLogin={setUser}                    theme={theme} toggleTheme={toggleTheme} />;
+  if (!user)          return <Login      onLogin={handleLogin}                theme={theme} toggleTheme={toggleTheme} />;
   if (showOnboarding) return <Onboarding onComplete={handleOnboardingComplete} user={user} />;
   return                     <Dashboard  user={user} onLogout={handleLogout}  theme={theme} toggleTheme={toggleTheme} />;
 }

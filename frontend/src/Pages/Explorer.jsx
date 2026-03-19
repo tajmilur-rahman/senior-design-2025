@@ -124,14 +124,24 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         setLoading(true);
         try {
             const response = await axios.get('/api/hub/explorer', {
-                params: { page, limit: itemsPerPage, search: debouncedSearch, sort_key: sortConfig.key, sort_dir: sortConfig.direction, sev: sevFilter, status: statusFilter, comp: compFilter }
+                params: {
+                    page,
+                    limit: itemsPerPage,
+                    search: debouncedSearch,
+                    sort_key: sortConfig.key,
+                    sort_dir: sortConfig.direction,
+                    sev: sevFilter,
+                    status: statusFilter,
+                    comp: compFilter,
+                    requested_role: user?.context_role || user?.role || 'user',
+                }
             });
             setBugs(response.data.bugs || []);
             setTotal(response.data.total || 0);
         } catch (err) {
             if (err.response?.status === 401 && onNavigate) onNavigate('login');
         } finally { setLoading(false); }
-    }, [page, itemsPerPage, debouncedSearch, sortConfig, sevFilter, statusFilter, compFilter, onNavigate]);
+    }, [page, itemsPerPage, debouncedSearch, sortConfig, sevFilter, statusFilter, compFilter, onNavigate, user?.context_role, user?.role]);
 
     useEffect(() => { fetchBugs(); }, [fetchBugs]);
     useEffect(() => { const iv = setInterval(fetchBugs, 30000); return () => clearInterval(iv); }, [fetchBugs]);

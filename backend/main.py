@@ -199,6 +199,32 @@ def complete_onboarding(req: OnboardingRequest, current_user: dict = Depends(aut
     return {"message": "Onboarding complete", "user": updated.data}
 
 
+@app.get("/api/auth/session-check")
+def session_check(requested_role: str = "user", current_user: dict = Depends(auth.get_current_user)):
+    """
+    Verifies the requested role against the current DB role.
+    Super admins can request any role context.
+    """
+    uuid = current_user.get("uuid")
+    db_profile = supabase.table("users").select("role, company_id").eq("uuid", uuid).single().execute()
+
+    if not db_profile.data:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
+    true_role = db_profile.data.get("role") or "user"
+
+    if requested_role != true_role and true_role != "super_admin":
+        raise HTTPException(status_code=403, detail="Role Mismatch")
+
+    return {
+        "status": "ok",
+        "role": true_role,
+        "effective_role": true_role,
+        "company_id": db_profile.data.get("company_id"),
+        "is_global": true_role == "super_admin",
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # OVERVIEW
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -206,6 +232,18 @@ def complete_onboarding(req: OnboardingRequest, current_user: dict = Depends(aut
 @app.get("/api/hub/overview")
 def get_overview(current_user: dict = Depends(auth.get_current_user)):
     cid   = current_user.get("company_id")
+    role  = current_user.get("role")
+
+    # Auto-provisioned users may not have a company yet.
+    # Return a safe empty dashboard until onboarding is complete.
+    if cid is None and role != "super_admin":
+        return {
+            "stats": {"total_db": 0, "analyzed": 0, "critical": 0},
+            "recent": [],
+            "charts": {"components": []},
+            "onboarding_required": True,
+        }
+
     table = get_company_table(cid)
 
     # Total count
@@ -258,16 +296,41 @@ def get_bugs(
     page: int = 1, limit: int = 10,
     search: str = "", sort_key: str = "id", sort_dir: str = "desc",
     sev: str = "", status: str = "", comp: str = "",
+    # Add requested_role to validate against the DB role
+    requested_role: str = "user", 
     current_user: dict = Depends(auth.get_current_user),
 ):
-    cid     = current_user.get("company_id")
-    table   = get_company_table(cid)
-    db_sort = "bug_id" if sort_key == "id" else sort_key
+    # 1. AUTHENTICATION & ROLE CROSS-CHECK
+    # Extract the TRUE role and company from the JWT/DB
+    true_role = current_user.get("role")  # Ensure your auth helper includes 'role'
+    cid = current_user.get("company_id")
 
+    if cid is None and true_role != "super_admin":
+        return {
+            "total": 0,
+            "role_context": true_role,
+            "bugs": [],
+            "onboarding_required": True,
+        }
+    
+    # SECURITY: Prevent a 'user' from selecting 'admin' or 'super_admin'
+    if requested_role != true_role and true_role != "super_admin":
+        raise HTTPException(status_code=403, detail="Role Mismatch: Unauthorized Access")
+
+    table = get_company_table(cid)
+    db_sort = "bug_id" if sort_key == "id" else sort_key
     query = supabase.table(table).select("*", count="exact")
-    if not is_shared_table(table):
+
+    # 2. MULTI-TENANCY LOGIC (The "Master Key" vs "Apartment Key")
+    # STAKEHOLDER REQ: Super Admin bypasses the company_id filter for global oversight
+    if true_role == "super_admin":
+        # No .eq("company_id") filter applied; sees all rows
+        pass 
+    elif not is_shared_table(table):
+        # Admins and Users are strictly locked to their company_id
         query = query.eq("company_id", cid)
 
+    # 3. SEARCH & FILTERS (Remains the same)
     if search.strip():
         if search.strip().isdigit():
             query = query.eq("bug_id", int(search.strip()))
@@ -278,11 +341,13 @@ def get_bugs(
     if status: query = query.ilike("status",   f"%{status}%")
     if comp:   query = query.ilike("component",f"%{comp}%")
 
+    # 4. EXECUTION
     offset = (page - 1) * limit
     res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).range(offset, offset + limit - 1).execute()
 
     return {
         "total": res.count or 0,
+        "role_context": true_role, # Useful for frontend debugging
         "bugs": [
             {
                 "id":        r.get("bug_id") or r.get("id"),
@@ -290,12 +355,11 @@ def get_bugs(
                 "component": r.get("component"),
                 "severity":  r.get("severity"),
                 "status":    r.get("status"),
+                "company":   r.get("company_id") if true_role == "super_admin" else None
             }
             for r in (res.data or [])
         ],
     }
-
-
 @app.get("/api/hub/export")
 def export_bugs_csv(
     search: str = "", sort_key: str = "id", sort_dir: str = "desc",
@@ -303,6 +367,19 @@ def export_bugs_csv(
     current_user: dict = Depends(auth.get_current_user),
 ):
     cid     = current_user.get("company_id")
+    role    = current_user.get("role")
+
+    if cid is None and role != "super_admin":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Summary", "Component", "Severity", "Status"])
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=apex_export.csv"},
+        )
+
     table   = get_company_table(cid)
     db_sort = "bug_id" if sort_key == "id" else sort_key
 
