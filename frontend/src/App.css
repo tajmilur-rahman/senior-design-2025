@@ -1015,4 +1015,51 @@ body{margin:0;background-color:var(--bg);color:var(--text-main);font-family:var(
   font-size: 11.5px;
   letter-spacing: 0.2px;
 }
+/* =========================================================
+   LOGIN ANIMATED BACKGROUND — append these to App.css
+   ========================================================= */
 
+/* Animated dot-grid background on the login page */
+.login-backdrop-enterprise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(37,99,235,0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  animation: gridDrift 20s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-backdrop-enterprise::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 40%, rgba(37,99,235,0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 80% 70%, rgba(16,185,129,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  animation: auraPulse 8s ease-in-out infinite alternate;
+}
+
+@keyframes gridDrift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 28px 28px; }
+}
+
+@keyframes auraPulse {
+  0%   { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 1;   transform: scale(1.05); }
+}
+
+/* Ensure login card sits above the background layers */
+.login-card-enterprise {
+  position: relative;
+  z-index: 1;
+}
+.theme-toggle-btn {
+  position: absolute;
+  z-index: 2;
+}

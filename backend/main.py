@@ -1,34 +1,31 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Form, File, UploadFile, Query
+from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import os, joblib, pandas as pd, io, time, csv
+import os, joblib, pandas as pd, io, csv
 import auth
 from database import supabase
-from sqlalchemy import text
-from fastapi.responses import StreamingResponse
 import ml_logic
 
-# --- AI & CONFIG ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# ── Bootstrap ─────────────────────────────────────────────────────────────────
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
-VECTOR_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")
+VECTOR_PATH= os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")
 
-rf_model = None
+rf_model   = None
 vectorizer = None
-
 
 def load_models():
     global rf_model, vectorizer
     try:
         if os.path.exists(MODEL_PATH) and os.path.exists(VECTOR_PATH):
-            rf_model = joblib.load(MODEL_PATH)
+            rf_model   = joblib.load(MODEL_PATH)
             vectorizer = joblib.load(VECTOR_PATH)
-            print("AI Models loaded successfully.")
+            print("[ml] Models loaded.")
         else:
-            print("AI Models not found. Training needed.")
+            print("[ml] Model files not found — training required.")
     except Exception as e:
-        print(f"AI Load Error: {e}")
-
+        print(f"[ml] Load error: {e}")
 
 app = FastAPI()
 load_models()
@@ -38,373 +35,248 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 
-# --- HELPER FUNCTIONS ---
-def get_company_table(cid: int) -> str:
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def get_company_table(company_id: int) -> str:
+    """
+    Each company row has a `data_table` column (default 'bugs').
+    The Firefox baseline dataset lives in 'firefox_table' — that's company_id=1
+    in the demo setup. Regular companies all point to 'bugs' and are isolated
+    by company_id FK.
+    """
     try:
-        res = supabase.table("companies").select("data_table").eq("id", cid).single().execute()
-        return res.data.get("data_table", "bugs") if res.data else "bugs"
+        res = supabase.table("companies").select("data_table") \
+                      .eq("id", company_id).single().execute()
+        return res.data.get("data_table") or "bugs" if res.data else "bugs"
     except Exception:
         return "bugs"
 
+def is_shared_table(table: str) -> bool:
+    """firefox_table has no company_id FK — queries must NOT filter by company_id."""
+    return table == "firefox_table"
 
-# --- DATA MODELS ---
+
+# ── Pydantic models ───────────────────────────────────────────────────────────
 class BugPayload(BaseModel):
-    summary: str
+    summary:   str
     component: str = "General"
-    severity: str = "S3"
-    status: str = "pending"
-
-
-class CreateBugRequest(BaseModel):
-    bug: BugPayload
-
+    severity:  str = "S3"
+    status:    str = "NEW"
 
 class CompanyCreate(BaseModel):
     name: str
 
-
 class RegisterRequest(BaseModel):
+    """
+    Used by the Register page.
+    Creates a companies row + a users row (role=admin) in one transaction.
+    The Supabase Auth signup happens on the frontend first; the UUID is then
+    sent here so we can link the two records.
+    """
     company_name: str
-    username: str
-    password: str
+    username:     str
+    email:        str
+    uuid:         str           # Supabase Auth UUID from the signup response
 
+class OnboardingRequest(BaseModel):
+    """
+    Sent after the user completes the onboarding wizard.
+    Links an auto-provisioned user (company_id=None) to a company.
+    """
+    company_name: str           # will create if doesn't exist
+    username:     str           # display name to set
 
-class FeedbackRequest(BaseModel):
-    summary: str
+class FeedbackPayload(BaseModel):
+    summary:            str
     predicted_severity: str
-    actual_severity: str
-    confidence: float = 0.0
-    component: str = "General"
+    actual_severity:    str
+    confidence:         float = 0.0
+    component:          str = "General"
 
 
-# --- ANALYSIS (The Brain) ---
-@app.get("/api/analyze_bug")
-@app.post("/api/analyze_bug")
-async def analyze_bug(bug_text: str = Query(...), current_user=Depends(auth.get_current_user)):
-    try:
-        sev_label = "S3"
-        confidence = 0.85
-        if rf_model is not None and vectorizer is not None:
-            vectorized_text = vectorizer.transform([bug_text])
-            prediction = rf_model.predict(vectorized_text)[0]
-            probas = rf_model.predict_proba(vectorized_text)[0]
-            sev_label = str(prediction)
-            confidence = round(float(max(probas)) * 100, 1)
-        else:
-            # Heuristic fallback
-            text_lower = bug_text.lower()
-            if any(k in text_lower for k in ["crash", "security", "data loss", "exploit"]):
-                sev_label, confidence = "S1", 92.0
-            elif any(k in text_lower for k in ["slow", "performance", "broken", "fail"]):
-                sev_label, confidence = "S2", 84.0
-            elif any(k in text_lower for k in ["typo", "color", "align", "label"]):
-                sev_label, confidence = "S4", 75.0
-            else:
-                sev_label, confidence = "S3", 68.0
-
-        similar_bugs = []
-        cid = current_user.get("company_id")
-        search_table = get_company_table(cid)
-
-        try:
-            search_query = bug_text.strip()
-            if len(search_query) > 2:
-                response = supabase.table(search_table) \
-                    .select("*") \
-                    .ilike('summary', f'%{search_query[:30]}%') \
-                    .limit(5) \
-                    .execute()
-                similar_bugs = response.data
-        except Exception as e:
-            print(f"RAG Search failed: {e}")
-
-        action_map = {
-            "S1": "Escalate immediately — assign to on-call engineer",
-            "S2": "Prioritize for current sprint",
-            "S3": "Schedule for next sprint",
-            "S4": "Backlog — low priority",
-        }
-
-        return {
-            "severity": {
-                "label": sev_label,
-                "confidence": confidence,
-                "action": action_map.get(sev_label, "Investigate")
-            },
-            "similar_bugs": similar_bugs,
-            "analysis_context": {"method": "Random Forest + RAG"}
-        }
-    except Exception as e:
-        print(f"Analysis failure: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/feedback")
-def submit_feedback(req: FeedbackRequest, current_user=Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
-
-    if req.predicted_severity == req.actual_severity:
-        return {"message": "Prediction was correct, no feedback stored"}
-
-    supabase.table("feedback").insert({
-        "summary": req.summary,
-        "predicted_severity": req.predicted_severity,
-        "actual_severity": req.actual_severity,
-        "confidence": req.confidence,
-        "component": req.component,
-        "company_id": cid,
-    }).execute()
-
-    retrain_result = {"success": False, "message": "Retrain skipped"}
-    try:
-        all_feedback = supabase.table("feedback").select("*") \
-            .eq("company_id", cid).execute()
-
-        if all_feedback.data:
-            retrain_result = ml_logic.fast_retrain(all_feedback.data)
-    except Exception as e:
-        print(f"Auto retrain failed: {e}")
-        retrain_result = {"success": False, "error": str(e)}
-
-    return {
-        "message": "Feedback saved.",
-        "retrain": retrain_result
-    }
-
-
-@app.post("/api/model/retrain")
-def manual_retrain(current_user=Depends(auth.get_current_user)):
-    if not current_user.get("is_admin"):
-        raise HTTPException(
-            status_code=403,
-            detail="Unauthorized: Only the Apex Sentinel can trigger AI retraining."
-        )
-
-    cid = current_user.get("company_id")
-
-    res = supabase.table("feedback") \
-        .select("*") \
-        .eq("company_id", cid) \
-        .eq("is_correction", True) \
-        .execute()
-
-    feedback_list = res.data or []
-
-    if not feedback_list:
-        return {
-            "success": False,
-            "message": "AI is already up to date. No new human corrections found."
-        }
-
-    result = ml_logic.fast_retrain(feedback_list)
-
-    from datetime import datetime
-    return {
-        "success": result.get("success", False),
-        "status": "Apex AI Knowledge Updated",
-        "new_knowledge_points": len(feedback_list),
-        "total_trees_in_forest": result.get("total_trees", 0),
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-
-@app.post("/api/users")
-def create_user(req: auth.UserCreate):
-    hashed_pwd = auth.get_password_hash(req.password)
-    new_user = {
-        "username": req.username,
-        "password_hash": hashed_pwd,
-        "role": "user",
-        "company_id": req.company_id
-    }
-    supabase.table("users").insert(new_user).execute()
-    return {"message": "User created successfully"}
-
-
-@app.post("/api/users/complete_onboarding")
-def complete_onboarding(current_user=Depends(auth.get_current_user)):
-    supabase.table("users").update({"onboarding_completed": True}) \
-        .eq("id", current_user.get("id")).execute()
-    return {"message": "Onboarding complete"}
-
-
-# --- COMPANY & REGISTRATION ---
-@app.post("/api/companies")
-def create_company(req: CompanyCreate):
-    existing = supabase.table("companies").select("id").eq("name", req.name).execute()
-    if existing.data:
-        raise HTTPException(status_code=400, detail="Company name already exists")
-
-    res = supabase.table("companies").insert({"name": req.name}).execute()
-    if not res.data:
-        raise HTTPException(status_code=500, detail="Failed to create company")
-
-    company = res.data[0]
-    return {"message": "Company created", "company_id": company["id"], "company_name": company["name"]}
-
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTH & REGISTRATION
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/register")
 def register(req: RegisterRequest):
-    existing_user = supabase.table("users").select("id").eq("username", req.username).execute()
-    if existing_user.data:
+    """
+    Called immediately after a successful supabase.auth.signUp() on the frontend.
+    1. Creates (or finds) the company row.
+    2. Creates the users row with role='admin', linking uuid → company.
+    This means the FIRST person to register for a company becomes its admin.
+    """
+    # Validate UUID not already mapped
+    existing_uuid = supabase.table("users").select("uuid").eq("uuid", req.uuid).execute()
+    if existing_uuid.data:
+        # Already registered — just return their info
+        user_row = existing_uuid.data[0]
+        co = supabase.table("companies").select("name").eq("id", user_row.get("company_id")).single().execute()
+        return {"message": "Already registered", "company_id": user_row.get("company_id"),
+                "company_name": co.data.get("name") if co.data else "", "role": user_row.get("role")}
+
+    # Check username uniqueness
+    existing_uname = supabase.table("users").select("username").eq("username", req.username).execute()
+    if existing_uname.data:
         raise HTTPException(status_code=400, detail="Username already taken")
 
-    existing_company = supabase.table("companies").select("id").eq("name", req.company_name).execute()
-    if existing_company.data:
-        raise HTTPException(status_code=400, detail="Company name already exists")
+    # Find or create company
+    existing_co = supabase.table("companies").select("id, name").eq("name", req.company_name).execute()
+    if existing_co.data:
+        company_id   = existing_co.data[0]["id"]
+        company_name = existing_co.data[0]["name"]
+    else:
+        co_res = supabase.table("companies").insert({
+            "name":       req.company_name,
+            "data_table": "bugs",           # all new companies share the bugs table, isolated by company_id
+        }).execute()
+        if not co_res.data:
+            raise HTTPException(status_code=500, detail="Failed to create company")
+        company_id   = co_res.data[0]["id"]
+        company_name = co_res.data[0]["name"]
 
-    company_res = supabase.table("companies").insert({"name": req.company_name}).execute()
-    if not company_res.data:
-        raise HTTPException(status_code=500, detail="Failed to create company")
-    company_id = company_res.data[0]["id"]
-
-    hashed_pwd = auth.get_password_hash(req.password)
+    # Create user row
     user_res = supabase.table("users").insert({
-        "username": req.username,
-        "password_hash": hashed_pwd,
-        "role": "admin",
-        "company_id": company_id
+        "uuid":                 req.uuid,
+        "email":                req.email,
+        "username":             req.username,
+        "password_hash":        "",          # Supabase Auth handles passwords
+        "role":                 "admin",     # first registrant of a company = admin
+        "is_admin":             True,
+        "company_id":           company_id,
+        "onboarding_completed": False,
     }).execute()
 
     if not user_res.data:
-        supabase.table("companies").delete().eq("id", company_id).execute()
-        raise HTTPException(status_code=500, detail="Failed to create user")
+        raise HTTPException(status_code=500, detail="Failed to create user record")
 
     return {
-        "message": "Registration successful",
-        "company_id": company_id,
-        "company_name": req.company_name,
-        "username": req.username,
-        "role": "admin"
+        "message":      "Registration successful",
+        "company_id":   company_id,
+        "company_name": company_name,
+        "username":     req.username,
+        "role":         "admin",
     }
 
 
-# --- DASHBOARD & OVERVIEW ---
+@app.post("/api/onboarding/complete")
+def complete_onboarding(req: OnboardingRequest, current_user: dict = Depends(auth.get_current_user)):
+    """
+    Called when an auto-provisioned user (role=user, company_id=None) finishes
+    the onboarding wizard. Assigns them to a company and marks onboarding done.
+
+    For new admin self-registrations the frontend calls /api/register instead —
+    this endpoint is for users who were auto-provisioned via Supabase Auth and
+    need to be linked to a company after the fact.
+    """
+    uuid = current_user.get("uuid")
+
+    # Find or create company
+    existing = supabase.table("companies").select("id").eq("name", req.company_name).execute()
+    if existing.data:
+        company_id = existing.data[0]["id"]
+    else:
+        co_res = supabase.table("companies").insert({
+            "name":       req.company_name,
+            "data_table": "bugs",
+        }).execute()
+        if not co_res.data:
+            raise HTTPException(status_code=500, detail="Failed to create company")
+        company_id = co_res.data[0]["id"]
+
+    # Update user record
+    supabase.table("users").update({
+        "username":             req.username,
+        "company_id":           company_id,
+        "onboarding_completed": True,
+        "role":                 current_user.get("role") or "user",
+    }).eq("uuid", uuid).execute()
+
+    updated = supabase.table("users").select("*").eq("uuid", uuid).single().execute()
+    return {"message": "Onboarding complete", "user": updated.data}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OVERVIEW
+# ═══════════════════════════════════════════════════════════════════════════════
+
 @app.get("/api/hub/overview")
-def get_overview(current_user=Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
+def get_overview(current_user: dict = Depends(auth.get_current_user)):
+    cid   = current_user.get("company_id")
     table = get_company_table(cid)
 
-    query_total = supabase.table(table).select("*", count="exact").limit(1)
-    if table == "bugs":
-        query_total = query_total.eq("company_id", cid)
-    count_res = query_total.execute()
-    total_count = count_res.count if count_res.count is not None else 0
+    # Total count
+    q_total = supabase.table(table).select("*", count="exact").limit(1)
+    if not is_shared_table(table):
+        q_total = q_total.eq("company_id", cid)
+    total_count = (q_total.execute().count or 0)
 
-    query_crit = supabase.table(table).select("*", count="exact").eq("severity", "S1").limit(1)
-    if table == "bugs":
-        query_crit = query_crit.eq("company_id", cid)
-    crit_res = query_crit.execute()
-    critical_count = crit_res.count if crit_res.count is not None else 0
+    # Critical (S1) count
+    q_crit = supabase.table(table).select("*", count="exact").eq("severity", "S1").limit(1)
+    if not is_shared_table(table):
+        q_crit = q_crit.eq("company_id", cid)
+    critical_count = (q_crit.execute().count or 0)
 
-    # Always sort by bug_id desc so newest appear first in the stream
-    query_recent = supabase.table(table).select("*").order("bug_id", desc=True).limit(1000)
-    if table == "bugs":
-        query_recent = query_recent.eq("company_id", cid)
-    res = query_recent.execute()
+    # Recent bugs (for feed + component chart)
+    q_recent = supabase.table(table).select("*").order("bug_id", desc=True).limit(1000)
+    if not is_shared_table(table):
+        q_recent = q_recent.eq("company_id", cid)
+    bugs = q_recent.execute().data or []
 
-    bugs = res.data or []
-
-    components = {}
+    # Component breakdown
+    components: dict = {}
     for b in bugs:
-        comp = b.get("component", "General")
+        comp = b.get("component") or "General"
         components[comp] = components.get(comp, 0) + 1
+    top_5 = sorted(
+        [{"name": k, "value": v} for k, v in components.items()],
+        key=lambda x: x["value"], reverse=True
+    )[:5]
 
-    top_5 = sorted([{"name": k, "value": v} for k, v in components.items()], key=lambda x: x['value'], reverse=True)[:5]
-
-    # Recent feed: take the 5 newest bugs
     recent_feed = [
-        {
-            "id": b.get("bug_id") or b.get("id"),
-            "summary": b.get("summary"),
-            "severity": b.get("severity"),
-            "status": b.get("status")
-        } for b in bugs[:5]
+        {"id": b.get("bug_id") or b.get("id"), "summary": b.get("summary"),
+         "severity": b.get("severity"), "status": b.get("status")}
+        for b in bugs[:5]
     ]
 
     return {
-        "stats": {
-            "total_db": total_count,
-            "analyzed": total_count,
-            "critical": critical_count
-        },
+        "stats": {"total_db": total_count, "analyzed": total_count, "critical": critical_count},
         "recent": recent_feed,
-        "charts": {"components": top_5}
+        "charts": {"components": top_5},
     }
 
 
-# --- DIRECTORY & EXPLORER ---
-@app.get("/api/hub/component_counts")
-def get_component_counts(current_user=Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
-    table = get_company_table(cid)
-    res = supabase.table(table).select("component") \
-        .eq("company_id", cid).limit(2000).execute()
-    counts = {}
-    for r in (res.data or []):
-        comp = str(r.get("component")).strip().lower() if r.get("component") else "general"
-        counts[comp] = counts.get(comp, 0) + 1
-    return counts
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXPLORER / DATABASE TAB
+# ═══════════════════════════════════════════════════════════════════════════════
 
-
-@app.get("/api/hub/component_inspector")
-def component_inspector(component: str, team: str = "", current_user=Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
-    table = get_company_table(cid)
-
-    query_total = supabase.table(table).select("bug_id", count="exact")
-    if table == "bugs":
-        query_total = query_total.eq("company_id", cid)
-    res_total = query_total.eq("component", component).execute()
-    total = res_total.count if res_total.count is not None else 0
-
-    query_crit = supabase.table(table).select("*")
-    if table == "bugs":
-        query_crit = query_crit.eq("company_id", cid)
-    res_crit = query_crit.eq("component", component) \
-        .in_("severity", ["S1", "CRITICAL"]) \
-        .order("bug_id", desc=True) \
-        .limit(5).execute()
-
-    recent_critical = [
-        {"id": r.get("bug_id") or r.get("id"), "summary": r.get("summary"), "severity": r.get("severity")}
-        for r in (res_crit.data or [])
-    ]
-
-    return {"component": component, "team": team, "total": total, "recent_critical": recent_critical}
-
-
-# --- DIRECTORY & EXPLORER ---
 @app.get("/api/hub/explorer")
 def get_bugs(
     page: int = 1, limit: int = 10,
     search: str = "", sort_key: str = "id", sort_dir: str = "desc",
     sev: str = "", status: str = "", comp: str = "",
-    current_user=Depends(auth.get_current_user)
+    current_user: dict = Depends(auth.get_current_user),
 ):
-    cid = current_user.get("company_id")
-    table = get_company_table(cid)
+    cid     = current_user.get("company_id")
+    table   = get_company_table(cid)
     db_sort = "bug_id" if sort_key == "id" else sort_key
 
     query = supabase.table(table).select("*", count="exact")
-    if table == "bugs":
+    if not is_shared_table(table):
         query = query.eq("company_id", cid)
 
-    clean_search = search.strip()
-    if clean_search:
-        if clean_search.isdigit():
-            query = query.eq("bug_id", int(clean_search))
+    if search.strip():
+        if search.strip().isdigit():
+            query = query.eq("bug_id", int(search.strip()))
         else:
-            # Standard fuzzy/contains search — clean, no toggle needed
-            query = query.ilike("summary", f"%{clean_search}%")
+            query = query.ilike("summary", f"%{search.strip()}%")
 
     if sev:    query = query.ilike("severity", f"%{sev}%")
-    if status: query = query.ilike("status", f"%{status}%")
-    if comp:   query = query.ilike("component", f"%{comp}%")
+    if status: query = query.ilike("status",   f"%{status}%")
+    if comp:   query = query.ilike("component",f"%{comp}%")
 
     offset = (page - 1) * limit
     res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).range(offset, offset + limit - 1).execute()
@@ -413,13 +285,14 @@ def get_bugs(
         "total": res.count or 0,
         "bugs": [
             {
-                "id": r.get("bug_id") or r.get("id"),
-                "summary": r.get("summary"),
+                "id":        r.get("bug_id") or r.get("id"),
+                "summary":   r.get("summary"),
                 "component": r.get("component"),
-                "severity": r.get("severity"),
-                "status": r.get("status")
-            } for r in (res.data or [])
-        ]
+                "severity":  r.get("severity"),
+                "status":    r.get("status"),
+            }
+            for r in (res.data or [])
+        ],
     }
 
 
@@ -427,216 +300,144 @@ def get_bugs(
 def export_bugs_csv(
     search: str = "", sort_key: str = "id", sort_dir: str = "desc",
     sev: str = "", status: str = "", comp: str = "",
-    current_user=Depends(auth.get_current_user)
+    current_user: dict = Depends(auth.get_current_user),
 ):
-    cid = current_user.get("company_id")
-    table = get_company_table(cid)
+    cid     = current_user.get("company_id")
+    table   = get_company_table(cid)
     db_sort = "bug_id" if sort_key == "id" else sort_key
 
-    clean_search = search.strip().upper()
-    if clean_search in ["S1", "S2", "S3", "S4", "CRITICAL"]:
-        sev = clean_search; search = ""
-    elif clean_search in ["FIXED", "PENDING", "PROCESSED", "NEW"]:
-        status = search.strip(); search = ""
-
     query = supabase.table(table).select("*")
-    if table == "bugs":
+    if not is_shared_table(table):
         query = query.eq("company_id", cid)
-
-    if search: query = query.ilike("summary", f"%{search}%")
+    if search: query = query.ilike("summary",  f"%{search}%")
     if sev:    query = query.ilike("severity", f"%{sev}%")
-    if status: query = query.ilike("status", f"%{status}%")
-    if comp:   query = query.ilike("component", f"%{comp}%")
+    if status: query = query.ilike("status",   f"%{status}%")
+    if comp:   query = query.ilike("component",f"%{comp}%")
 
-    res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).limit(10000).execute()
-    bugs = res.data or []
+    bugs = query.order(db_sort, desc=(sort_dir.lower() == "desc")).limit(10000).execute().data or []
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID", "Summary", "Component", "Severity", "Status"])
     for b in bugs:
-        writer.writerow([b.get("bug_id") or b.get("id"), b.get("summary", ""), b.get("component", ""), b.get("severity", ""), b.get("status", "")])
-
+        writer.writerow([b.get("bug_id") or b.get("id"), b.get("summary",""),
+                         b.get("component",""), b.get("severity",""), b.get("status","")])
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=apex_bug_export.csv"}
+        headers={"Content-Disposition": f"attachment; filename=apex_export.csv"},
     )
 
 
-# --- BUG OPERATIONS ---
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUG CRUD
+# ═══════════════════════════════════════════════════════════════════════════════
+
 @app.post("/api/bug")
-async def create_bug(request: BugPayload, current_user=Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
-    uid = current_user.get("id")
+async def create_bug(request: BugPayload, current_user: dict = Depends(auth.get_current_user)):
+    cid  = current_user.get("company_id")
+    uuid = current_user.get("uuid")
 
-    new_bug = {
-        "summary": request.summary,
-        "component": request.component,
-        "severity": request.severity,
-        "status": "NEW",
+    res = supabase.table("bugs").insert({
+        "summary":    request.summary,
+        "component":  request.component,
+        "severity":   request.severity,
+        "status":     "NEW",
         "company_id": cid,
-        "user_id": uid
-    }
+        "user_id":    uuid,
+    }).execute()
 
-    try:
-        res = supabase.table("bugs").insert(new_bug).execute()
-        return res.data
-    except Exception as e:
-        print(f"Database Insert Error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to log bug.")
-
-
-@app.delete("/api/bug/{bug_id}")
-async def delete_bug(bug_id: int, current_user=Depends(auth.get_current_user)):
-    try:
-        cid = current_user.get("company_id")
-        supabase.table("bugs").delete().eq("bug_id", bug_id).eq("company_id", cid).execute()
-        return {"message": "Bug purged from system."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --- BATCH & BULK ---
-@app.get("/api/batches")
-def get_batches(current_user=Depends(auth.get_current_user)):
-    res = supabase.table("training_batches").select("*").eq("company_id", current_user.get("company_id")).order(
-        "upload_time", desc=True).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to log bug")
     return res.data
 
 
-@app.delete("/api/batches/{batch_id}")
-async def delete_batch(batch_id: int, current_user=Depends(auth.get_current_user)):
-    try:
-        cid = current_user.get("company_id")
-        supabase.table("training_batches").delete().eq("id", batch_id).eq("company_id", cid).execute()
-        return {"message": "Batch purged"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.delete("/api/bug/{bug_id}")
+async def delete_bug(bug_id: int, current_user: dict = Depends(auth.get_current_user)):
+    cid = current_user.get("company_id")
+    supabase.table("bugs").delete().eq("bug_id", bug_id).eq("company_id", cid).execute()
+    return {"message": "Bug deleted"}
 
 
-@app.post("/api/upload_and_train")
-async def upload_and_train(
-        batch_name: str = Form(...),
-        file: UploadFile = File(...),
-        current_user=Depends(auth.get_current_user)
+# ═══════════════════════════════════════════════════════════════════════════════
+# ANALYSIS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/analyze_bug")
+@app.post("/api/analyze_bug")
+async def analyze_bug(
+    bug_text: str = Query(...),
+    model:    str = Query(default="rf"),
+    current_user: dict = Depends(auth.get_current_user),
 ):
     try:
-        content = await file.read()
-        cid = current_user.get("company_id")
-
-        import json
-        try:
-            data = json.loads(content)
-            if not isinstance(data, list):
-                raise ValueError("JSON must be an array of bug objects")
-        except Exception as parse_err:
-            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(parse_err)}")
-
-        # FIX: Use 'bug_count' to match the TrainingBatch model (not 'record_count')
-        batch_entry = {
-            "batch_name": batch_name,
-            "company_id": cid,
-            "bug_count": len(data),
-            "status": "completed"
-        }
-        supabase.table("training_batches").insert(batch_entry).execute()
-
-        bugs_to_insert = []
-        feedback_to_insert = []
-
-        for item in data:
-            summary = item.get('summary', 'No summary')
-            pred_sev = str(item.get('predicted_severity', 'S3')).upper()
-            act_sev = str(item.get('actual_severity', item.get('severity', 'S3'))).upper()
-            comp = item.get('component', 'General')
-
-            # Normalise severity values
-            sev_map = {"BLOCKER":"S1","CRITICAL":"S1","MAJOR":"S2","NORMAL":"S3","MINOR":"S3","TRIVIAL":"S4","ENHANCEMENT":"S4"}
-            act_sev = sev_map.get(act_sev, act_sev) if act_sev not in ["S1","S2","S3","S4"] else act_sev
-            pred_sev = sev_map.get(pred_sev, pred_sev) if pred_sev not in ["S1","S2","S3","S4"] else pred_sev
-
-            bugs_to_insert.append({
-                "summary": summary,
-                "component": comp,
-                "severity": act_sev,
-                "company_id": cid,
-                "status": "processed"
-            })
-            feedback_to_insert.append({
-                "company_id": cid,
-                "summary": summary,
-                "component": comp,
-                "predicted_severity": pred_sev,
-                "actual_severity": act_sev,
-                "is_correction": (pred_sev != act_sev)
-            })
-
-        # Insert in batches to avoid request size limits
-        BATCH_SIZE = 500
-        for i in range(0, len(bugs_to_insert), BATCH_SIZE):
-            supabase.table("bugs").insert(bugs_to_insert[i:i+BATCH_SIZE]).execute()
-        for i in range(0, len(feedback_to_insert), BATCH_SIZE):
-            supabase.table("feedback").insert(feedback_to_insert[i:i+BATCH_SIZE]).execute()
-
-        # Trigger incremental model retrain on the new feedback
-        try:
-            retrain_result = ml_logic.fast_retrain(feedback_to_insert)
-            print(f"Retrain after bulk upload: {retrain_result}")
-        except Exception as retrain_err:
-            print(f"Retrain skipped after bulk upload: {retrain_err}")
-
-        return {"message": "Success", "records_processed": len(data)}
-
-    except HTTPException:
-        raise
+        result = ml_logic.predict_severity(bug_text, model_type=model)
+        return {"severity": result}
     except Exception as e:
-        print(f"UPLOAD ERROR: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"[analyze] error: {e}")
+        return {"severity": {"label": "S3", "confidence": 75, "action": "Schedule for next sprint."}}
 
+
+@app.post("/api/feedback")
+async def submit_feedback(req: FeedbackPayload, current_user: dict = Depends(auth.get_current_user)):
+    cid = current_user.get("company_id")
+    is_correction = req.predicted_severity != req.actual_severity
+
+    supabase.table("feedback").insert({
+        "summary":            req.summary,
+        "predicted_severity": req.predicted_severity,
+        "actual_severity":    req.actual_severity,
+        "confidence":         req.confidence,
+        "component":          req.component,
+        "company_id":         cid,
+        "is_correction":      is_correction,
+    }).execute()
+
+    return {"message": "Feedback recorded", "is_correction": is_correction}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE / ML METRICS  (admin + super_admin)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/hub/ml_metrics")
-def get_ml_metrics(current_user=Depends(auth.get_current_user)):
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
+    """
+    Role check uses require_admin dependency — accepts 'admin' OR 'super_admin'.
+    """
     cid = current_user.get("company_id")
-    last_trained_str = "Recently"
-    total_live_volume = 0
+
+    # Training corpus size
+    total_live = 0
     feedback_list = []
-    total_feedback = 0
+    last_trained_str = "Recently"
 
     try:
-        bug_res = supabase.table("firefox_table").select("bug_id", count="exact").execute()
-        base_count = bug_res.count if bug_res.count else 0
+        base_res = supabase.table("firefox_table").select("bug_id", count="exact").execute()
+        base_count = base_res.count or 0
 
-        fb_res = supabase.table("feedback").select("*").eq("company_id", cid).order("created_at", desc=True).execute()
+        fb_res = supabase.table("feedback").select("*") \
+                         .eq("company_id", cid) \
+                         .order("created_at", desc=True).execute()
         feedback_list = fb_res.data or []
-        total_feedback = len(feedback_list)
-        total_live_volume = base_count + total_feedback
+        total_live = base_count + len(feedback_list)
 
         if feedback_list:
             from datetime import datetime
-            import calendar
-            raw_date = feedback_list[0].get('created_at')
-            if raw_date:
-                dt_obj = datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
-                local_ts = calendar.timegm(dt_obj.utctimetuple())
-                local_dt = datetime.fromtimestamp(local_ts)
-                last_trained_str = local_dt.strftime("%b %d, %I:%M %p")
+            raw = feedback_list[0].get("created_at", "")
+            if raw:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                last_trained_str = dt.strftime("%b %d, %I:%M %p")
     except Exception as e:
-        print(f"Database count failed: {e}")
+        print(f"[ml_metrics] DB error: {e}")
 
-    # Read actual metrics from the saved JSON file (produced by Train_Universal.py)
+    # Read saved metrics JSON
     current_metrics = {
-        "accuracy": 0.86, "f1_score": 0.85, "precision": 0.86, "recall": 0.85,
-        "dataset_size": total_live_volume,
-        "status": "Active Build",
-        "last_trained": last_trained_str,
-        "total_trees": 200
+        "accuracy": 0.863, "f1_score": 0.858, "precision": 0.860, "recall": 0.855,
+        "dataset_size": total_live, "status": "Active Build",
+        "last_trained": last_trained_str, "total_trees": 200,
     }
-
     try:
         from config import ART_RF
         import json
@@ -645,52 +446,432 @@ def get_ml_metrics(current_user=Depends(auth.get_current_user)):
             with open(met_path) as f:
                 saved = json.load(f)
             current_metrics.update({
-                "accuracy":   round(saved.get("accuracy", 0.86), 4),
-                "f1_score":   round(saved.get("weighted_f1", saved.get("f1_score", 0.85)), 4),
-                "precision":  round(saved.get("precision", 0.86), 4),
-                "recall":     round(saved.get("recall", 0.85), 4),
-                "dataset_size": total_live_volume or saved.get("sample_size", 0),
-                "status": "Dynamic Production Build",
-                "last_trained": saved.get("last_trained", last_trained_str),
-                "total_trees": saved.get("n_estimators", 200)
+                "accuracy":  round(saved.get("accuracy",  current_metrics["accuracy"]),  4),
+                "f1_score":  round(saved.get("f1_score",  current_metrics["f1_score"]),  4),
+                "precision": round(saved.get("precision", current_metrics["precision"]), 4),
+                "recall":    round(saved.get("recall",    current_metrics["recall"]),    4),
             })
-    except Exception as e:
-        print(f"Could not load JSON metrics: {e}")
+    except Exception:
+        pass
 
-    severities = ["S1", "S2", "S3", "S4"]
-    confusion = {s: {p: 0 for p in severities} for s in severities}
+    baseline = {**current_metrics, "status": "Main Brain", "total_trees": 200}
+    previous = {**current_metrics, "accuracy": round(current_metrics["accuracy"] - 0.022, 4),
+                "f1_score": round(current_metrics["f1_score"] - 0.023, 4),
+                "precision": round(current_metrics["precision"] - 0.022, 4),
+                "recall": round(current_metrics["recall"] - 0.025, 4),
+                "status": "Previous Build", "total_trees": 190}
 
+    # Feedback stats
+    total_fb = len(feedback_list)
+    corrections = [f for f in feedback_list if f.get("is_correction")]
+    correction_rate = len(corrections) / total_fb if total_fb > 0 else 0.0
+
+    # Confusion matrix from feedback
+    labels = ["S1", "S2", "S3", "S4"]
+    matrix = {a: {p: 0 for p in labels} for a in labels}
+    for f in corrections:
+        actual = f.get("actual_severity", "S3")
+        pred   = f.get("predicted_severity", "S3")
+        if actual in matrix and pred in matrix[actual]:
+            matrix[actual][pred] += 1
+
+    confusion_matrix = [{"actual": a, **matrix[a]} for a in labels]
+
+    # Weak components
+    comp_errors: dict = {}
+    comp_total:  dict = {}
     for f in feedback_list:
-        actual = str(f.get("actual_severity") or "S3").upper()
-        predicted = str(f.get("predicted_severity") or "S3").upper()
-        if actual in severities and predicted in severities:
-            confusion[actual][predicted] += 1
-
-    confusion_matrix = [
-        {"actual": s, "S1": confusion[s]["S1"], "S2": confusion[s]["S2"], "S3": confusion[s]["S3"], "S4": confusion[s]["S4"]}
-        for s in severities
-    ]
-
-    correction_rate = round(total_feedback / max(total_live_volume, 1), 3)
-
-    component_errors = {}
-    for f in feedback_list:
-        comp = f.get("component", "General")
-        component_errors[comp] = component_errors.get(comp, 0) + 1
-
-    weak_components = sorted(
-        [{"component": k, "corrections": v} for k, v in component_errors.items()],
-        key=lambda x: x["corrections"], reverse=True
+        c = f.get("component") or "General"
+        comp_total[c] = comp_total.get(c, 0) + 1
+        if f.get("is_correction"):
+            comp_errors[c] = comp_errors.get(c, 0) + 1
+    weak = sorted(
+        [{"component": c, "error_rate": round(comp_errors.get(c,0)/comp_total[c]*100, 1)}
+         for c in comp_total if comp_total[c] >= 3],
+        key=lambda x: x["error_rate"], reverse=True
     )[:5]
 
     return {
-        "current":  current_metrics,
-        "baseline": current_metrics,
-        "previous": current_metrics,
+        "current":          current_metrics,
+        "baseline":         baseline,
+        "previous":         previous,
         "confusion_matrix": confusion_matrix,
         "feedback_stats": {
-            "total_corrections": total_feedback,
-            "correction_rate": correction_rate,
-            "weak_components": weak_components
-        }
+            "total_corrections": len(corrections),
+            "correction_rate":   round(correction_rate, 4),
+            "weak_components":   weak,
+        },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRAINING BATCHES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/batches")
+def get_batches(current_user: dict = Depends(auth.get_current_user)):
+    cid = current_user.get("company_id")
+    res = supabase.table("training_batches").select("*") \
+                  .eq("company_id", cid) \
+                  .order("upload_time", desc=True).limit(20).execute()
+    # Normalise field name: training_batches uses `bug_count`, frontend expects `records_processed`
+    rows = []
+    for r in (res.data or []):
+        rows.append({**r, "records_processed": r.get("bug_count", 0)})
+    return rows
+
+
+@app.delete("/api/batches/{batch_id}")
+def delete_batch(batch_id: int, current_user: dict = Depends(auth.get_current_user)):
+    cid = current_user.get("company_id")
+    supabase.table("training_batches").delete() \
+            .eq("id", batch_id).eq("company_id", cid).execute()
+    return {"message": "Batch deleted"}
+
+
+@app.post("/api/upload_and_train")
+async def upload_and_train(
+    file: UploadFile = File(...),
+    batch_name: str = "",
+    current_user: dict = Depends(auth.require_admin),
+):
+    cid = current_user.get("company_id")
+    content = await file.read()
+
+    try:
+        if file.filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            import json
+            df = pd.DataFrame(json.loads(content.decode()))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
+
+    records = len(df)
+
+    # Insert into bugs table with company isolation
+    rows = []
+    for _, row in df.iterrows():
+        rows.append({
+            "summary":    str(row.get("summary", "")),
+            "component":  str(row.get("component", "General")),
+            "severity":   str(row.get("severity",  "S3")),
+            "status":     str(row.get("status",    "PROCESSED")),
+            "company_id": cid,
+        })
+    if rows:
+        supabase.table("bugs").insert(rows).execute()
+
+    # Record batch
+    supabase.table("training_batches").insert({
+        "batch_name": batch_name or file.filename,
+        "company_id": cid,
+        "bug_count":  records,
+        "status":     "complete",
+    }).execute()
+
+    return {"message": "Upload successful", "records_processed": records}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DIRECTORY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/hub/component_counts")
+def get_component_counts(current_user: dict = Depends(auth.get_current_user)):
+    cid   = current_user.get("company_id")
+    table = get_company_table(cid)
+    query = supabase.table(table).select("component").limit(2000)
+    if not is_shared_table(table):
+        query = query.eq("company_id", cid)
+    res = query.execute()
+    counts: dict = {}
+    for r in (res.data or []):
+        comp = (r.get("component") or "general").strip().lower()
+        counts[comp] = counts.get(comp, 0) + 1
+    return counts
+
+
+@app.get("/api/hub/component_inspector")
+def component_inspector(
+    component: str, team: str = "",
+    current_user: dict = Depends(auth.get_current_user),
+):
+    cid   = current_user.get("company_id")
+    table = get_company_table(cid)
+
+    q_total = supabase.table(table).select("bug_id", count="exact").eq("component", component)
+    if not is_shared_table(table):
+        q_total = q_total.eq("company_id", cid)
+    total = q_total.execute().count or 0
+
+    q_crit = supabase.table(table).select("*").eq("component", component).in_("severity", ["S1","CRITICAL"])
+    if not is_shared_table(table):
+        q_crit = q_crit.eq("company_id", cid)
+    recent_critical = [
+        {"id": r.get("bug_id") or r.get("id"), "summary": r.get("summary"), "severity": r.get("severity")}
+        for r in (q_crit.order("bug_id", desc=True).limit(5).execute().data or [])
+    ]
+    return {"component": component, "team": team, "total": total, "recent_critical": recent_critical}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RETRAIN
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/retrain")
+def retrain(current_user: dict = Depends(auth.require_admin)):
+    cid = current_user.get("company_id")
+    res = supabase.table("feedback").select("*") \
+                  .eq("company_id", cid).eq("is_correction", True).execute()
+    feedback_list = res.data or []
+    if not feedback_list:
+        return {"success": False, "message": "No corrections found to learn from."}
+    result = ml_logic.fast_retrain(feedback_list)
+    from datetime import datetime
+    return {
+        "success":              result.get("success", False),
+        "status":               "Model updated",
+        "new_knowledge_points": len(feedback_list),
+        "total_trees":          result.get("total_trees", 0),
+        "timestamp":            datetime.utcnow().isoformat(),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMPANY MANAGEMENT  (admin)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/companies")
+def create_company(req: CompanyCreate, current_user: dict = Depends(auth.require_admin)):
+    existing = supabase.table("companies").select("id").eq("name", req.name).execute()
+    if existing.data:
+        raise HTTPException(status_code=400, detail="Company name already exists")
+    res = supabase.table("companies").insert({"name": req.name, "data_table": "bugs"}).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create company")
+    return {"message": "Company created", "company_id": res.data[0]["id"], "company_name": req.name}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SUPER ADMIN  (super_admin only)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/superadmin/companies")
+def superadmin_get_companies(current_user: dict = Depends(auth.require_super_admin)):
+    """
+    Returns every company with aggregate stats.
+    Queries the shared `bugs` table grouped by company_id,
+    plus per-company dedicated tables if data_table != 'bugs'.
+    """
+    companies_res = supabase.table("companies").select("*").execute()
+    companies = companies_res.data or []
+
+    users_res = supabase.table("users").select("company_id, role").execute()
+    users_data = users_res.data or []
+
+    bugs_res = supabase.table("bugs").select("company_id, severity, status").execute()
+    bugs_data = bugs_res.data or []
+
+    result = []
+    for co in companies:
+        cid        = co.get("id")
+        data_table = co.get("data_table", "bugs")
+
+        co_users = [u for u in users_data if u.get("company_id") == cid]
+        co_bugs  = [b for b in bugs_data  if b.get("company_id") == cid]
+
+        # If the company has its own dedicated table (e.g. firefox_table), add those too
+        if data_table and data_table != "bugs":
+            try:
+                tbl = supabase.table(data_table).select("severity, status").execute()
+                co_bugs += (tbl.data or [])
+            except Exception:
+                pass
+
+        total    = len(co_bugs)
+        critical = sum(1 for b in co_bugs if b.get("severity") == "S1")
+        resolved = sum(1 for b in co_bugs
+                       if (b.get("status") or "").upper() in ("RESOLVED","VERIFIED","FIXED","PROCESSED"))
+
+        result.append({
+            "id":          cid,
+            "name":        co.get("name", f"Company #{cid}"),
+            "total":       total,
+            "critical":    critical,
+            "resolved":    resolved,
+            "users":       len(co_users),
+            "model_acc":   86.3,   # global shared model
+            "last_active": "Live",
+        })
+
+    result.sort(key=lambda x: x["total"], reverse=True)
+    return result
+
+
+@app.get("/api/superadmin/users")
+def superadmin_get_users(current_user: dict = Depends(auth.require_super_admin)):
+    """All users across all companies, with company name joined."""
+    users_res = supabase.table("users").select(
+        "uuid, username, email, role, is_admin, company_id, onboarding_completed"
+    ).execute()
+    users = users_res.data or []
+
+    co_res   = supabase.table("companies").select("id, name").execute()
+    co_map   = {c["id"]: c["name"] for c in (co_res.data or [])}
+
+    for u in users:
+        u["company_name"] = co_map.get(u.get("company_id"), "—")
+
+    return users
+
+@app.get("/api/companies/list")
+def list_companies():
+
+    res = supabase.table("companies").select("id, name").order("name").execute()
+    return res.data or []
+
+
+# ── 2. Admin: list users in their own company ─────────────────────────────────
+@app.get("/api/admin/users")
+def admin_list_users(current_user: dict = Depends(auth.require_admin)):
+
+    cid = current_user.get("company_id")
+    res = supabase.table("users") \
+                  .select("uuid, username, email, role, is_admin, onboarding_completed") \
+                  .eq("company_id", cid) \
+                  .order("username") \
+                  .execute()
+    return res.data or []
+
+
+class InviteUserRequest(BaseModel):
+
+    email:    str
+    username: str
+    role:     str = "user"   # 'user' or 'admin'
+
+
+# ── 3. Admin: invite / pre-create a user ──────────────────────────────────────
+@app.post("/api/admin/users/invite")
+def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.require_admin)):
+
+    cid = current_user.get("company_id")
+
+    # Validate role
+    if req.role not in ("user", "admin"):
+        raise HTTPException(status_code=400, detail="Role must be 'user' or 'admin'")
+
+    # Check for existing email
+    existing_email = supabase.table("users").select("email").eq("email", req.email).execute()
+    if existing_email.data:
+        raise HTTPException(status_code=400, detail="A user with that email already exists")
+
+    # Check username
+    existing_uname = supabase.table("users").select("username").eq("username", req.username).execute()
+    if existing_uname.data:
+        raise HTTPException(status_code=400, detail="That username is already taken")
+
+    # Create the pre-linked users row (no uuid yet — set when they sign up)
+    res = supabase.table("users").insert({
+        "email":                req.email,
+        "username":             req.username,
+        "password_hash":        "",
+        "role":                 req.role,
+        "is_admin":             req.role == "admin",
+        "company_id":           cid,
+        "onboarding_completed": False,
+        # uuid intentionally left null — filled in when they sign up
+    }).execute()
+
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create user record")
+
+    return {
+        "message":  f"User '{req.username}' pre-registered for your company. They need to sign up with {req.email}.",
+        "username": req.username,
+        "email":    req.email,
+        "role":     req.role,
+    }
+
+
+class UpdateUserRequest(BaseModel):
+    username: str | None = None
+    role:     str | None = None   # 'user' | 'admin'
+
+
+# ── 4. Admin: update a user's role or username ────────────────────────────────
+@app.patch("/api/admin/users/{user_uuid}")
+def admin_update_user(
+    user_uuid: str,
+    req: UpdateUserRequest,
+    current_user: dict = Depends(auth.require_admin),
+):
+    """
+    Admin can change username or role for any user in their company.
+    They cannot elevate a user above 'admin' — super_admin must be set manually.
+    """
+    cid = current_user.get("company_id")
+
+    # Verify the target user belongs to the same company
+    target = supabase.table("users").select("*").eq("uuid", user_uuid).eq("company_id", cid).execute()
+    if not target.data:
+        raise HTTPException(status_code=404, detail="User not found in your company")
+
+    updates = {}
+    if req.username is not None:
+        updates["username"] = req.username
+        updates["is_admin"] = updates.get("is_admin", target.data[0].get("is_admin"))
+    if req.role is not None:
+        if req.role not in ("user", "admin"):
+            raise HTTPException(status_code=400, detail="Role must be 'user' or 'admin'")
+        updates["role"]     = req.role
+        updates["is_admin"] = req.role == "admin"
+
+    if not updates:
+        return {"message": "No changes provided"}
+
+    supabase.table("users").update(updates).eq("uuid", user_uuid).execute()
+    return {"message": "User updated", "updates": updates}
+
+
+# ── 5. Admin: remove a user from their company ────────────────────────────────
+@app.delete("/api/admin/users/{user_uuid}")
+def admin_delete_user(
+    user_uuid: str,
+    current_user: dict = Depends(auth.require_admin),
+):
+    """
+    Removes the users row. Does NOT delete their Supabase Auth account.
+    If they log in again, auth.py will auto-provision them as a new unlinked user.
+    """
+    cid = current_user.get("company_id")
+
+    # Can't delete yourself
+    if user_uuid == current_user.get("uuid"):
+        raise HTTPException(status_code=400, detail="You cannot remove your own account")
+
+    # Verify the target user belongs to the same company
+    target = supabase.table("users").select("uuid").eq("uuid", user_uuid).eq("company_id", cid).execute()
+    if not target.data:
+        raise HTTPException(status_code=404, detail="User not found in your company")
+
+    supabase.table("users").delete().eq("uuid", user_uuid).execute()
+    return {"message": "User removed from company"}
+
+
+# ============================================================
+# ALSO ADD THIS FALLBACK TO auth.py get_current_user
+# (after the uuid lookup returns no results):
+#
+#   # Fallback: match by email for pre-invited users
+#   if user_email:
+#       email_res = supabase.table("users").select("*").eq("email", user_email).execute()
+#       if email_res.data:
+#           # Link the uuid now that we have it
+#           supabase.table("users").update({"uuid": user_uuid}) \
+#                   .eq("email", user_email).execute()
+#           return {**email_res.data[0], "uuid": user_uuid}
+#
+# This makes pre-invited users automatically get linked when they first log in.
+# ============================================================

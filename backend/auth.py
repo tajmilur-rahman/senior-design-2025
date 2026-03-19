@@ -1,66 +1,101 @@
 import os
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
+from jose import jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from database import get_db
-import models
 from pydantic import BaseModel
 from database import supabase
 
+# ── Config ────────────────────────────────────────────────────────────────────
+SECRET_KEY = '+wdvqIdxOWrs4WqDF5X2IxJyKC30JMVddqQpTJy59HqHLyZrRu7O3uIBk5uZt5WVTDQEs3/f8Q/Sc2oEfKgOsA=='
+ALGORITHM  = "HS256"
 
+pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
+
+# ── Pydantic models ───────────────────────────────────────────────────────────
 class UserCreate(BaseModel):
-    username: str
-    password: str
+    username:   str
+    password:   str
     company_id: int
+
 class LoginRequest(BaseModel):
     username: str
     password: str
 
-# Configuration
-SECRET_KEY = '+wdvqIdxOWrs4WqDF5X2IxJyKC30JMVddqQpTJy59HqHLyZrRu7O3uIBk5uZt5WVTDQEs3/f8Q/Sc2oEfKgOsA=='
-ALGORITHM = "HS256"
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
+def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+
+# ── Core auth dependency ──────────────────────────────────────────────────────
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+
     try:
-        # 1. Bypass the alg error
         payload = jwt.get_unverified_claims(token)
-        user_id = payload.get("sub")
-        email = payload.get("email") # Supabase includes email in the token
+        user_uuid  = payload.get("sub")    # Supabase Auth UUID
+        user_email = payload.get("email")  # included by Supabase
 
-        # 2. Check if user exists in our local table
-        response = supabase.table("users").select("*").eq("uuid", user_id).execute()
-        
-        if response.data:
-            return response.data[0]
-        
-        # 3. AUTO-PROVISION: If not found, create the row now!
-        # This fixes the 'User Mapping Failed' for new registrations
-        print(f"DEBUG: New user detected ({email}). Provisioning local record...")
-        
+        if not user_uuid:
+            raise HTTPException(status_code=401, detail="Invalid token: missing sub")
+
+        # Look up by uuid (the Supabase Auth user ID)
+        res = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
+
+        if res.data:
+            return res.data[0]
+
+        # ── Auto-provision ────────────────────────────────────────────────────
+        # New Supabase Auth user signed up but doesn't have a users row yet.
+        # We create one with a safe default. The onboarding flow will assign
+        # them to a real company and set their role properly.
+        print(f"[auth] Auto-provisioning user: {user_email}")
+
+        username = (user_email or "").split("@")[0] or f"user_{user_uuid[:8]}"
+
+        # Make username unique if it already exists
+        existing = supabase.table("users").select("username").eq("username", username).execute()
+        if existing.data:
+            username = f"{username}_{user_uuid[:6]}"
+
         new_user = {
-            "uuid": user_id,
-            "username": email.split('@')[0],
-            "role": "user",      # Default new users to regular role
-            "is_admin": False,
-            "company_id": 1,     # Assign to a default demo company
-            "onboarding_completed": False
+            "uuid":                 user_uuid,
+            "email":                user_email,
+            "username":             username,
+            "password_hash":        "",        # Supabase Auth handles auth — no local password needed
+            "role":                 "user",    # default; onboarding will set properly
+            "is_admin":             False,
+            "company_id":           None,      # NULL until onboarding assigns a company
+            "onboarding_completed": False,
         }
-        
-        insert_res = supabase.table("users").insert(new_user).execute()
-        return insert_res.data[0]
 
+        insert_res = supabase.table("users").insert(new_user).execute()
+        if insert_res.data:
+            return insert_res.data[0]
+
+        raise HTTPException(status_code=500, detail="Failed to provision user record")
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"DEBUG: Auth Flow Failure -> {e}")
-        raise HTTPException(status_code=401, detail="Authentication sync failed")
+        print(f"[auth] get_current_user error: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+
+def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """Dependency: allows admin and super_admin."""
+    if current_user.get("role") not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+def require_super_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """Dependency: allows only super_admin."""
+    if current_user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    return current_user
