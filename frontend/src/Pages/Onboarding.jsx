@@ -1,11 +1,9 @@
-import { useState, useEffect } from "react";
-import axios from "axios";
+import { useState } from "react";
 import {
   ShieldCheck, Brain, Upload, ArrowRight, ArrowLeft, X,
-  Building2, User, Plus, ChevronDown, CheckCircle, Loader
+  Zap, Database, PenTool
 } from "lucide-react";
 
-// ─── Demo prediction data (Step: Predictor) ───────────────────────────────────
 const DEMO_PREDICTIONS = {
   crash:    { sev: "S1", conf: 94, diagnosis: "Critical Memory Corruption",  team: "Core Performance"    },
   login:    { sev: "S1", conf: 91, diagnosis: "Access Control Failure",       team: "Security Ops"        },
@@ -25,239 +23,92 @@ const EXAMPLES   = [
   "Typo in the settings page label",
 ];
 
-// ─── Step 0: Company Setup ────────────────────────────────────────────────────
-// This is the ONLY step that collects real data.
-// All other steps are a product tour.
-function SetupStep({ user, onSetupComplete }) {
-  const [mode, setMode]               = useState("create"); // 'create' | 'join'
-  const [companyName, setCompanyName] = useState("");
-  const [displayName, setDisplayName] = useState(user?.username || "");
-  const [companies, setCompanies]     = useState([]);
-  const [selectedCo, setSelectedCo]   = useState(null);
-  const [dropOpen, setDropOpen]       = useState(false);
-  const [loading, setLoading]         = useState(false);
-  const [loadingCos, setLoadingCos]   = useState(false);
-  const [error, setError]             = useState("");
-
-  // Fetch existing companies for the "join" mode dropdown
-  useEffect(() => {
-    if (mode !== "join") return;
-    setLoadingCos(true);
-    axios.get("/api/companies/list")
-      .then(r => setCompanies(r.data || []))
-      .catch(() => setCompanies([]))
-      .finally(() => setLoadingCos(false));
-  }, [mode]);
-
-  const handleSubmit = async () => {
-    setError("");
-    if (!displayName.trim()) { setError("Please enter your name."); return; }
-    if (mode === "create" && !companyName.trim()) { setError("Please enter a company name."); return; }
-    if (mode === "join"   && !selectedCo)         { setError("Please select a company."); return; }
-
-    setLoading(true);
-    try {
-      const coName = mode === "create" ? companyName.trim() : selectedCo.name;
-      await onSetupComplete(coName, displayName.trim());
-    } catch (e) {
-      setError(e?.response?.data?.detail || "Something went wrong. Please try again.");
-      setLoading(false);
-    }
-  };
+// ── First-launch choice screen ────────────────────────────────────────────────
+function LaunchChoiceStep({ onChoice }) {
+  const choices = [
+    {
+      id: "submit",
+      icon: <PenTool size={26} color="var(--accent)" />,
+      title: "Submit your first bug",
+      desc: "Jump straight in and start logging real bugs from the Severity Analysis tab.",
+      cta: "Start fresh",
+      badge: null,
+    },
+    {
+      id: "demo",
+      icon: <Database size={26} color="#10b981" />,
+      title: "Explore demo data",
+      desc: "Browse 220,000+ pre-loaded Mozilla Firefox bugs to see the full dashboard in action.",
+      cta: "Show me around",
+      badge: "220k+ bugs loaded",
+    },
+    {
+      id: "tour",
+      icon: <Brain size={26} color="#a78bfa" />,
+      title: "Take a quick tour",
+      desc: "See how the AI severity predictor works with a short interactive walkthrough.",
+      cta: "Take the tour",
+      badge: null,
+    },
+  ];
 
   return (
-    <div className="onboarding-step-content">
-      <p className="onboarding-desc">
-        Before we get started, let's link your account to a company.
-        You can <strong>create a new organisation</strong> or <strong>join an existing one</strong>.
-      </p>
-
-      {/* Mode toggle */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
-        {[
-          { id: "create", label: "Create new company", icon: <Plus size={14} /> },
-          { id: "join",   label: "Join existing",      icon: <Building2 size={14} /> },
-        ].map(opt => (
-          <button key={opt.id} onClick={() => { setMode(opt.id); setSelectedCo(null); setError(""); }}
-            style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-              padding: "10px 14px", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer",
-              border: `1.5px solid ${mode === opt.id ? "var(--accent)" : "var(--border)"}`,
-              background: mode === opt.id ? "var(--pill-bg)" : "var(--hover-bg)",
-              color: mode === opt.id ? "var(--accent)" : "var(--text-sec)",
-              transition: "all 0.15s",
-            }}>
-            {opt.icon} {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Company name (create mode) */}
-      {mode === "create" && (
-        <div className="fade-in">
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-sec)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>
-            Company name
-          </label>
-          <div style={{ position: "relative" }}>
-            <Building2 size={16} color="var(--text-sec)" style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-            <input
-              className="sys-input"
-              placeholder="e.g. Acme Engineering"
-              value={companyName}
-              onChange={e => setCompanyName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSubmit()}
-              style={{ paddingLeft: 38, height: 44, fontSize: 13, width: "100%", boxSizing: "border-box" }}
-            />
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {choices.map(c => (
+        <button
+          key={c.id}
+          onClick={() => onChoice(c.id)}
+          style={{
+            display: "flex", alignItems: "center", gap: 16,
+            padding: "16px 18px", borderRadius: 12, cursor: "pointer",
+            border: "1.5px solid var(--border)",
+            background: "var(--hover-bg)",
+            transition: "all 0.15s", textAlign: "left",
+            fontFamily: "var(--font-head)", width: "100%",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "var(--accent)";
+            e.currentTarget.style.background = "var(--pill-bg)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "var(--border)";
+            e.currentTarget.style.background = "var(--hover-bg)";
+          }}
+        >
+          <div style={{
+            width: 48, height: 48, borderRadius: 10,
+            background: "var(--card-bg)", border: "1px solid var(--border)",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            {c.icon}
           </div>
-          <p style={{ fontSize: 11, color: "var(--text-sec)", margin: "6px 0 0" }}>
-            This creates a new row in the <code style={{ background: "var(--hover-bg)", padding: "1px 5px", borderRadius: 3 }}>companies</code> table and assigns you as admin.
-          </p>
-        </div>
-      )}
-
-      {/* Company picker (join mode) */}
-      {mode === "join" && (
-        <div className="fade-in">
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-sec)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>
-            Select your company
-          </label>
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setDropOpen(o => !o)} style={{
-              width: "100%", height: 44, display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "0 14px", background: "var(--input-bg)", border: `1px solid ${dropOpen ? "var(--accent)" : "var(--border)"}`,
-              borderRadius: 8, cursor: "pointer", fontSize: 13, color: selectedCo ? "var(--text-main)" : "var(--text-sec)",
-              fontFamily: "var(--font-head)", boxSizing: "border-box",
-              boxShadow: dropOpen ? "0 0 0 3px rgba(37,99,235,0.1)" : "none",
-            }}>
-              <span>{selectedCo ? selectedCo.name : (loadingCos ? "Loading companies…" : "Choose a company…")}</span>
-              {loadingCos ? <Loader size={14} className="spin" /> : <ChevronDown size={14} style={{ transition: "0.2s", transform: dropOpen ? "rotate(180deg)" : "none" }} />}
-            </button>
-            {dropOpen && !loadingCos && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 100,
-                background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 10,
-                boxShadow: "0 16px 40px rgba(0,0,0,0.2)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
-              }}>
-                {companies.length === 0 ? (
-                  <div style={{ padding: "16px", fontSize: 13, color: "var(--text-sec)", textAlign: "center" }}>
-                    No companies found. Try creating one instead.
-                  </div>
-                ) : companies.map(co => (
-                  <div key={co.id} onClick={() => { setSelectedCo(co); setDropOpen(false); }}
-                    style={{
-                      padding: "11px 16px", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-                      background: selectedCo?.id === co.id ? "var(--pill-bg)" : "transparent",
-                      color: selectedCo?.id === co.id ? "var(--accent)" : "var(--text-main)",
-                      borderBottom: "1px solid var(--border)",
-                    }}
-                    onMouseEnter={e => { if (selectedCo?.id !== co.id) e.currentTarget.style.background = "var(--hover-bg)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = selectedCo?.id === co.id ? "var(--pill-bg)" : "transparent"; }}>
-                    <Building2 size={13} color="var(--text-sec)" />
-                    <span style={{ fontWeight: 600 }}>{co.name}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-sec)", marginLeft: "auto" }}>ID #{co.id}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
+                {c.title}
+              </span>
+              {c.badge && (
+                <span style={{
+                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 4,
+                  background: "rgba(16,185,129,0.1)", color: "#10b981",
+                  textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0,
+                }}>
+                  {c.badge}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-sec)", lineHeight: 1.5 }}>
+              {c.desc}
+            </div>
           </div>
-          <p style={{ fontSize: 11, color: "var(--text-sec)", margin: "6px 0 0" }}>
-            Joining an existing company sets your role to <strong>user</strong>. Ask your company admin if you need admin access.
-          </p>
-        </div>
-      )}
-
-      {/* Display name */}
-      <div>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-sec)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>
-          Your display name
-        </label>
-        <div style={{ position: "relative" }}>
-          <User size={16} color="var(--text-sec)" style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-          <input
-            className="sys-input"
-            placeholder="e.g. Alex Chen"
-            value={displayName}
-            onChange={e => setDisplayName(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSubmit()}
-            style={{ paddingLeft: 38, height: 44, fontSize: 13, width: "100%", boxSizing: "border-box" }}
-          />
-        </div>
-        <p style={{ fontSize: 11, color: "var(--text-sec)", margin: "6px 0 0" }}>
-          Stored as <code style={{ background: "var(--hover-bg)", padding: "1px 5px", borderRadius: 3 }}>users.username</code> — shown in the nav bar.
-        </p>
-      </div>
-
-      {error && (
-        <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: 13, color: "var(--danger)", fontWeight: 600 }}>
-          {error}
-        </div>
-      )}
-
-      {/* Submit */}
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        style={{
-          width: "100%", padding: "12px 0", background: "var(--accent)", border: "none",
-          borderRadius: 9, color: "white", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-          opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          fontFamily: "var(--font-head)",
-        }}>
-        {loading ? <><Loader size={14} className="spin" /> Setting up…</> : <><CheckCircle size={14} /> Continue</>}
-      </button>
-
-      {/* What this does — transparency note */}
-      <div style={{ padding: "12px 16px", background: "var(--hover-bg)", border: "1px solid var(--border)", borderRadius: 9, fontSize: 12, color: "var(--text-sec)", lineHeight: 1.7 }}>
-        <strong style={{ color: "var(--text-main)", display: "block", marginBottom: 4 }}>What gets saved:</strong>
-        {mode === "create" ? (
-          <>
-            <div>• <code style={{ background: "var(--bg)", padding: "0 4px", borderRadius: 3 }}>companies</code> → new row: <strong>{companyName || "your company name"}</strong>, data_table: 'bugs'</div>
-            <div>• <code style={{ background: "var(--bg)", padding: "0 4px", borderRadius: 3 }}>users</code> → your row updated: company_id linked, username set, role stays <strong>admin</strong></div>
-          </>
-        ) : (
-          <>
-            <div>• <code style={{ background: "var(--bg)", padding: "0 4px", borderRadius: 3 }}>users</code> → your row updated: company_id → {selectedCo ? `#${selectedCo.id} (${selectedCo.name})` : "selected company"}, role: <strong>user</strong></div>
-            <div>• No new company created.</div>
-          </>
-        )}
-      </div>
+          <ArrowRight size={15} color="var(--text-sec)" style={{ flexShrink: 0 }} />
+        </button>
+      ))}
     </div>
   );
 }
 
-// ─── Step: Welcome tour ───────────────────────────────────────────────────────
-function WelcomeStep() {
-  return (
-    <div className="onboarding-step-content">
-      <p className="onboarding-desc">
-        Apex System uses a <strong>Random Forest ML model</strong> trained on 220,000+ real-world bugs
-        to instantly predict the severity of any bug your team submits.
-      </p>
-      <div className="onboarding-feature-grid">
-        {[
-          { title: "AI Prediction",  desc: "Type a bug summary and get an instant S1–S4 severity score" },
-          { title: "Bulk Upload",    desc: "Upload a CSV of existing bugs and let the model classify them all" },
-          { title: "Your Data Only", desc: "Your company's bugs are completely isolated from other tenants" },
-        ].map((f, i) => (
-          <div key={i} className="onboarding-feature-card">
-            <div className="onboarding-feature-title">{f.title}</div>
-            <div className="onboarding-feature-desc">{f.desc}</div>
-          </div>
-        ))}
-      </div>
-      <div className="onboarding-info-box">
-        <div className="onboarding-info-title">How it works in 3 steps</div>
-        <div className="onboarding-info-body">
-          1. Describe a bug in plain English<br />
-          2. Apex System's AI predicts the severity instantly<br />
-          3. Confirm or correct — the model learns from your feedback
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step: AI Predictor demo ──────────────────────────────────────────────────
+// ── Tour: predictor demo ──────────────────────────────────────────────────────
 function PredictorStep() {
   const [text, setText]       = useState("");
   const [result, setResult]   = useState(null);
@@ -277,17 +128,27 @@ function PredictorStep() {
   };
 
   return (
-    <div className="onboarding-step-content">
-      <p className="onboarding-desc">Describe a bug in plain English. The AI will classify its severity instantly.</p>
+    <div className="onboarding-step-content" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "2rem", padding: "1rem 0" }}>
+      <p className="onboarding-desc">
+        Describe a bug in plain English. The AI will classify its severity instantly.
+      </p>
       <div className="onboarding-chips">
         {EXAMPLES.map((ex, i) => (
           <button key={i} className="onboarding-chip" onClick={() => setText(ex)}>{ex}</button>
         ))}
       </div>
-      <textarea className="onboarding-textarea" rows={3} value={text}
+      <textarea
+        className="onboarding-textarea"
+        rows={3}
+        value={text}
         onChange={e => setText(e.target.value)}
-        placeholder="e.g. Application crashes when clicking the login button on iOS..." />
-      <button className="onboarding-predict-btn" onClick={predict} disabled={!text.trim() || loading}>
+        placeholder="e.g. Application crashes when clicking the login button on iOS..."
+      />
+      <button
+        className="onboarding-predict-btn"
+        onClick={predict}
+        disabled={!text.trim() || loading}
+      >
         {loading ? "Analyzing…" : "Predict Severity"}
       </button>
       {result && (
@@ -301,7 +162,7 @@ function PredictorStep() {
             </div>
             <span className="onboarding-conf">{result.conf}% confidence</span>
           </div>
-          <div className="onboarding-result-grid">
+          <div className="onboarding-result-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginTop: "1rem" }}>
             <div className="onboarding-result-card">
               <div className="onboarding-result-card-label">Diagnosis</div>
               <div className="onboarding-result-card-value">{result.diagnosis}</div>
@@ -317,14 +178,44 @@ function PredictorStep() {
   );
 }
 
-// ─── Step: Bulk Upload info ───────────────────────────────────────────────────
+function WelcomeStep() {
+  return (
+    <div className="onboarding-step-content" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "2rem", padding: "1rem 0" }}>
+      <p className="onboarding-desc">
+        Apex SystemOS uses a <strong>Random Forest ML model</strong> trained on 220,000+ real-world
+        bugs to instantly predict severity for every bug your team submits.
+      </p>
+      <div className="onboarding-feature-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "2rem" }}>
+        {[
+          { title: "AI Prediction",  desc: "Type a bug summary and get an instant S1–S4 severity score" },
+          { title: "Bulk Upload",    desc: "Upload a CSV of existing bugs and let the model classify them all" },
+          { title: "Your Data Only", desc: "Your company's bugs are fully isolated from other tenants" },
+        ].map((f, i) => (
+          <div key={i} className="onboarding-feature-card">
+            <div className="onboarding-feature-title">{f.title}</div>
+            <div className="onboarding-feature-desc">{f.desc}</div>
+          </div>
+        ))}
+      </div>
+      <div className="onboarding-info-box">
+        <div className="onboarding-info-title">How it works</div>
+        <div className="onboarding-info-body">
+          1. Describe a bug in plain English<br />
+          2. The AI predicts severity instantly<br />
+          3. Confirm or correct — the model learns from your feedback
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UploadStep() {
   return (
-    <div className="onboarding-step-content">
+    <div className="onboarding-step-content" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "2rem", padding: "1rem 0" }}>
       <p className="onboarding-desc">
         Already tracking bugs elsewhere? Upload a <strong>CSV or JSON</strong> file to import them all at once.
       </p>
-      <div className="onboarding-csv-grid">
+      <div className="onboarding-csv-grid" style={{ display: "grid", gap: "1rem" }}>
         {[
           { col: "summary",   req: true,  desc: "Bug description"    },
           { col: "severity",  req: false, desc: "S1, S2, S3, or S4"  },
@@ -347,91 +238,91 @@ function UploadStep() {
         <pre className="onboarding-csv-code">{`summary,severity,component\n"Login crashes on Safari",S1,Frontend\n"Export button missing label",S4,UI\n"API timeout on large queries",S2,Backend`}</pre>
       </div>
       <div className="onboarding-info-box">
-        After upload, the AI automatically classifies each bug — the model gets smarter with every batch you add.
+        After upload, the AI automatically classifies each bug — the model improves with every batch.
       </div>
     </div>
   );
 }
 
-// ─── Main Onboarding Component ────────────────────────────────────────────────
-// onComplete(companyName, displayName) — called once setup is done
-// user — the current user object from App.jsx (may have company_id=null)
-export default function Onboarding({ onComplete, user }) {
-  // setupDone tracks whether Step 0 (the data-collection step) is complete
-  const [setupDone, setSetupDone] = useState(false);
-  const [step, setStep]           = useState(0); // tour steps: 0=welcome, 1=predictor, 2=upload
+const TOUR_STEPS = [
+  { id: "welcome",   icon: <ShieldCheck size={40} color="#3b82f6" />, title: "Welcome to Apex SystemOS", subtitle: "AI-powered bug triage for your team",              Component: WelcomeStep   },
+  { id: "predictor", icon: <Brain       size={40} color="#a78bfa" />, title: "Try the AI Predictor",     subtitle: "See the model in action",                         Component: PredictorStep },
+  { id: "upload",    icon: <Upload      size={40} color="#22c55e" />, title: "Bulk Upload Your Bugs",    subtitle: "Already tracking bugs elsewhere? Import them all", Component: UploadStep    },
+];
 
-  // If the user already has a company (e.g. registered via Register page),
-  // skip the setup step entirely and just show the product tour
-  const needsSetup = !user?.company_id;
+// ── Main Onboarding component ─────────────────────────────────────────────────
+// onComplete(companyName, displayName, navigateTo)
+// navigateTo: optional tab ID to land on after onboarding ('submit', 'database', null)
+export default function Onboarding({ onComplete }) {
+  const [choice, setChoice] = useState(null);
+  const [step,   setStep]   = useState(0);
 
-  // Tour steps shown AFTER setup (or immediately if company already linked)
-  const TOUR_STEPS = [
-    { id: "welcome",   icon: <ShieldCheck size={40} color="#3b82f6" />, title: "Welcome to Apex System",  subtitle: "AI-powered bug triage for your team" },
-    { id: "predictor", icon: <Brain       size={40} color="#a78bfa" />, title: "Try the AI Predictor",   subtitle: "See the model in action" },
-    { id: "upload",    icon: <Upload      size={40} color="#22c55e" />, title: "Bulk Upload Your Bugs",  subtitle: "Already tracking bugs elsewhere? Import them all at once" },
-  ];
+  const handleChoice = (id) => {
+    if (id === "submit") {
+      // Go straight to Severity Analysis tab
+      onComplete(null, null, "submit");
+    } else if (id === "demo") {
+      // Go to Database tab — the Firefox data is already there
+      onComplete(null, null, "database");
+    } else {
+      // Show the product tour carousel
+      setChoice("tour");
+      setStep(0);
+    }
+  };
+
+  const handleTourDone = () => onComplete(null, null, null);
 
   const cur    = TOUR_STEPS[step];
   const isLast = step === TOUR_STEPS.length - 1;
 
-  // Called by SetupStep when the user clicks Continue
-  const handleSetupComplete = async (companyName, displayName) => {
-    await onComplete(companyName, displayName);
-    setSetupDone(true);
-    // Don't close yet — show the product tour
-  };
-
-  // Called when the tour finishes
-  const handleTourDone = () => {
-    if (needsSetup && !setupDone) {
-      // Shouldn't normally reach here, but safety net
-      onComplete("", user?.username || "");
-    } else {
-      onComplete(null, null); // signal: tour done, no setup needed
-    }
-  };
-
-  // ── Render setup step (Step 0) ────────────────────────────────────────────
-  if (needsSetup && !setupDone) {
+  // ── Choice screen ────────────────────────────────────────────────────────
+  if (!choice) {
     return (
-      <div className="onboarding-backdrop">
-        <div className="onboarding-card">
+      <div className="onboarding-backdrop" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
+        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
           <div className="onboarding-header">
-            <div className="onboarding-icon"><Building2 size={40} color="var(--accent)" /></div>
-            <div className="onboarding-step-label">Setup · Step 1 of 1</div>
-            <h2 className="onboarding-title">Set up your workspace</h2>
-            <p className="onboarding-subtitle">Link your account to a company to get started</p>
+            <div className="onboarding-icon">
+              <Zap size={40} color="var(--accent)" />
+            </div>
+            <div className="onboarding-step-label">You're all set</div>
+            <h2 className="onboarding-title">How would you like to start?</h2>
+            <p className="onboarding-subtitle">You can change this any time from the dashboard.</p>
           </div>
-          <SetupStep user={user} onSetupComplete={handleSetupComplete} />
+          <LaunchChoiceStep onChoice={handleChoice} />
+          <div style={{ marginTop: 18, textAlign: "center" }}>
+            <button
+              className="onboarding-skip-text"
+              onClick={() => onComplete(null, null, null)}
+              style={{ fontSize: 12 }}
+            >
+              Skip and go to dashboard →
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── Render product tour ───────────────────────────────────────────────────
+  // ── Product tour ──────────────────────────────────────────────────────────
   return (
-    <div className="onboarding-backdrop">
-      <div className="onboarding-card">
-        <button className="onboarding-skip" onClick={handleTourDone} title="Skip tour"><X size={18} /></button>
-
+    <div className="onboarding-backdrop" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
+      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+        <button className="onboarding-skip" onClick={handleTourDone} title="Skip tour">
+          <X size={18} />
+        </button>
         <div className="onboarding-progress">
           {TOUR_STEPS.map((_, i) => (
             <div key={i} className={`onboarding-dot ${i === step ? "active" : i < step ? "done" : ""}`} />
           ))}
         </div>
-
         <div className="onboarding-header">
           <div className="onboarding-icon">{cur.icon}</div>
           <div className="onboarding-step-label">Step {step + 1} of {TOUR_STEPS.length}</div>
           <h2 className="onboarding-title">{cur.title}</h2>
           <p className="onboarding-subtitle">{cur.subtitle}</p>
         </div>
-
-        {cur.id === "welcome"   && <WelcomeStep />}
-        {cur.id === "predictor" && <PredictorStep />}
-        {cur.id === "upload"    && <UploadStep />}
-
+        <cur.Component />
         <div className="onboarding-nav">
           <button className="onboarding-skip-text" onClick={handleTourDone}>Skip tour</button>
           <div className="onboarding-nav-right">
@@ -440,7 +331,10 @@ export default function Onboarding({ onComplete, user }) {
                 <ArrowLeft size={16} /> Back
               </button>
             )}
-            <button className="onboarding-btn-next" onClick={() => isLast ? handleTourDone() : setStep(s => s + 1)}>
+            <button
+              className="onboarding-btn-next"
+              onClick={() => isLast ? handleTourDone() : setStep(s => s + 1)}
+            >
               {isLast ? "Go to Dashboard" : "Next"} <ArrowRight size={16} />
             </button>
           </div>

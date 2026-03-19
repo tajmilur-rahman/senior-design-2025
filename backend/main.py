@@ -70,16 +70,12 @@ class CompanyCreate(BaseModel):
     name: str
 
 class RegisterRequest(BaseModel):
-    """
-    Used by the Register page.
-    Creates a companies row + a users row (role=admin) in one transaction.
-    The Supabase Auth signup happens on the frontend first; the UUID is then
-    sent here so we can link the two records.
-    """
     company_name: str
     username:     str
     email:        str
-    uuid:         str           # Supabase Auth UUID from the signup response
+    uuid:         str
+    role:         str = "user"
+    invite_code:  str = ""
 
 class OnboardingRequest(BaseModel):
     """
@@ -104,48 +100,125 @@ class FeedbackPayload(BaseModel):
 @app.post("/api/register")
 def register(req: RegisterRequest):
     """
-    Called immediately after a successful supabase.auth.signUp() on the frontend.
-    1. Creates (or finds) the company row.
-    2. Creates the users row with role='admin', linking uuid → company.
-    This means the FIRST person to register for a company becomes its admin.
+    Admin registration: creates company + admin user row.
+    User registration: validates invite_code against companies.invite_code,
+                       then links user to that company.
     """
-    # Validate UUID not already mapped
-    existing_uuid = supabase.table("users").select("uuid").eq("uuid", req.uuid).execute()
-    if existing_uuid.data:
-        # Already registered — just return their info
-        user_row = existing_uuid.data[0]
-        co = supabase.table("companies").select("name").eq("id", user_row.get("company_id")).single().execute()
-        return {"message": "Already registered", "company_id": user_row.get("company_id"),
-                "company_name": co.data.get("name") if co.data else "", "role": user_row.get("role")}
+    role = req.role if req.role in ("user", "admin") else "user"
 
-    # Check username uniqueness
+    # --- Check for existing UUID ---
+    existing_uuid = supabase.table("users").select("*").eq("uuid", req.uuid).execute()
+    if existing_uuid.data:
+        user_row = existing_uuid.data[0]
+        if user_row.get("company_id") is not None:
+            co = supabase.table("companies").select("name").eq("id", user_row["company_id"]).single().execute()
+            return {
+                "message":      "Already registered",
+                "company_id":   user_row.get("company_id"),
+                "company_name": co.data.get("name") if co.data else "",
+                "role":         user_row.get("role"),
+            }
+        else:
+            supabase.table("users").delete().eq("uuid", req.uuid).execute()
+
+    # --- Check for existing email ---
+    existing_email = supabase.table("users").select("*").eq("email", req.email).execute()
+    if existing_email.data:
+        user_row = existing_email.data[0]
+        if user_row.get("company_id") is not None:
+            co = supabase.table("companies").select("name").eq("id", user_row["company_id"]).single().execute()
+            return {
+                "message":      "Already registered",
+                "company_id":   user_row.get("company_id"),
+                "company_name": co.data.get("name") if co.data else "",
+                "role":         user_row.get("role"),
+            }
+        else:
+            supabase.table("users").delete().eq("email", req.email).execute()
+
+    # --- Username uniqueness ---
     existing_uname = supabase.table("users").select("username").eq("username", req.username).execute()
     if existing_uname.data:
         raise HTTPException(status_code=400, detail="Username already taken")
 
-    # Find or create company
-    existing_co = supabase.table("companies").select("id, name").eq("name", req.company_name).execute()
-    if existing_co.data:
-        company_id   = existing_co.data[0]["id"]
-        company_name = existing_co.data[0]["name"]
-    else:
-        co_res = supabase.table("companies").insert({
-            "name":       req.company_name,
-            "data_table": "bugs",           # all new companies share the bugs table, isolated by company_id
-        }).execute()
-        if not co_res.data:
-            raise HTTPException(status_code=500, detail="Failed to create company")
-        company_id   = co_res.data[0]["id"]
-        company_name = co_res.data[0]["name"]
+    # ── ADMIN PATH ────────────────────────────────────────────────────────────
+    if role == "admin":
+        existing_co = supabase.table("companies").select("id, name").eq("name", req.company_name).execute()
+        if existing_co.data:
+            company_id   = existing_co.data[0]["id"]
+            company_name = existing_co.data[0]["name"]
+        else:
+            # Generate a unique 8-char invite code for the new company
+            import uuid as uuid_lib
+            invite_code = uuid_lib.uuid4().hex[:8].upper()
+            # Ensure uniqueness (retry on collision — extremely unlikely)
+            for _ in range(5):
+                check = supabase.table("companies").select("id").eq("invite_code", invite_code).execute()
+                if not check.data:
+                    break
+                invite_code = uuid_lib.uuid4().hex[:8].upper()
 
-    # Create user row
+            co_res = supabase.table("companies").insert({
+                "name":        req.company_name,
+                "data_table":  "bugs",
+                "invite_code": invite_code,
+            }).execute()
+            if not co_res.data:
+                raise HTTPException(status_code=500, detail="Failed to create company")
+            company_id   = co_res.data[0]["id"]
+            company_name = co_res.data[0]["name"]
+
+        user_res = supabase.table("users").insert({
+            "uuid":                 req.uuid,
+            "email":                req.email,
+            "username":             req.username,
+            "password_hash":        "",
+            "role":                 "admin",
+            "is_admin":             True,
+            "company_id":           company_id,
+            "onboarding_completed": False,
+        }).execute()
+
+        if not user_res.data:
+            raise HTTPException(status_code=500, detail="Failed to create user record")
+
+        return {
+            "message":      "Registration successful",
+            "company_id":   company_id,
+            "company_name": company_name,
+            "username":     req.username,
+            "role":         "admin",
+        }
+
+    # ── USER PATH ─────────────────────────────────────────────────────────────
+    # Regular users MUST provide a valid invite code.
+    # This is the multi-tenancy gate — without it, any stranger could join
+    # any company just by knowing its name.
+    if not req.invite_code or not req.invite_code.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="An invite code is required to join a company. Ask your company admin for the code."
+        )
+
+    # Look up the company by invite code (case-insensitive)
+    code_upper = req.invite_code.strip().upper()
+    co_res = supabase.table("companies").select("id, name").eq("invite_code", code_upper).execute()
+    if not co_res.data:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid invite code. Please check the code with your admin and try again."
+        )
+
+    company_id   = co_res.data[0]["id"]
+    company_name = co_res.data[0]["name"]
+
     user_res = supabase.table("users").insert({
         "uuid":                 req.uuid,
         "email":                req.email,
         "username":             req.username,
-        "password_hash":        "",          # Supabase Auth handles passwords
-        "role":                 "admin",     # first registrant of a company = admin
-        "is_admin":             True,
+        "password_hash":        "",
+        "role":                 "user",
+        "is_admin":             False,
         "company_id":           company_id,
         "onboarding_completed": False,
     }).execute()
@@ -158,7 +231,7 @@ def register(req: RegisterRequest):
         "company_id":   company_id,
         "company_name": company_name,
         "username":     req.username,
-        "role":         "admin",
+        "role":         "user",
     }
 
 
@@ -802,11 +875,28 @@ def superadmin_get_users(current_user: dict = Depends(auth.require_super_admin))
 
     return users
 
-@app.get("/api/companies/list")
-def list_companies():
 
-    res = supabase.table("companies").select("id, name").order("name").execute()
-    return res.data or []
+@app.get("/api/companies/list")
+def list_companies(current_user: dict = Depends(auth.get_current_user)):
+    # Get all companies
+    companies_res = supabase.table("companies").select("id, name").order("name").execute()
+    all_companies = companies_res.data or []
+
+    # Get all company_ids that have at least one user linked
+    users_res = supabase.table("users").select("company_id").execute()
+    active_ids = set(
+        u["company_id"] for u in (users_res.data or [])
+        if u.get("company_id") is not None
+    )
+
+    # Filter: exclude System company and companies with no users
+    filtered = [
+        c for c in all_companies
+        if c.get("name") != "System"
+           and c.get("id") in active_ids
+    ]
+
+    return filtered
 
 
 # ── 2. Admin: list users in their own company ─────────────────────────────────
@@ -828,7 +918,58 @@ class InviteUserRequest(BaseModel):
     username: str
     role:     str = "user"   # 'user' or 'admin'
 
+@app.get("/api/invite/validate")
+def validate_invite_code(code: str):
+    """
+    Public endpoint — no auth required.
+    Returns { valid: bool, company_name: str } so the registration form
+    can show a live preview of which company the code belongs to.
+    """
+    if not code or len(code.strip()) < 4:
+        return {"valid": False, "company_name": ""}
 
+    code_upper = code.strip().upper()
+    res = supabase.table("companies").select("id, name").eq("invite_code", code_upper).execute()
+    if res.data:
+        return {"valid": True, "company_name": res.data[0]["name"], "company_id": res.data[0]["id"]}
+    return {"valid": False, "company_name": ""}
+@app.get("/api/admin/invite_code")
+def get_invite_code(current_user: dict = Depends(auth.require_admin)):
+    """Returns the invite code for the current admin's company."""
+    cid = current_user.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="No company assigned to this admin")
+
+    res = supabase.table("companies").select("id, name, invite_code").eq("id", cid).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    return {
+        "company_id":   res.data["id"],
+        "company_name": res.data["name"],
+        "invite_code":  res.data.get("invite_code") or "",
+    }
+
+@app.post("/api/admin/invite_code/regenerate")
+def regenerate_invite_code(current_user: dict = Depends(auth.require_admin)):
+    """
+    Generates a new invite code for the admin's company.
+    Old code immediately stops working — useful if a code leaks.
+    """
+    import uuid as uuid_lib
+    cid = current_user.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="No company assigned")
+
+    new_code = uuid_lib.uuid4().hex[:8].upper()
+    for _ in range(5):
+        check = supabase.table("companies").select("id").eq("invite_code", new_code).execute()
+        if not check.data:
+            break
+        new_code = uuid_lib.uuid4().hex[:8].upper()
+
+    supabase.table("companies").update({"invite_code": new_code}).eq("id", cid).execute()
+    return {"invite_code": new_code, "message": "Invite code regenerated. The old code is now invalid."}
 # ── 3. Admin: invite / pre-create a user ──────────────────────────────────────
 @app.post("/api/admin/users/invite")
 def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.require_admin)):
@@ -878,77 +1019,113 @@ class UpdateUserRequest(BaseModel):
 
 
 # ── 4. Admin: update a user's role or username ────────────────────────────────
-@app.patch("/api/admin/users/{user_uuid}")
-def admin_update_user(
-    user_uuid: str,
-    req: UpdateUserRequest,
-    current_user: dict = Depends(auth.require_admin),
-):
-    """
-    Admin can change username or role for any user in their company.
-    They cannot elevate a user above 'admin' — super_admin must be set manually.
-    """
-    cid = current_user.get("company_id")
-
-    # Verify the target user belongs to the same company
-    target = supabase.table("users").select("*").eq("uuid", user_uuid).eq("company_id", cid).execute()
-    if not target.data:
-        raise HTTPException(status_code=404, detail="User not found in your company")
-
-    updates = {}
-    if req.username is not None:
-        updates["username"] = req.username
-        updates["is_admin"] = updates.get("is_admin", target.data[0].get("is_admin"))
-    if req.role is not None:
-        if req.role not in ("user", "admin"):
-            raise HTTPException(status_code=400, detail="Role must be 'user' or 'admin'")
-        updates["role"]     = req.role
-        updates["is_admin"] = req.role == "admin"
-
-    if not updates:
-        return {"message": "No changes provided"}
-
-    supabase.table("users").update(updates).eq("uuid", user_uuid).execute()
-    return {"message": "User updated", "updates": updates}
-
-
-# ── 5. Admin: remove a user from their company ────────────────────────────────
 @app.delete("/api/admin/users/{user_uuid}")
 def admin_delete_user(
-    user_uuid: str,
-    current_user: dict = Depends(auth.require_admin),
+        user_uuid: str,
+        delete_company: bool = False,  # NEW: super_admin can pass ?delete_company=true
+        current_user: dict = Depends(auth.require_admin),
 ):
     """
-    Removes the users row. Does NOT delete their Supabase Auth account.
-    If they log in again, auth.py will auto-provision them as a new unlinked user.
+    Deletes a user from BOTH public.users and auth.users.
+
+    Super admin extra:
+    - If delete_company=true and the user was the last member of their company,
+      the company row is also deleted.
+    - Admins cannot delete companies — only super_admins.
     """
     cid = current_user.get("company_id")
+    true_role = current_user.get("role")
 
-    # Can't delete yourself
     if user_uuid == current_user.get("uuid"):
         raise HTTPException(status_code=400, detail="You cannot remove your own account")
 
-    # Verify the target user belongs to the same company
-    target = supabase.table("users").select("uuid").eq("uuid", user_uuid).eq("company_id", cid).execute()
+    # Verify target user exists and (for non-super-admins) belongs to same company
+    if true_role == "super_admin":
+        target = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
+    else:
+        target = supabase.table("users").select("*").eq("uuid", user_uuid).eq("company_id", cid).execute()
+
     if not target.data:
         raise HTTPException(status_code=404, detail="User not found in your company")
 
+    target_user = target.data[0]
+    target_company = target_user.get("company_id")
+
+    # Step 1: Delete from public.users
     supabase.table("users").delete().eq("uuid", user_uuid).execute()
-    return {"message": "User removed from company"}
+
+    # Step 2: Delete from auth.users via Supabase Admin API
+    auth_deleted = True
+    try:
+        from database import SUPABASE_URL, SUPABASE_KEY
+        import requests as http_requests
+
+        response = http_requests.delete(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{user_uuid}",
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+        if response.status_code not in (200, 204):
+            print(f"[delete_user] auth.users deletion failed for {user_uuid}: "
+                  f"{response.status_code} {response.text}")
+            auth_deleted = False
+    except Exception as e:
+        print(f"[delete_user] auth.users deletion exception for {user_uuid}: {e}")
+        auth_deleted = False
+
+    # Step 3: Super admin — optionally delete the company if it's now empty
+    company_deleted = False
+    company_delete_error = None
+
+    if delete_company and true_role == "super_admin" and target_company:
+        try:
+            # Check how many users still belong to this company
+            remaining = supabase.table("users").select("id", count="exact") \
+                .eq("company_id", target_company).execute()
+            remaining_count = remaining.count or 0
+
+            if remaining_count == 0:
+                # Safe to delete — no users left
+                supabase.table("companies").delete().eq("id", target_company).execute()
+                company_deleted = True
+            else:
+                company_delete_error = f"Company not deleted — {remaining_count} user(s) still belong to it."
+        except Exception as e:
+            company_delete_error = str(e)
+
+    result = {
+        "message": f"User '{target_user.get('username') or target_user.get('email')}' deleted.",
+        "warning": not auth_deleted,
+        "uuid": user_uuid,
+        "company_deleted": company_deleted,
+    }
+    if company_delete_error:
+        result["company_warning"] = company_delete_error
+    if not auth_deleted:
+        result["message"] += " Auth record may need manual cleanup."
+
+    return result
 
 
-# ============================================================
-# ALSO ADD THIS FALLBACK TO auth.py get_current_user
-# (after the uuid lookup returns no results):
-#
-#   # Fallback: match by email for pre-invited users
-#   if user_email:
-#       email_res = supabase.table("users").select("*").eq("email", user_email).execute()
-#       if email_res.data:
-#           # Link the uuid now that we have it
-#           supabase.table("users").update({"uuid": user_uuid}) \
-#                   .eq("email", user_email).execute()
-#           return {**email_res.data[0], "uuid": user_uuid}
-#
-# This makes pre-invited users automatically get linked when they first log in.
-# ============================================================
+@app.get("/api/superadmin/company_detail/{company_id}")
+def superadmin_company_detail(
+        company_id: int,
+        current_user: dict = Depends(auth.require_super_admin),
+):
+    """Returns a company's name and current user count."""
+    co = supabase.table("companies").select("id, name").eq("id", company_id).single().execute()
+    if not co.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    users_res = supabase.table("users").select("id", count="exact") \
+        .eq("company_id", company_id).execute()
+
+    return {
+        "id": co.data["id"],
+        "name": co.data["name"],
+        "user_count": users_res.count or 0,
+    }
