@@ -163,9 +163,14 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    const initAuth = async (session) => {
+    const initAuth = async (session, opts = {}) => {
+      const { event = null, fromInitialSession = false } = opts;
       try {
-        if (!session) { setUser(null); return; }
+        if (!session) {
+          setUser(null);
+          setShowOnboarding(false);
+          return;
+        }
 
         const uuid = session.user.id;
 
@@ -186,8 +191,13 @@ export default function App() {
             is_admin:             db.is_admin || false,
             onboarding_completed: db.onboarding_completed || false,
           });
-          // Show onboarding only on first ever login
-          setShowOnboarding(!db.onboarding_completed);
+          // Show onboarding only right after an explicit sign-in event,
+          // never during initial session hydration on app load.
+          if (!fromInitialSession && event === 'SIGNED_IN') {
+            setShowOnboarding(!db.onboarding_completed);
+          } else {
+            setShowOnboarding(false);
+          }
         } else {
           // Row still not found after all retries — show onboarding
           // which will handle linking the user to a company
@@ -198,19 +208,24 @@ export default function App() {
             role: 'user', context_role: 'user',
             company_id: null, onboarding_completed: false,
           });
-          setShowOnboarding(true);
+          setShowOnboarding(!fromInitialSession && event === 'SIGNED_IN');
         }
       } catch (err) {
         console.error('[App] initAuth:', err);
         setUser(null);
+        setShowOnboarding(false);
       } finally {
         setLoading(false);
       }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => initAuth(session));
+    supabase.auth.getSession().then(({ data: { session } }) =>
+      initAuth(session, { fromInitialSession: true })
+    );
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event !== 'INITIAL_SESSION') initAuth(session);
+      if (event !== 'INITIAL_SESSION') {
+        initAuth(session, { event, fromInitialSession: false });
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
