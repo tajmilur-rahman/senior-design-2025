@@ -10,7 +10,7 @@ body {
   width: 100vw;
   height: 100vh;
   /* background-color and color are now dynamically managed by App.css */
-  overflow: hidden; 
+  overflow: hidden;
 }
 
 #root {

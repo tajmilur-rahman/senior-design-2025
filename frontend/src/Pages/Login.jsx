@@ -304,12 +304,12 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
     (mode === 'register' && registerRole === 'user' && inviteValidation?.valid !== true);
 
   return (
-    <div className="login-backdrop-enterprise" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto" }}>
+    <div className="login-backdrop-enterprise">
       <button className="theme-toggle-btn" onClick={toggleTheme} aria-label="Toggle theme">
         {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
       </button>
-      <div className="login-card-enterprise fade-in-up" style={{ width: "100%", maxWidth: "1100px", minHeight: "clamp(520px, 70vh, 720px)", display: "flex", overflow: "hidden", margin: "auto", boxShadow: "var(--glow)", borderRadius: "20px" }}>
-        <div className="login-brand-side" style={{ flex: 1, padding: "4rem", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      <div className="login-card-enterprise fade-in-up">
+        <div className="login-brand-side">
           <div className="floating-shape shape-1" /><div className="floating-shape shape-2" /><div className="floating-shape shape-3" />
           <div className="brand-content">
             <div className="logo-box-large"><ShieldCheck size={44} color="white" /></div>
@@ -319,7 +319,7 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
           </div>
         </div>
 
-        <div className="login-form-side" style={{ flex: 1, padding: "4rem", display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: "600px", background: "var(--card-bg)" }}>
+        <div className="login-form-side">
 
           {/* Success */}
           {viewState === 'success' && (
