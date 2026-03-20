@@ -13,7 +13,6 @@ import SuperAdmin      from './Pages/SuperAdmin';
 import UserManagement  from './Pages/UserManagement';
 import { ShieldCheck, LogOut, Moon, Sun, Crown } from 'lucide-react';
 import './App.css';
-import './Normalize.css'
 
 axios.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
