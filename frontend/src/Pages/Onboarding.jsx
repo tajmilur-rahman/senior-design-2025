@@ -279,8 +279,8 @@ export default function Onboarding({ onComplete }) {
   // ── Choice screen ────────────────────────────────────────────────────────
   if (!choice) {
     return (
-      <div className="onboarding-backdrop" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
-        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+      <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
+        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
           <div className="onboarding-header">
             <div className="onboarding-icon">
               <Zap size={40} color="var(--accent)" />
@@ -289,7 +289,9 @@ export default function Onboarding({ onComplete }) {
             <h2 className="onboarding-title">How would you like to start?</h2>
             <p className="onboarding-subtitle">You can change this any time from the dashboard.</p>
           </div>
-          <LaunchChoiceStep onChoice={handleChoice} />
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            <LaunchChoiceStep onChoice={handleChoice} />
+          </div>
           <div style={{ marginTop: 18, textAlign: "center" }}>
             <button
               className="onboarding-skip-text"
@@ -306,8 +308,8 @@ export default function Onboarding({ onComplete }) {
 
   // ── Product tour ──────────────────────────────────────────────────────────
   return (
-    <div className="onboarding-backdrop" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
-      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+    <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
+      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
         <button className="onboarding-skip" onClick={handleTourDone} title="Skip tour">
           <X size={18} />
         </button>

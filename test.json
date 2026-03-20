@@ -1,0 +1,22 @@
+[
+  { "summary": "System crash on login page", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Memory leak in kernel", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Button color is slightly off", "predicted_severity": "S3", "actual_severity": "S5", "company_id": 2 },
+  { "summary": "User cannot reset password", "predicted_severity": "S2", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Database connection timeout", "predicted_severity": "S1", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Typo in footer text", "predicted_severity": "S3", "actual_severity": "S5", "company_id": 2 },
+  { "summary": "API returning 500 error", "predicted_severity": "S2", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Slow loading on mobile", "predicted_severity": "S3", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "Security vulnerability in SSL", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Logo is pixelated", "predicted_severity": "S3", "actual_severity": "S4", "company_id": 2 },
+  { "summary": "Search bar not working", "predicted_severity": "S2", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Dark mode toggle fails", "predicted_severity": "S3", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "CSV export missing columns", "predicted_severity": "S2", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "Null pointer exception on checkout", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Font size too small on tablet", "predicted_severity": "S3", "actual_severity": "S4", "company_id": 2 },
+  { "summary": "Payment gateway timeout", "predicted_severity": "S1", "actual_severity": "S1", "company_id": 2 },
+  { "summary": "Header disappears on scroll", "predicted_severity": "S3", "actual_severity": "S3", "company_id": 2 },
+  { "summary": "Broken link in help docs", "predicted_severity": "S3", "actual_severity": "S5", "company_id": 2 },
+  { "summary": "Incorrect tax calculation", "predicted_severity": "S1", "actual_severity": "S2", "company_id": 2 },
+  { "summary": "Translation missing for Spanish", "predicted_severity": "S3", "actual_severity": "S4", "company_id": 2 }
+]
