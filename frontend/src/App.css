@@ -99,12 +99,43 @@ body {
 .nav-link:hover { color: var(--text-main); }
 .nav-link.active { background: var(--card-bg); color: var(--accent); box-shadow: var(--shadow-sm); }
 .nav-right { display: flex; align-items: center; gap: 12px; }
-.user-pill { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 3px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 99px; }
+.user-pill { display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 3px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 99px; cursor: pointer; transition: border-color 0.2s; }
+.user-pill:hover { border-color: var(--accent); }
 .user-avatar-sm { width: 26px; height: 26px; background: var(--text-main); color: var(--bg); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .user-name { font-size: 12.5px; font-weight: 600; color: var(--text-main); }
 .icon-btn { background: none; border: none; cursor: pointer; padding: 6px; border-radius: 6px; transition: 0.2s; color: var(--text-sec); }
 .icon-btn:hover { background: var(--hover-bg); color: var(--text-main); }
-.nav-right .sys-btn.outline { padding: 5px 10px; font-size: 11.5px; letter-spacing: 0.2px; }
+
+/* ── User dropdown ─────────────────────────────────────────────────────────── */
+.user-pill-wrapper { position: relative; }
+.user-dropdown {
+  position: absolute; top: 100%; right: 0;
+  padding-top: 8px;
+  background: transparent;
+  min-width: 190px;
+  opacity: 0; pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 2000;
+}
+.user-dropdown-inner {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.user-pill-wrapper:hover .user-dropdown {
+  opacity: 1; pointer-events: auto; transform: translateY(0);
+}
+.user-dropdown-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 10px 14px;
+  background: none; border: none; font-family: var(--font-head);
+  font-size: 13px; font-weight: 600; color: var(--text-main);
+  cursor: pointer; text-align: left; transition: background 0.15s;
+}
+.user-dropdown-item:hover { background: var(--hover-bg); }
+.user-dropdown-item.danger { color: var(--danger); }
+.user-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CORE LAYOUT

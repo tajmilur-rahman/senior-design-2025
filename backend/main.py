@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import os, joblib, pandas as pd, io, csv
+import os, joblib, pandas as pd, io, csv, re
 import auth
 from database import supabase
 import ml_logic
@@ -91,6 +91,9 @@ class FeedbackPayload(BaseModel):
     actual_severity:    str
     confidence:         float = 0.0
     component:          str = "General"
+
+class ResolutionSearchRequest(BaseModel):
+    summary: str
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1129,3 +1132,54 @@ def superadmin_company_detail(
         "name": co.data["name"],
         "user_count": users_res.count or 0,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RESOLUTION SUPPORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/resolution-support/search")
+def search_resolution_support(payload: ResolutionSearchRequest):
+    query = payload.summary.strip()
+
+    if not query:
+        return {"results": []}
+
+    words = [w.lower() for w in re.split(r"\s+", query) if len(w) >= 3]
+
+    result = (
+        supabase.table("resolution_knowledge")
+        .select("*")
+        .limit(1000)
+        .execute()
+    )
+
+    rows = result.data or []
+    query_lower = query.lower()
+    scored = []
+
+    for row in rows:
+        summary = (row.get("summary") or "").lower()
+        component = (row.get("component") or "").lower()
+        resolution_text = (row.get("resolution_text") or "").lower()
+
+        score = 0
+
+        if query_lower in summary:
+            score += 10
+
+        for word in words:
+            if word in summary:
+                score += 3
+            if word in resolution_text:
+                score += 1
+            if word in component:
+                score += 1
+
+        if score > 0:
+            row["match_score"] = score
+            scored.append(row)
+
+    scored.sort(key=lambda x: x["match_score"], reverse=True)
+
+    return {"results": scored[:5]}

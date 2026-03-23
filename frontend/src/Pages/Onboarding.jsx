@@ -280,7 +280,7 @@ export default function Onboarding({ onComplete }) {
   if (!choice) {
     return (
       <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
-        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
           <div className="onboarding-header">
             <div className="onboarding-icon">
               <Zap size={40} color="var(--accent)" />
@@ -309,7 +309,7 @@ export default function Onboarding({ onComplete }) {
   // ── Product tour ──────────────────────────────────────────────────────────
   return (
     <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
-      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
         <button className="onboarding-skip" onClick={handleTourDone} title="Skip tour">
           <X size={18} />
         </button>

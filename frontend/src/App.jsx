@@ -9,9 +9,10 @@ import Login           from './Pages/Login';
 import Directory       from './Pages/Directory';
 import Onboarding      from './Pages/Onboarding';
 import Performance     from './Pages/Performance';
-import SuperAdmin      from './Pages/SuperAdmin';
-import UserManagement  from './Pages/UserManagement';
-import { ShieldCheck, LogOut, Moon, Sun, Crown } from 'lucide-react';
+import SuperAdmin        from './Pages/SuperAdmin';
+import UserManagement    from './Pages/UserManagement';
+import ResolutionSupport from './Pages/ResolutionSupport';
+import { ShieldCheck, LogOut, Moon, Sun, Crown, Users, ChevronDown } from 'lucide-react';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -23,12 +24,11 @@ axios.interceptors.request.use(async (config) => {
 const NAV_TABS = [
   { id: 'overview',    label: 'Overview' },
   { id: 'submit',      label: 'Severity Analysis' },
-  { id: 'performance', label: 'Performance',  adminOnly: true },
+  { id: 'performance', label: 'Performance', adminOnly: true },
   { id: 'analysis',    label: 'Analytics' },
   { id: 'directory',   label: 'Directory' },
   { id: 'database',    label: 'Database' },
-  { id: 'users',       label: 'Users',         adminOnly: true },
-  { id: 'superadmin',  label: 'Super Admin',   superAdminOnly: true },
+  { id: 'resolution',  label: 'Resolution' },
 ];
 
 const ROLE_CONFIG = {
@@ -106,24 +106,39 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
             <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
               {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
             </button>
-            <div className="user-pill">
-              <div className="user-avatar-sm">{(user?.username || 'U')[0].toUpperCase()}</div>
-              <span className="user-name">{user?.username || 'User'}</span>
-              <span style={{
-                fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4,
-                background: role.bg, color: role.color,
-                textTransform: 'uppercase', letterSpacing: 0.4,
-              }}>
-                {role.label}
-              </span>
+            <div className="user-pill-wrapper">
+              <div className="user-pill">
+                <div className="user-avatar-sm">{(user?.username || 'U')[0].toUpperCase()}</div>
+                <span className="user-name">{user?.username || 'User'}</span>
+                <span style={{
+                  fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4,
+                  background: role.bg, color: role.color,
+                  textTransform: 'uppercase', letterSpacing: 0.4,
+                }}>
+                  {role.label}
+                </span>
+                <ChevronDown size={13} style={{ color: 'var(--text-sec)', marginLeft: 2 }} />
+              </div>
+              <div className="user-dropdown">
+                <div className="user-dropdown-inner">
+                  {isAdmin && (
+                    <button className="user-dropdown-item" onClick={() => setTab('users')}>
+                      <Users size={14} /> Admin Panel
+                    </button>
+                  )}
+                  {isSuperAdmin && (
+                    <button className="user-dropdown-item" onClick={() => setTab('superadmin')}
+                      style={{ color: '#f59e0b' }}>
+                      <Crown size={14} /> Super Admin Panel
+                    </button>
+                  )}
+                  {(isAdmin || isSuperAdmin) && <div className="user-dropdown-divider" />}
+                  <button className="user-dropdown-item danger" onClick={onLogout}>
+                    <LogOut size={14} /> Sign out
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              className="sys-btn outline"
-              onClick={onLogout}
-              style={{ padding: '5px 10px', fontSize: 11.5, fontWeight: 600, gap: 5, borderRadius: 99 }}
-            >
-              <LogOut size={12} color="var(--text-sec)" /> Sign out
-            </button>
           </div>
         </div>
       </nav>
@@ -134,6 +149,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
         {tab === 'analysis'    && <BugAnalysis />}
         {tab === 'directory'   && <Directory    onNavigate={navigate} />}
         {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} onNavigate={navigate} />}
+        {tab === 'resolution'  && <ResolutionSupport />}
         {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
         {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin     user={user} />}
       </main>
