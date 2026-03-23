@@ -1,22 +1,38 @@
 import os, json, joblib, numpy as np, pandas as pd
 import random, re
-from config import META, FLAGS, ART_RF
+from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
 from scipy.sparse import hstack, csr_matrix        
 from sklearn.preprocessing import LabelEncoder   
 
 # --- 1. CORE LOGIC ---
-def load_pack(s=ART_RF):
+# Cache keyed by company_id (int) or "global"
+_model_cache: dict = {}
+
+
+def load_pack(company_id=None):
+    """Load model pack for a company or the global model. Uses in-memory cache."""
+    cache_key = company_id if company_id is not None else "global"
+    if cache_key in _model_cache:
+        return _model_cache[cache_key]
+
+    s = get_artifact_paths(company_id)
     try:
-        # Check if files actually exist
         if not os.path.exists(s['model']):
             print(f"⚠️ Model not found at {s['model']}. Using fallback mode.")
-            return None, None, None, {}
-
-        return joblib.load(s["model"]), joblib.load(s["vec"]), joblib.load(s["enc"]), json.load(
-            open(s["met"])) if os.path.exists(s["met"]) else {}
+            pack = (None, None, None, {})
+        else:
+            pack = (
+                joblib.load(s["model"]),
+                joblib.load(s["vec"]),
+                joblib.load(s["enc"]),
+                json.load(open(s["met"])) if os.path.exists(s["met"]) else {},
+            )
     except Exception as e:
-        print(f"Error loading model: {e}")
-        return None, None, None, {}
+        print(f"Error loading model (company_id={company_id}): {e}")
+        pack = (None, None, None, {})
+
+    _model_cache[cache_key] = pack
+    return pack
 
 
 def predict_internal(sum_text, meta_inputs, m, v, e):
@@ -111,15 +127,31 @@ def extract_keywords(text):
 
 
 # --- 3. API WRAPPER ---
-_loaded_pack = None
 
+def predict_severity(summary: str, component: str = "General", platform: str = "All", company_id=None):
+    """
+    Called by the Website API.
+    If company_id is provided and that company has its own model, use it.
+    Falls back to the global model if the company model doesn't exist.
+    Returns an extra 'model_source' key: 'company' | 'global'.
+    """
+    used_source = "global"
+    fallback = False
 
-def predict_severity(summary: str, component: str = "General", platform: str = "All"):
-    """Called by the Website API."""
-    global _loaded_pack
-    if _loaded_pack is None: _loaded_pack = load_pack()
+    # Try company model first if requested
+    if company_id is not None and company_model_exists(company_id):
+        m, v, e, _ = load_pack(company_id)
+        if m:
+            used_source = "company"
+        else:
+            # Company model files exist but failed to load — fall back
+            m, v, e, _ = load_pack(None)
+            fallback = True
+    else:
+        m, v, e, _ = load_pack(None)  # global model
+        if company_id is not None:
+            fallback = True  # was requested but doesn't exist yet
 
-    m, v, e, _ = _loaded_pack
     label, conf = None, 0.0
 
     # 1. Run ML Prediction
@@ -161,11 +193,13 @@ def predict_severity(summary: str, component: str = "General", platform: str = "
     keywords = extract_keywords(summary)
 
     return {
-        "prediction": label,
-        "confidence": conf,
-        "diagnosis": diagnosis,
-        "team": team,
-        "keywords": keywords
+        "prediction":   label,
+        "confidence":   conf,
+        "diagnosis":    diagnosis,
+        "team":         team,
+        "keywords":     keywords,
+        "model_source": used_source,
+        "fallback":     fallback,
     }
 
 def safe_transform(encoder, values):
@@ -176,22 +210,30 @@ def safe_transform(encoder, values):
     return encoder.transform(safe_vals)
 
 
-def fast_retrain(feedback_data: list) -> dict:
+def fast_retrain(feedback_data: list, company_id=None, progress_cb=None) -> dict:
     """
     Incrementally retrains the Random Forest using user feedback corrections.
     Uses warm_start to add new trees without discarding existing knowledge.
-    Called automatically after feedback is saved, or manually by admin.
 
-    feedback_data: list of dicts with keys:
-        summary, actual_severity, component (from feedback table)
+    company_id=None  → retrains the global model
+    company_id=<int> → retrains (or initializes) a company-specific model
+    progress_cb      → optional callable(step: str, pct: int) for SSE progress reporting
+
+    feedback_data: list of dicts with keys: summary, actual_severity, component
     """
-    global _loaded_pack
-    print("Starting fast retrain from feedback data...")
+    def _progress(step, pct):
+        if progress_cb:
+            try:
+                progress_cb(step, pct)
+            except Exception:
+                pass
 
-    # Step 1: Load current model artifacts
-    if _loaded_pack is None:
-        _loaded_pack = load_pack()
-    rf_model, tfidf, encoders, metrics = _loaded_pack
+    global _model_cache
+    print(f"Starting fast retrain (company_id={company_id})...")
+
+    # Step 1: Load current model artifacts (always start from global base)
+    _progress("Loading base model", 10)
+    rf_model, tfidf, encoders, metrics = load_pack(None)  # always base on global
 
     if not rf_model:
         return {"success": False, "error": "Base model not found. Run full training first."}
@@ -241,9 +283,11 @@ def fast_retrain(feedback_data: list) -> dict:
 
         # Step 5: Vectorize text using the LOCKED vocabulary
         # We use transform() not fit_transform() to keep vocab consistent
+        _progress("Vectorizing text features", 50)
         X_text = tfidf.transform(df["summary"])
 
         # Step 6: Encode metadata using existing encoders
+        _progress("Encoding metadata", 60)
         all_meta = cat_cols + extra_cols
         X_meta_list = []
         for c in all_meta:
@@ -263,6 +307,7 @@ def fast_retrain(feedback_data: list) -> dict:
 
         # Step 8: Incremental training using warm_start
         # warm_start=True keeps all existing trees and adds new ones
+        _progress("Training random forest", 70)
         rf_model.warm_start = True
         old_tree_count = rf_model.n_estimators
         rf_model.n_estimators += 10  # add 10 new trees per retrain
@@ -270,16 +315,37 @@ def fast_retrain(feedback_data: list) -> dict:
         print(f"Adding 10 new trees. Total: {old_tree_count} → {rf_model.n_estimators}")
         rf_model.fit(X_new, y_new)
 
-        # Step 9: Save updated model and force reload
-        from config import ART_RF
-        joblib.dump(rf_model, ART_RF["model"])
-        _loaded_pack = load_pack()  # force reload so next prediction uses new model
+        # Step 9: Determine save path (company-specific or global)
+        _progress("Saving model artifacts", 88)
+        artifact_paths = get_artifact_paths(company_id)
+        if company_id is not None:
+            # Ensure company model directory exists
+            company_dir = os.path.dirname(artifact_paths["model"])
+            os.makedirs(company_dir, exist_ok=True)
+
+        joblib.dump(rf_model, artifact_paths["model"])
+        # Also save the vectorizer and encoders so the company model is self-contained
+        joblib.dump(tfidf,    artifact_paths["vec"])
+        joblib.dump(encoders, artifact_paths["enc"])
+
+        # Invalidate cache so the next prediction uses the newly trained model
+        cache_key = company_id if company_id is not None else "global"
+        _model_cache.pop(cache_key, None)
+
+        # Mark company as having its own model in the DB
+        if company_id is not None:
+            try:
+                from database import supabase
+                supabase.table("companies").update({"has_own_model": True}).eq("id", company_id).execute()
+            except Exception as db_err:
+                print(f"[retrain] DB flag update failed: {db_err}")
 
         return {
-            "success": True,
-            "message": f"Model retrained on {len(df)} feedback corrections. Added 10 new trees.",
-            "total_trees": rf_model.n_estimators,
-            "records_used": len(df)
+            "success":      True,
+            "message":      f"Model retrained on {len(df)} feedback corrections. Added 10 new trees.",
+            "total_trees":  rf_model.n_estimators,
+            "records_used": len(df),
+            "company_id":   company_id,
         }
 
     except Exception as e:

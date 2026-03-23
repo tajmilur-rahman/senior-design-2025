@@ -50,6 +50,19 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         if res.data:
             return res.data[0]
 
+        # ── Check by email first (handles pre-invited users) ──────────────────
+        # Admins can pre-create rows with an email but no UUID yet.
+        # When the invited user signs up, we link their UUID to that row.
+        if user_email:
+            email_res = supabase.table("users").select("*").eq("email", user_email).execute()
+            if email_res.data:
+                row = email_res.data[0]
+                if not row.get("uuid"):
+                    # Link the UUID to the pre-invited row
+                    supabase.table("users").update({"uuid": user_uuid}).eq("email", user_email).execute()
+                    row["uuid"] = user_uuid
+                return row
+
         # ── Auto-provision ────────────────────────────────────────────────────
         # New Supabase Auth user signed up but doesn't have a users row yet.
         # We create one with a safe default. The onboarding flow will assign
@@ -72,6 +85,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             "is_admin":             False,
             "company_id":           None,      # NULL until onboarding assigns a company
             "onboarding_completed": False,
+            "status":               "pending", # must be approved by Super Admin
         }
 
         insert_res = supabase.table("users").insert(new_user).execute()
@@ -87,15 +101,28 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
-def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Dependency: allows admin and super_admin."""
+def require_active(current_user: dict = Depends(get_current_user)) -> dict:
+    """Dependency: blocks pending or inactive accounts from accessing data."""
+    status = current_user.get("status", "active")
+    if status == "pending":
+        raise HTTPException(status_code=403, detail="account_pending")
+    if status == "inactive":
+        raise HTTPException(status_code=403, detail="account_inactive")
+    return current_user
+
+
+def require_admin(current_user: dict = Depends(require_active)) -> dict:
+    """Dependency: allows active admin and super_admin."""
     if current_user.get("role") not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
 
 def require_super_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Dependency: allows only super_admin."""
+    """
+    Dependency: allows only super_admin.
+    Does NOT enforce require_active so super admin can always access approval endpoints.
+    """
     if current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super admin access required")
     return current_user

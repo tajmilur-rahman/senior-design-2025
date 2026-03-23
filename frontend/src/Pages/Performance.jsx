@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
     BrainCircuit, Target, Crosshair, Activity,
-    TrendingUp, Database, Clock, ShieldCheck, Zap, History, Globe, AlertCircle
+    TrendingUp, Database, Clock, ShieldCheck, Zap, History, Globe, AlertCircle,
+    PlayCircle, CheckCircle, XCircle, RefreshCw, Cpu, X
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis,
@@ -17,9 +18,20 @@ export default function Performance() {
       confusion_matrix: null,
       feedback_stats:   null,
   });
-  const [viewVersion, setViewVersion] = useState('enterprise');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [viewVersion,   setViewVersion]   = useState('enterprise');
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(null);
+  const [validating,    setValidating]    = useState(false);
+  const [validationRes, setValidationRes] = useState(null);
+
+  // SSE training modal state
+  const [trainModal,    setTrainModal]    = useState(false);
+  const [trainStep,     setTrainStep]     = useState('');
+  const [trainPct,      setTrainPct]      = useState(0);
+  const [trainDone,     setTrainDone]     = useState(false);
+  const [trainError,    setTrainError]    = useState(null);
+  const [trainResult,   setTrainResult]   = useState(null);
+  const esRef = useRef(null);
 
   const fallbackCurrent = {
       accuracy: 0.863, f1_score: 0.858, precision: 0.860, recall: 0.855,
@@ -64,6 +76,81 @@ export default function Performance() {
               });
           }
       } finally { setLoading(false); }
+  };
+
+  const handleValidate = async () => {
+    setValidating(true); setValidationRes(null);
+    try {
+      const res = await axios.post('/api/admin/model/validate');
+      setValidationRes(res.data);
+    } catch (e) {
+      setValidationRes({ success: false, message: e.response?.data?.detail || 'Validation failed.' });
+    } finally { setValidating(false); }
+  };
+
+  const handleTrainModel = async () => {
+    setTrainModal(true);
+    setTrainDone(false);
+    setTrainError(null);
+    setTrainResult(null);
+    setTrainStep('Initializing…');
+    setTrainPct(0);
+
+    // Start training
+    let streamUrl = '/api/admin/model/train/stream?stream_key=global';
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post('/api/admin/model/train/start', null, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.data?.success) {
+        setTrainError(res.data?.message || 'No corrections to train on.');
+        setTrainDone(true);
+        return;
+      }
+      streamUrl = res.data.stream_url || streamUrl;
+    } catch (e) {
+      setTrainError(e.response?.data?.detail || 'Could not start training.');
+      setTrainDone(true);
+      return;
+    }
+
+    // Subscribe to SSE progress stream (EventSource can't send auth headers — key is in URL)
+    const es = new EventSource(streamUrl);
+    esRef.current = es;
+
+    es.onmessage = (evt) => {
+      try {
+        const state = JSON.parse(evt.data);
+        setTrainStep(state.step || '');
+        setTrainPct(state.pct || 0);
+        if (state.done) {
+          setTrainDone(true);
+          setTrainError(state.error || null);
+          setTrainResult(state.result || null);
+          es.close();
+          if (!state.error) {
+            setTimeout(() => fetchMetrics(), 500);
+          }
+        }
+      } catch (_) {}
+    };
+
+    es.onerror = () => {
+      setTrainError('Connection to training stream lost.');
+      setTrainDone(true);
+      es.close();
+    };
+  };
+
+  const closeTrainModal = () => {
+    if (esRef.current) { esRef.current.close(); esRef.current = null; }
+    setTrainModal(false);
+    setTrainDone(false);
+    setTrainStep('');
+    setTrainPct(0);
+    setTrainError(null);
+    setTrainResult(null);
   };
 
   useEffect(() => { fetchMetrics(); }, []);
@@ -155,6 +242,7 @@ export default function Performance() {
   }
 
   return (
+    <>
     <div className="page-content fade-in" style={{ position: 'relative' }}>
       {/* Header */}
       <div className="explorer-header" style={{ marginBottom: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -374,6 +462,145 @@ export default function Performance() {
               </div>
           </div>
       </div>
+
+      {/* Train Model */}
+      <div className="sys-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Cpu size={15} color="#a78bfa" />
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>Train Company Model</span>
+              <span style={{ fontSize: 11, color: 'var(--text-sec)', marginLeft: 4 }}>Retrain on your feedback corrections</span>
+              <button
+                  onClick={handleTrainModel}
+                  style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: '#a78bfa', color: 'white', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                  <Cpu size={12} /> Train Model
+              </button>
+          </div>
+          <div style={{ padding: '14px 20px' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: 0 }}>
+                  Incrementally trains your company's model using feedback corrections. Each retrain adds new trees to the ensemble — your model improves without losing prior knowledge.
+              </p>
+          </div>
+      </div>
+
+      {/* Model Validation */}
+      <div className="sys-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ShieldCheck size={15} color="var(--accent)" />
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>Model Validation</span>
+              <span style={{ fontSize: 11, color: 'var(--text-sec)', marginLeft: 4 }}>Run against recent feedback corrections</span>
+              <button
+                  onClick={handleValidate}
+                  disabled={validating}
+                  style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: validating ? 'not-allowed' : 'pointer', opacity: validating ? 0.7 : 1 }}
+              >
+                  {validating ? <><RefreshCw size={12} className="spin" /> Running…</> : <><PlayCircle size={12} /> Run Validation</>}
+              </button>
+          </div>
+          <div style={{ padding: 20 }}>
+              {!validationRes ? (
+                  <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: 0 }}>
+                      Click "Run Validation" to benchmark the current model against user-corrected feedback records.
+                  </p>
+              ) : !validationRes.success ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>
+                      <AlertCircle size={14} /> {validationRes.message}
+                  </div>
+              ) : (
+                  <div className="fade-in">
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
+                          {[
+                              { label: 'Accuracy',       value: `${validationRes.accuracy}%`, color: validationRes.accuracy >= 70 ? 'var(--success)' : 'var(--danger)' },
+                              { label: 'Correct',        value: validationRes.correct,        color: 'var(--text-main)' },
+                              { label: 'Samples tested', value: validationRes.total,          color: 'var(--text-main)' },
+                          ].map(s => (
+                              <div key={s.label} style={{ padding: '12px 16px', background: 'var(--hover-bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{s.label}</div>
+                                  <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: 'var(--font-mono)' }}>{s.value}</div>
+                              </div>
+                          ))}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                          Sample results · via {validationRes.model_source} model
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {(validationRes.details || []).slice(0, 10).map((d, i) => (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 6, background: d.correct ? 'rgba(16,185,129,0.04)' : 'rgba(239,68,68,0.04)', border: `1px solid ${d.correct ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}` }}>
+                                  {d.correct ? <CheckCircle size={12} color="var(--success)" /> : <XCircle size={12} color="var(--danger)" />}
+                                  <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>Predicted <strong style={{ color: 'var(--text-main)' }}>{d.predicted}</strong> · Actual <strong style={{ color: d.correct ? 'var(--success)' : 'var(--danger)' }}>{d.actual}</strong></span>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+          </div>
+      </div>
     </div>
+
+    {/* SSE Training Modal */}
+    {trainModal && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: 'var(--card-bg)', borderRadius: 18, padding: '2rem 2.5rem', minWidth: 400, maxWidth: 500, width: '90vw', boxShadow: 'var(--glow)', position: 'relative' }}>
+          {trainDone && (
+            <button onClick={closeTrainModal} style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)' }}>
+              <X size={18} />
+            </button>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: trainError ? 'rgba(239,68,68,0.1)' : trainDone ? 'rgba(16,185,129,0.1)' : 'rgba(167,139,250,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {trainError ? <XCircle size={24} color="#ef4444" /> : trainDone ? <CheckCircle size={24} color="#10b981" /> : <Cpu size={24} color="#a78bfa" style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />}
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-main)' }}>
+                {trainError ? 'Training Failed' : trainDone ? 'Training Complete' : 'Training Model…'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 2 }}>{trainStep}</div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {!trainError && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>Progress</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{trainPct}%</span>
+              </div>
+              <div style={{ height: 8, borderRadius: 4, background: 'var(--hover-bg)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${trainPct}%`, background: trainDone ? '#10b981' : '#a78bfa', borderRadius: 4, transition: 'width 0.4s ease' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Result summary */}
+          {trainDone && !trainError && trainResult && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+              {[
+                { label: 'Records used',  value: trainResult.records_used },
+                { label: 'Total trees',   value: trainResult.total_trees  },
+              ].map(s => (
+                <div key={s.label} style={{ padding: '10px 14px', background: 'var(--hover-bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{s.label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {trainError && (
+            <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 16, padding: '10px 14px', background: 'rgba(239,68,68,0.06)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)' }}>
+              {trainError}
+            </div>
+          )}
+
+          {trainDone && (
+            <button onClick={closeTrainModal} style={{ width: '100%', padding: '10px', background: trainError ? '#ef4444' : 'var(--accent)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              {trainError ? 'Dismiss' : 'Done'}
+            </button>
+          )}
+        </div>
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      </div>
+    )}
+    </>
   );
 }

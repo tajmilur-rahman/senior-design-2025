@@ -7,11 +7,6 @@ import {
 import { supabase } from '../supabaseClient';
 import axios from 'axios';
 
-const ROLE_LABELS = {
-  user:        'Regular user',
-  admin:       'Company admin',
-  super_admin: 'System super admin',
-};
 
 function PasswordInput({ value, onChange, placeholder, required = true }) {
   const [visible, setVisible] = useState(false);
@@ -31,24 +26,6 @@ function PasswordInput({ value, onChange, placeholder, required = true }) {
         style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', display: 'flex', padding: 4, borderRadius: 4 }}>
         {visible ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
-    </div>
-  );
-}
-
-function RoleMismatchBanner({ roleError, onDismiss }) {
-  if (!roleError) return null;
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', marginBottom: 18, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 9, fontSize: 13, color: '#f59e0b', lineHeight: 1.6 }}>
-      <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-      <div style={{ flex: 1 }}>
-        <strong style={{ display: 'block', marginBottom: 3, color: '#f59e0b' }}>Access context mismatch</strong>
-        You selected <strong>"{ROLE_LABELS[roleError.selected] || roleError.selected}"</strong> but
-        your account has role <strong>"{ROLE_LABELS[roleError.actual] || roleError.actual}"</strong>.
-        {roleError.actual === 'super_admin'
-          ? ' Super admins can use any context — try signing in again.'
-          : ' Please select the correct context and sign in again.'}
-      </div>
-      <button onClick={onDismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f59e0b', padding: 2, flexShrink: 0, fontSize: 16, lineHeight: 1 }} aria-label="Dismiss">×</button>
     </div>
   );
 }
@@ -111,7 +88,7 @@ function InviteCodeInput({ value, onChange, validationState }) {
   );
 }
 
-export default function Login({ onLogin, theme, toggleTheme, roleError, onClearRoleError }) {
+export default function Login({ onLogin, theme, toggleTheme }) {
   const [mode, setMode]                       = useState('login');
   const [viewState, setViewState]             = useState('form');
   const [email, setEmail]                     = useState('');
@@ -123,7 +100,6 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
   const [inviteCode, setInviteCode]           = useState('');
   const [inviteValidation, setInviteValidation] = useState(null);
   const [mfaCode, setMfaCode]                 = useState('');
-  const [selectedRole, setSelectedRole]       = useState(localStorage.getItem('user_context_role') || 'user');
   const [msg, setMsg]                         = useState('');
   const [isLoading, setIsLoading]             = useState(false);
   const [isRecovery, setIsRecovery]           = useState(false);
@@ -183,7 +159,7 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
         if (factors?.totp?.length > 0) {
           setViewState('mfa_challenge');
         } else {
-          onLogin(data.user, selectedRole);
+          onLogin(data.user);
         }
 
       } else if (mode === 'register') {
@@ -266,7 +242,7 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
       const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: mfaCode });
       if (error) throw error;
       const { data: { user } } = await supabase.auth.getUser();
-      onLogin(user, selectedRole);
+      onLogin(user);
     } catch {
       setMsg('Invalid verification code. Please try again.');
     } finally {
@@ -279,8 +255,7 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
     setMsg(''); setEmail(''); setPassword(''); setConfirmPassword('');
     setCompanyName(''); setUsername(''); setMfaCode('');
     setInviteCode(''); setInviteValidation(null);
-    setSelectedRole('user'); setRegisterRole('user');
-    if (onClearRoleError) onClearRoleError();
+    setRegisterRole('user');
   };
 
   const headings = {
@@ -366,28 +341,7 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
               <h2 className="login-title">{headings[mode]}</h2>
               <p className="login-sub">{subheadings[mode]}</p>
 
-              <RoleMismatchBanner roleError={roleError} onDismiss={onClearRoleError} />
-
               <form onSubmit={handleAuth} className="modern-form">
-
-                {/* LOGIN: access context */}
-                {mode === 'login' && (
-                  <div className="input-group fade-in" style={{ marginBottom: 20 }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 8, textTransform: 'uppercase' }}>
-                      Access Context
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <ShieldCheck size={18} className="input-icon" style={{ opacity: 0.5 }} />
-                      <select className="sys-input login-input" value={selectedRole}
-                        onChange={e => { setSelectedRole(e.target.value); if (onClearRoleError) onClearRoleError(); }}
-                        style={{ appearance: 'auto', paddingLeft: 40, cursor: 'pointer' }}>
-                        <option value="user">Regular User</option>
-                        <option value="admin">Company Admin</option>
-                        <option value="super_admin">System Super Admin</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
 
                 {/* REGISTER: role toggle */}
                 {mode === 'register' && (
@@ -441,10 +395,22 @@ export default function Login({ onLogin, theme, toggleTheme, roleError, onClearR
                   <>
                     {/* Admin: company name */}
                     {registerRole === 'admin' && (
-                      <div className="input-group fade-in">
-                        <Building2 size={18} className="input-icon" style={{ opacity: 0.5 }} />
-                        <input className="sys-input login-input" placeholder="Company name" value={companyName}
-                          onChange={e => setCompanyName(e.target.value)} required />
+                      <div className="fade-in">
+                        <div className="input-group">
+                          <Building2 size={18} className="input-icon" style={{ opacity: 0.5 }} />
+                          <input className="sys-input login-input" placeholder="Company name" value={companyName}
+                            onChange={e => setCompanyName(e.target.value)} required />
+                        </div>
+                        {companyName && /[<>"';&|`\\{}]/.test(companyName) && (
+                          <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--danger)', fontWeight: 600 }}>
+                            Company name contains invalid characters.
+                          </p>
+                        )}
+                        {companyName && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(companyName) && (
+                          <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--danger)', fontWeight: 600 }}>
+                            Company name cannot be an email address.
+                          </p>
+                        )}
                       </div>
                     )}
 

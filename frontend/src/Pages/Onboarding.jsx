@@ -1,7 +1,9 @@
 import { useState } from "react";
+import axios from "axios";
+import { supabase } from "../supabaseClient";
 import {
   ShieldCheck, Brain, Upload, ArrowRight, ArrowLeft, X,
-  Zap, Database, PenTool
+  Zap, Database, PenTool, Download, CheckCircle, Loader
 } from "lucide-react";
 
 const DEMO_PREDICTIONS = {
@@ -24,8 +26,17 @@ const EXAMPLES   = [
 ];
 
 // ── First-launch choice screen ────────────────────────────────────────────────
-function LaunchChoiceStep({ onChoice }) {
+function LaunchChoiceStep({ onChoice, isAdmin }) {
   const choices = [
+    {
+      id: "populate",
+      icon: <Download size={26} color="#10b981" />,
+      title: "Populate with sample data",
+      desc: "Seed your company database with 5,000 real Mozilla bugs — ready to explore instantly.",
+      cta: "Seed my database",
+      badge: "Recommended",
+      adminOnly: true,
+    },
     {
       id: "submit",
       icon: <PenTool size={26} color="var(--accent)" />,
@@ -33,14 +44,16 @@ function LaunchChoiceStep({ onChoice }) {
       desc: "Jump straight in and start logging real bugs from the Severity Analysis tab.",
       cta: "Start fresh",
       badge: null,
+      adminOnly: false,
     },
     {
       id: "demo",
-      icon: <Database size={26} color="#10b981" />,
-      title: "Explore demo data",
+      icon: <Database size={26} color="#3b82f6" />,
+      title: "Explore Firefox demo data",
       desc: "Browse 220,000+ pre-loaded Mozilla Firefox bugs to see the full dashboard in action.",
       cta: "Show me around",
-      badge: "220k+ bugs loaded",
+      badge: "220k+ bugs",
+      adminOnly: false,
     },
     {
       id: "tour",
@@ -49,8 +62,9 @@ function LaunchChoiceStep({ onChoice }) {
       desc: "See how the AI severity predictor works with a short interactive walkthrough.",
       cta: "Take the tour",
       badge: null,
+      adminOnly: false,
     },
-  ];
+  ].filter(c => !c.adminOnly || isAdmin);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -253,17 +267,37 @@ const TOUR_STEPS = [
 // ── Main Onboarding component ─────────────────────────────────────────────────
 // onComplete(companyName, displayName, navigateTo)
 // navigateTo: optional tab ID to land on after onboarding ('submit', 'database', null)
-export default function Onboarding({ onComplete }) {
-  const [choice, setChoice] = useState(null);
-  const [step,   setStep]   = useState(0);
+export default function Onboarding({ onComplete, user }) {
+  const [choice,       setChoice]       = useState(null);
+  const [step,         setStep]         = useState(0);
+  const [seeding,      setSeeding]      = useState(false);   // loading state for populate
+  const [seedResult,   setSeedResult]   = useState(null);    // { count, error }
 
-  const handleChoice = (id) => {
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+
+  const handleChoice = async (id) => {
     if (id === "submit") {
-      // Go straight to Severity Analysis tab
       onComplete(null, null, "submit");
     } else if (id === "demo") {
-      // Go to Database tab — the Firefox data is already there
       onComplete(null, null, "database");
+    } else if (id === "populate") {
+      setChoice("populate");
+      setSeeding(true);
+      setSeedResult(null);
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
+        const res = await axios.post("/api/admin/seed_company_data", null, {
+          params: { sample_size: 5000 },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        setSeedResult({ count: res.data.count, message: res.data.message });
+      } catch (err) {
+        const msg = err.response?.data?.detail || "Seeding failed. You can try again from the Database tab.";
+        setSeedResult({ error: msg });
+      } finally {
+        setSeeding(false);
+      }
     } else {
       // Show the product tour carousel
       setChoice("tour");
@@ -275,6 +309,57 @@ export default function Onboarding({ onComplete }) {
 
   const cur    = TOUR_STEPS[step];
   const isLast = step === TOUR_STEPS.length - 1;
+
+  // ── Populate / seed screen ────────────────────────────────────────────────
+  if (choice === "populate") {
+    return (
+      <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", boxSizing: "border-box", background: "var(--bg-primary)" }}>
+        <div className="onboarding-card" style={{ width: "100%", maxWidth: "520px", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem", boxShadow: "var(--glow)", gap: 24, textAlign: "center" }}>
+          {seeding ? (
+            <>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(16,185,129,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Loader size={32} color="#10b981" style={{ animation: "spin 1s linear infinite" }} />
+              </div>
+              <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding your database…</h2>
+              <p className="onboarding-subtitle" style={{ margin: 0 }}>
+                Loading 5,000 sample bugs from Mozilla Firefox data. This takes a few seconds.
+              </p>
+            </>
+          ) : seedResult?.error ? (
+            <>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(239,68,68,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <X size={32} color="#ef4444" />
+              </div>
+              <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding failed</h2>
+              <p style={{ color: "var(--text-sec)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="onboarding-btn-back" onClick={() => { setChoice(null); setSeedResult(null); }}>
+                  <ArrowLeft size={15} /> Try again
+                </button>
+                <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database")}>
+                  Go to Dashboard <ArrowRight size={15} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(16,185,129,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle size={32} color="#10b981" />
+              </div>
+              <h2 className="onboarding-title" style={{ margin: 0 }}>Database ready!</h2>
+              <p className="onboarding-subtitle" style={{ margin: 0 }}>
+                {seedResult?.count ? `${seedResult.count.toLocaleString()} sample bugs` : "Sample bugs"} have been loaded into your company's database.
+              </p>
+              <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database")}>
+                Explore my database <ArrowRight size={15} />
+              </button>
+            </>
+          )}
+        </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   // ── Choice screen ────────────────────────────────────────────────────────
   if (!choice) {
@@ -290,7 +375,7 @@ export default function Onboarding({ onComplete }) {
             <p className="onboarding-subtitle">You can change this any time from the dashboard.</p>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-            <LaunchChoiceStep onChoice={handleChoice} />
+            <LaunchChoiceStep onChoice={handleChoice} isAdmin={isAdmin} />
           </div>
           <div style={{ marginTop: 18, textAlign: "center" }}>
             <button

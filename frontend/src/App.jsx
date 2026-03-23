@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import axios from 'axios';
 import BugAnalysis     from './Pages/BugAnalysis';
@@ -12,7 +12,10 @@ import Performance     from './Pages/Performance';
 import SuperAdmin        from './Pages/SuperAdmin';
 import UserManagement    from './Pages/UserManagement';
 import ResolutionSupport from './Pages/ResolutionSupport';
-import { ShieldCheck, LogOut, Moon, Sun, Crown, Users, ChevronDown } from 'lucide-react';
+import PendingApproval   from './Pages/PendingApproval';
+import ProfileSettings   from './Pages/ProfileSettings';
+import CompanyProfile    from './Pages/CompanyProfile';
+import { ShieldCheck, LogOut, Moon, Sun, Crown, Users, ChevronDown, UserCog } from 'lucide-react';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -29,6 +32,7 @@ const NAV_TABS = [
   { id: 'directory',   label: 'Directory' },
   { id: 'database',    label: 'Database' },
   { id: 'resolution',  label: 'Resolution' },
+  { id: 'company',     label: 'Company',     adminOnly: true },
 ];
 
 const ROLE_CONFIG = {
@@ -121,6 +125,9 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
               </div>
               <div className="user-dropdown">
                 <div className="user-dropdown-inner">
+                  <button className="user-dropdown-item" onClick={() => setTab('profile')}>
+                    <UserCog size={14} /> Profile Settings
+                  </button>
                   {isAdmin && (
                     <button className="user-dropdown-item" onClick={() => setTab('users')}>
                       <Users size={14} /> Admin Panel
@@ -132,7 +139,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
                       <Crown size={14} /> Super Admin Panel
                     </button>
                   )}
-                  {(isAdmin || isSuperAdmin) && <div className="user-dropdown-divider" />}
+                  <div className="user-dropdown-divider" />
                   <button className="user-dropdown-item danger" onClick={onLogout}>
                     <LogOut size={14} /> Sign out
                   </button>
@@ -152,6 +159,8 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
         {tab === 'resolution'  && <ResolutionSupport />}
         {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
         {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin     user={user} />}
+        {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={u => setUser(prev => ({ ...prev, ...u }))} />}
+        {tab === 'company'     && isAdmin       && <CompanyProfile  user={user} />}
       </main>
     </div>
   );
@@ -162,8 +171,10 @@ export default function App() {
   const [loading,        setLoading]        = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [initialTab,     setInitialTab]     = useState(null);
+  // Tracks whether onboarding has already been shown in this browser session.
+  // Prevents repeated SIGNED_IN events (token refresh, approval) from re-triggering it.
+  const onboardingShownRef = useRef(false);
   const [theme,          setTheme]          = useState(localStorage.getItem('theme') || 'dark');
-  const [loginError,     setLoginError]     = useState(null);
 
   const resolveContextRole = (dbRole) => {
     const saved = localStorage.getItem('user_context_role');
@@ -185,6 +196,7 @@ export default function App() {
         if (!session) {
           setUser(null);
           setShowOnboarding(false);
+          onboardingShownRef.current = false; // reset so next login re-evaluates
           return;
         }
 
@@ -206,11 +218,18 @@ export default function App() {
             company_id:           db.company_id,
             is_admin:             db.is_admin || false,
             onboarding_completed: db.onboarding_completed || false,
+            status:               db.status || 'active',
           });
-          // Show onboarding only right after an explicit sign-in event,
-          // never during initial session hydration on app load.
+          // Show onboarding only on the first explicit SIGNED_IN event per session.
+          // Supabase fires SIGNED_IN multiple times (token refresh, approval callback, etc.)
+          // so we guard with a ref — once decided, skip all subsequent SIGNED_IN triggers.
           if (!fromInitialSession && event === 'SIGNED_IN') {
-            setShowOnboarding(!db.onboarding_completed);
+            if (!db.onboarding_completed && !onboardingShownRef.current) {
+              onboardingShownRef.current = true;
+              setShowOnboarding(true);
+            } else {
+              setShowOnboarding(false);
+            }
           } else {
             setShowOnboarding(false);
           }
@@ -289,9 +308,7 @@ export default function App() {
     setUser(null); setShowOnboarding(false);
   };
 
-  const handleLogin = async (loginUser, selectedRole) => {
-    setLoginError(null);
-
+  const handleLogin = async (loginUser) => {
     // Read the authoritative role from DB — don't trust the JWT claim
     let dbRole = 'user';
     try {
@@ -299,23 +316,6 @@ export default function App() {
       dbRole = db?.role || 'user';
     } catch (err) {
       console.error('[App] handleLogin role fetch:', err);
-    }
-
-    const isSuperAdmin = dbRole === 'super_admin';
-
-    // Super admins can context-switch freely
-    if (isSuperAdmin) {
-      const contextRole = selectedRole || dbRole;
-      localStorage.setItem('user_context_role', contextRole);
-      setUser({ ...loginUser, role: dbRole, context_role: contextRole });
-      return;
-    }
-
-    // Non-super-admins: selected context must match DB role
-    if (selectedRole && selectedRole !== dbRole) {
-      await supabase.auth.signOut();
-      setLoginError({ selected: selectedRole, actual: dbRole });
-      return;
     }
 
     localStorage.setItem('user_context_role', dbRole);
@@ -346,9 +346,11 @@ export default function App() {
       onLogin={handleLogin}
       theme={theme}
       toggleTheme={toggleTheme}
-      roleError={loginError}
-      onClearRoleError={() => setLoginError(null)}
     />
+  );
+  // Block pending and inactive accounts before showing any dashboard content
+  if (user.status === 'pending' || user.status === 'inactive') return (
+    <PendingApproval user={user} onLogout={handleLogout} status={user.status} />
   );
   if (showOnboarding) return (
     <Onboarding onComplete={handleOnboardingComplete} user={user} />

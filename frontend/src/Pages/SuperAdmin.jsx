@@ -2,15 +2,24 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Crown, Building2, Bug, AlertTriangle, Users, TrendingUp,
-  RefreshCw, Globe, ShieldCheck, ChevronRight, Activity
+  RefreshCw, Globe, ShieldCheck, ChevronRight, Clock, CheckCircle, XCircle,
+  UserPlus, X
 } from 'lucide-react';
 
+const BLANK_USER = { email: '', username: '', role: 'user', company_id: '' };
+
 export default function SuperAdmin({ user }) {
-  const [companies, setCompanies] = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [usingDemo, setUsingDemo] = useState(false);
-  const [selected,  setSelected]  = useState(null);
-  const [error,     setError]     = useState(null);
+  const [companies,    setCompanies]    = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [usingDemo,    setUsingDemo]    = useState(false);
+  const [selected,     setSelected]     = useState(null);
+  const [error,        setError]        = useState(null);
+  const [pending,      setPending]      = useState([]);
+  const [actionMsg,    setActionMsg]    = useState('');
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [createForm,   setCreateForm]   = useState(BLANK_USER);
+  const [creating,     setCreating]     = useState(false);
+  const [createMsg,    setCreateMsg]    = useState(null); // { type, text }
 
   const DEMO = [
     { id: 1, name: 'Apex Demo Corp',    total: 222847, critical: 1203, resolved: 186400, users: 14, model_acc: 86.3, last_active: '2 min ago' },
@@ -22,20 +31,68 @@ export default function SuperAdmin({ user }) {
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const res = await axios.get('/api/superadmin/companies');
-      if (res.data && res.data.length > 0) {
-        setCompanies(res.data);
+      const [companiesRes, pendingRes] = await Promise.all([
+        axios.get('/api/superadmin/companies'),
+        axios.get('/api/superadmin/pending'),
+      ]);
+      if (companiesRes.data && companiesRes.data.length > 0) {
+        setCompanies(companiesRes.data);
         setUsingDemo(false);
       } else {
         setCompanies(DEMO);
         setUsingDemo(true);
       }
+      setPending(pendingRes.data || []);
     } catch (e) {
       setCompanies(DEMO);
       setUsingDemo(e.response?.status !== 403);
       if (e.response?.status === 403) setError('Super admin access required on this account.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApprove = async (uuid, username) => {
+    try {
+      await axios.patch(`/api/superadmin/users/${uuid}/approve`);
+      setActionMsg(`✓ ${username} approved.`);
+      setPending(p => p.filter(u => u.uuid !== uuid));
+      setTimeout(() => setActionMsg(''), 4000);
+    } catch (e) {
+      setActionMsg('Approval failed. Try again.');
+    }
+  };
+
+  const handleReject = async (uuid, username) => {
+    if (!window.confirm(`Reject ${username}? They will be marked inactive.`)) return;
+    try {
+      await axios.patch(`/api/superadmin/users/${uuid}/reject`);
+      setActionMsg(`${username} rejected.`);
+      setPending(p => p.filter(u => u.uuid !== uuid));
+      setTimeout(() => setActionMsg(''), 4000);
+    } catch (e) {
+      setActionMsg('Rejection failed. Try again.');
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    if (!createForm.company_id) { setCreateMsg({ type: 'error', text: 'Please select a company.' }); return; }
+    setCreating(true); setCreateMsg(null);
+    try {
+      const res = await axios.post('/api/superadmin/users/create', {
+        email:      createForm.email,
+        username:   createForm.username,
+        role:       createForm.role,
+        company_id: Number(createForm.company_id),
+      });
+      setCreateMsg({ type: 'success', text: res.data.message });
+      setCreateForm(BLANK_USER);
+      setTimeout(() => { setShowCreate(false); setCreateMsg(null); load(); }, 2500);
+    } catch (err) {
+      setCreateMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to create user.' });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -72,12 +129,20 @@ export default function SuperAdmin({ user }) {
             Global view across all registered organisations.
           </p>
         </div>
-        <button
-          onClick={load}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-sec)' }}
-        >
-          <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--accent)', border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'white' }}
+          >
+            <UserPlus size={13} /> Create User
+          </button>
+          <button
+            onClick={load}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-sec)' }}
+          >
+            <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -104,6 +169,65 @@ export default function SuperAdmin({ user }) {
           </div>
         ))}
       </div>
+
+      {/* Pending Approvals */}
+      {(pending.length > 0 || actionMsg) && (
+        <div className="sys-card fade-in" style={{ padding: 0, overflow: 'hidden', marginBottom: 24, border: '1px solid rgba(245,158,11,0.3)' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock size={15} color="#f59e0b" />
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>Pending Approvals</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>
+              {pending.length} awaiting review
+            </span>
+          </div>
+          {actionMsg && (
+            <div style={{ padding: '10px 20px', fontSize: 13, color: 'var(--success)', fontWeight: 600, background: 'rgba(16,185,129,0.06)', borderBottom: '1px solid var(--border)' }}>
+              {actionMsg}
+            </div>
+          )}
+          {pending.length === 0 && actionMsg ? null : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--hover-bg)', borderBottom: '1px solid var(--border)' }}>
+                  {['User', 'Email', 'Role', 'Company', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '10px 18px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map(u => (
+                  <tr key={u.uuid} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '12px 18px', fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>{u.username}</td>
+                    <td style={{ padding: '12px 18px', fontSize: 12, color: 'var(--text-sec)' }}>{u.email}</td>
+                    <td style={{ padding: '12px 18px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
+                        background: u.role === 'admin' ? 'rgba(99,102,241,0.1)' : 'var(--pill-bg)',
+                        color: u.role === 'admin' ? '#6366f1' : 'var(--accent)', textTransform: 'uppercase' }}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 18px', fontSize: 12, color: 'var(--text-sec)' }}>{u.company_name || '—'}</td>
+                    <td style={{ padding: '12px 18px' }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => handleApprove(u.uuid, u.username)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.08)', color: 'var(--success)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                          <CheckCircle size={12} /> Approve
+                        </button>
+                        <button onClick={() => handleReject(u.uuid, u.username)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)', color: 'var(--danger)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                          <XCircle size={12} /> Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Organisations table */}
       <div className="sys-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
@@ -180,6 +304,67 @@ export default function SuperAdmin({ user }) {
           </tbody>
         </table>
       </div>
+
+      {/* Create User Modal */}
+      {showCreate && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }} onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
+          <div className="sys-card fade-in" style={{ width: '100%', maxWidth: 440, padding: 28, position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+              <UserPlus size={17} color="var(--accent)" />
+              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-main)' }}>Create User</span>
+              <button onClick={() => setShowCreate(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', display: 'flex' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateUser}>
+              {[
+                { label: 'Email', key: 'email', type: 'email', placeholder: 'user@company.com' },
+                { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom: 14 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>{f.label}</label>
+                  <input className="sys-input" type={f.type} required placeholder={f.placeholder}
+                    value={createForm[f.key]}
+                    onChange={e => setCreateForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ fontSize: 13 }} />
+                </div>
+              ))}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>Role</label>
+                <select className="sys-input" value={createForm.role}
+                  onChange={e => setCreateForm(p => ({ ...p, role: e.target.value }))}
+                  style={{ fontSize: 13, height: 40, cursor: 'pointer' }}>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>Company</label>
+                <select className="sys-input" value={createForm.company_id} required
+                  onChange={e => setCreateForm(p => ({ ...p, company_id: e.target.value }))}
+                  style={{ fontSize: 13, height: 40, cursor: 'pointer' }}>
+                  <option value="" disabled>Select a company…</option>
+                  {companies.filter(c => c.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              {createMsg && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, fontSize: 13,
+                  color: createMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
+                  {createMsg.type === 'error' ? <AlertTriangle size={13} /> : <CheckCircle size={13} />}
+                  {createMsg.text}
+                </div>
+              )}
+              <button type="submit" disabled={creating} className="sys-btn"
+                style={{ width: '100%', justifyContent: 'center', opacity: creating ? 0.6 : 1 }}>
+                {creating ? <><RefreshCw size={13} className="spin" /> Creating…</> : <><UserPlus size={13} /> Create & Send Invite</>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Selected org detail */}
       {selected && (

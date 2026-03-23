@@ -3,7 +3,8 @@ import axios from 'axios';
 import {
   Users, Trash2, RefreshCw, UserX, Building2,
   AlertTriangle, CheckCircle, X, Crown, Globe,
-  KeyRound, Copy, RotateCcw, Eye, EyeOff
+  KeyRound, Copy, RotateCcw, Eye, EyeOff,
+  ShieldCheck, UserMinus, UserCheck, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
 
 function RoleBadge({ role }) {
@@ -238,6 +239,7 @@ export default function UserManagement({ currentUser }) {
   const [toDelete, setToDelete] = useState(null);
   const [toast,    setToast]    = useState({ text: '', type: '' });
   const [search,   setSearch]   = useState('');
+  const [actioning, setActioning] = useState(null); // uuid of user being acted on
 
   const myUuid       = currentUser?.uuid || currentUser?.id || null;
   const myRole       = currentUser?.role || 'user';
@@ -262,6 +264,35 @@ export default function UserManagement({ currentUser }) {
   }, [isSuperAdmin]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const handlePromote = async (u) => {
+    const newRole = u.role === 'admin' ? 'user' : 'admin';
+    const label   = newRole === 'admin' ? 'promote to Admin' : 'demote to User';
+    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${u.username}?`)) return;
+    setActioning(u.uuid);
+    try {
+      await axios.patch(`/api/admin/users/${u.uuid}`, { role: newRole });
+      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, role: newRole, is_admin: newRole === 'admin' } : x));
+      showToast(`${u.username} is now ${newRole === 'admin' ? 'an Admin' : 'a User'}.`);
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Role update failed.', 'error');
+    } finally { setActioning(null); }
+  };
+
+  const handleToggleStatus = async (u) => {
+    const isActive = (u.status || 'active') === 'active';
+    const action   = isActive ? 'deactivate' : 'reactivate';
+    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${u.username}?`)) return;
+    setActioning(u.uuid);
+    try {
+      await axios.patch(`/api/admin/users/${u.uuid}/${action}`);
+      const newStatus = isActive ? 'inactive' : 'active';
+      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: newStatus } : x));
+      showToast(`${u.username} ${isActive ? 'deactivated' : 'reactivated'}.`);
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Status update failed.', 'error');
+    } finally { setActioning(null); }
+  };
 
   const handleDeleteConfirm = async (deleteCompany) => {
     if (!toDelete) return;
@@ -349,7 +380,7 @@ export default function UserManagement({ currentUser }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 500 }}>
             <thead>
               <tr style={{ background: 'var(--hover-bg)', borderBottom: '1px solid var(--border)' }}>
-                {['User', 'Email', 'Role', isSuperAdmin ? 'Company' : null, 'Status', 'Action']
+                {['User', 'Email', 'Role', isSuperAdmin ? 'Company' : null, 'Status', 'Actions']
                   .filter(Boolean).map(h => (
                     <th key={h} style={{ padding: '12px 18px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
@@ -396,21 +427,58 @@ export default function UserManagement({ currentUser }) {
                     <td style={{ padding: '13px 18px' }}><RoleBadge role={u.role || 'user'} /></td>
                     {isSuperAdmin && <td style={{ padding: '13px 18px' }}><CompanyCell user={u} /></td>}
                     <td style={{ padding: '13px 18px' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: u.onboarding_completed ? 'rgba(16,185,129,0.1)' : 'var(--hover-bg)', color: u.onboarding_completed ? 'var(--success)' : 'var(--text-sec)', border: `1px solid ${u.onboarding_completed ? 'rgba(16,185,129,0.25)' : 'var(--border)'}` }}>
-                        {u.onboarding_completed ? 'Active' : 'Pending'}
-                      </span>
+                      {(() => {
+                        const st = u.status || 'active';
+                        const cfg = {
+                          active:   { label: 'Active',   color: 'var(--success)', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.25)' },
+                          pending:  { label: 'Pending',  color: '#f59e0b',         bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
+                          inactive: { label: 'Inactive', color: 'var(--text-sec)', bg: 'var(--hover-bg)',      border: 'var(--border)' },
+                        }[st] || { label: st, color: 'var(--text-sec)', bg: 'var(--hover-bg)', border: 'var(--border)' };
+                        return (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                            {cfg.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: '13px 18px' }}>
-                      <button
-                        onClick={() => { if (!isSelf) setToDelete(u); }}
-                        disabled={!!isSelf}
-                        title={isSelf ? 'You cannot delete your own account' : `Delete ${displayName}`}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: isSelf ? 'var(--hover-bg)' : 'rgba(239,68,68,0.06)', border: `1px solid ${isSelf ? 'var(--border)' : 'rgba(239,68,68,0.25)'}`, borderRadius: 7, cursor: isSelf ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, color: isSelf ? 'var(--text-sec)' : '#ef4444', fontFamily: 'var(--font-head)', transition: 'all 0.15s' }}
-                        onMouseEnter={e => { if (!isSelf) e.currentTarget.style.background = 'rgba(239,68,68,0.14)'; }}
-                        onMouseLeave={e => { if (!isSelf) e.currentTarget.style.background = 'rgba(239,68,68,0.06)'; }}
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {/* Promote / Demote — only for admin managing non-super-admin, non-self */}
+                        {!isSelf && u.role !== 'super_admin' && (
+                          <button
+                            onClick={() => handlePromote(u)}
+                            disabled={actioning === u.uuid}
+                            title={u.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: u.role === 'admin' ? 'rgba(245,158,11,0.07)' : 'rgba(99,102,241,0.07)', border: `1px solid ${u.role === 'admin' ? 'rgba(245,158,11,0.3)' : 'rgba(99,102,241,0.3)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: u.role === 'admin' ? '#f59e0b' : '#6366f1', fontFamily: 'var(--font-head)' }}
+                          >
+                            {u.role === 'admin' ? <ArrowDownCircle size={11} /> : <ArrowUpCircle size={11} />}
+                            {u.role === 'admin' ? 'Demote' : 'Promote'}
+                          </button>
+                        )}
+                        {/* Deactivate / Reactivate */}
+                        {!isSelf && u.role !== 'super_admin' && (
+                          <button
+                            onClick={() => handleToggleStatus(u)}
+                            disabled={actioning === u.uuid}
+                            title={(u.status || 'active') === 'active' ? 'Deactivate user' : 'Reactivate user'}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: (u.status || 'active') === 'active' ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.07)', border: `1px solid ${(u.status || 'active') === 'active' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.3)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: (u.status || 'active') === 'active' ? '#ef4444' : 'var(--success)', fontFamily: 'var(--font-head)' }}
+                          >
+                            {(u.status || 'active') === 'active' ? <UserMinus size={11} /> : <UserCheck size={11} />}
+                            {(u.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
+                          </button>
+                        )}
+                        {/* Delete */}
+                        {!isSelf && (
+                          <button
+                            onClick={() => setToDelete(u)}
+                            title={`Delete ${displayName}`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#ef4444', fontFamily: 'var(--font-head)' }}
+                          >
+                            <Trash2 size={11} /> Delete
+                          </button>
+                        )}
+                        {isSelf && <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>(you)</span>}
+                      </div>
                     </td>
                   </tr>
                 );

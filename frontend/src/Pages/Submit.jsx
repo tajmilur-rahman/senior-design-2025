@@ -4,7 +4,8 @@ import { mozillaTaxonomy } from '../javascript/taxonomy';
 import {
   UploadCloud, AlertCircle, FileText, PenTool,
   Cpu, CheckCircle, Send, Trash2, X,
-  FolderTree, Database, RefreshCw, ArrowRight, Info
+  FolderTree, Database, RefreshCw, ArrowRight, Info,
+  Globe, Building2, Zap, Lock
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
 
@@ -109,8 +110,16 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const [batches, setBatches] = useState([]);
   const [showGlossary, setShowGlossary] = useState(false);
   const [refreshingBugs, setRefreshingBugs] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState(null);
+  const [consentGlobal, setConsentGlobal] = useState(true);
+  const [hasOwnModel, setHasOwnModel] = useState(false);
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const pollIntervalRef = useRef(null);
   const newBugIdsRef = useRef(new Set());
+
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const showMsg = (text, type = 'success') => {
     setMsg({ text, type });
@@ -125,6 +134,22 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
       onClearPrefill?.();
     }
   }, [prefill, onClearPrefill]);
+
+  // Fetch company model status (for non-super-admin users with a company)
+  useEffect(() => {
+    if (!isSuperAdmin && user?.company_id) {
+      axios.get('/api/admin/company_profile').then(res => {
+        setHasOwnModel(res.data?.has_own_model || false);
+      }).catch(() => {});
+    }
+  }, [isSuperAdmin, user?.company_id]);
+
+  // Fetch companies list for super admin bug creation
+  useEffect(() => {
+    if (isSuperAdmin) {
+      axios.get('/api/companies/list').then(res => setCompanies(res.data || [])).catch(() => {});
+    }
+  }, [isSuperAdmin]);
 
   const teams = Object.keys(mozillaTaxonomy || {});
   const categories = team ? Object.keys(mozillaTaxonomy[team] || {}) : [];
@@ -162,14 +187,33 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
   useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }, []);
 
+  const handleAnalyze = async (source) => {
+    if (!summary) { showMsg('Please enter a bug summary first.', 'error'); return; }
+    setAnalyzing(true);
+    setAnalyzeResult(null);
+    try {
+      const res = await axios.get('/api/analyze_bug', {
+        params: { bug_text: summary, model_source: source },
+      });
+      setAnalyzeResult({ ...res.data?.severity, _source: source });
+    } catch (err) {
+      showMsg(err.response?.data?.detail || 'Analysis failed', 'error');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const handleManualSubmit = async () => {
     if (!summary) { showMsg('Please enter a bug summary.', 'error'); return; }
     if (!component) { showMsg('Please select a component.', 'error'); return; }
+    if (isSuperAdmin && !selectedCompanyId) { showMsg('Super Admin: please select a company.', 'error'); return; }
     setLoading(true);
     const tempId = `pending-${Date.now()}`;
     setBugs(prev => [{ id: tempId, summary, component, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
     try {
-      const response = await axios.post('/api/bug', { summary, component, severity, status: 'NEW' });
+      const payload = { summary, component, severity, status: 'NEW' };
+      if (isSuperAdmin && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
+      const response = await axios.post('/api/bug', payload);
       const realId = response.data?.[0]?.bug_id || response.data?.[0]?.id;
       if (realId) {
         newBugIdsRef.current.add(String(realId));
@@ -323,9 +367,102 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   )}
                 </div>
 
+                {/* Super Admin: company selector */}
+                {isSuperAdmin && (
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <Building2 size={13} color="var(--accent)" />
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1 }}>Company</span>
+                      <span style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 700, background: 'rgba(239,68,68,0.08)', padding: '1px 6px', borderRadius: 4 }}>required</span>
+                    </div>
+                    <select className="sys-input" value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)}
+                      style={{ height: 44, fontSize: 13, width: '100%', cursor: 'pointer' }}>
+                      <option value="" disabled>Select a company…</option>
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* AI Severity Analysis */}
+                <div style={{ marginBottom: 18, padding: '14px 16px', background: 'var(--hover-bg)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>AI Severity Analysis</div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: analyzeResult ? 12 : 0 }}>
+                    <button
+                      onClick={() => handleAnalyze('universal')}
+                      disabled={analyzing || !summary}
+                      style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '9px 0', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: (!summary || analyzing) ? 'not-allowed' : 'pointer',
+                        background: 'var(--accent)', color: 'white', border: 'none', opacity: (!summary || analyzing) ? 0.5 : 1,
+                      }}>
+                      <Globe size={13} /> Universal Model
+                    </button>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <button
+                        onClick={() => hasOwnModel && handleAnalyze('company')}
+                        disabled={analyzing || !summary || !hasOwnModel}
+                        title={!hasOwnModel ? 'Train your company model first via the Retrain button' : undefined}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: '9px 0', borderRadius: 7, fontSize: 12, fontWeight: 700,
+                          cursor: (!summary || analyzing || !hasOwnModel) ? 'not-allowed' : 'pointer',
+                          background: hasOwnModel ? '#6366f1' : 'var(--hover-bg)', color: hasOwnModel ? 'white' : 'var(--text-sec)',
+                          border: `1px solid ${hasOwnModel ? '#6366f1' : 'var(--border)'}`, opacity: (!summary || !hasOwnModel) ? 0.6 : 1,
+                        }}>
+                        {hasOwnModel ? <Zap size={13} /> : <Lock size={13} />} Company Model
+                      </button>
+                    </div>
+                  </div>
+
+                  {analyzeResult && (
+                    <div className="fade-in" style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <SevBadge sev={analyzeResult.prediction} />
+                        <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                          {Math.round((analyzeResult.confidence || 0) * 100)}% confidence
+                        </span>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: analyzeResult.fallback ? '#f59e0b' : 'var(--text-sec)', fontWeight: 600 }}>
+                          via {analyzeResult.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}
+                          {analyzeResult.fallback ? ' (fallback)' : ''}
+                        </span>
+                      </div>
+                      {analyzeResult.diagnosis && (
+                        <div style={{ color: 'var(--text-sec)', marginBottom: 4 }}>
+                          <span style={{ fontWeight: 600 }}>Diagnosis:</span> {analyzeResult.diagnosis}
+                        </div>
+                      )}
+                      {analyzeResult.team && (
+                        <div style={{ color: 'var(--text-sec)' }}>
+                          <span style={{ fontWeight: 600 }}>Suggested team:</span> {analyzeResult.team}
+                        </div>
+                      )}
+                      {analyzeResult.keywords?.length > 0 && (
+                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {analyzeResult.keywords.map(k => (
+                            <span key={k} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: 'var(--pill-bg)', color: 'var(--accent)', fontWeight: 600 }}>{k}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Consent checkbox */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 18, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={consentGlobal}
+                    onChange={e => setConsentGlobal(e.target.checked)}
+                    style={{ marginTop: 2, accentColor: 'var(--accent)', width: 14, height: 14, flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                    Allow this report to improve the <strong style={{ color: 'var(--text-main)' }}>Universal Model</strong> (shared across all companies)
+                  </span>
+                </label>
+
                 <button className="sys-btn" onClick={handleManualSubmit}
-                  disabled={loading || !summary || !component}
-                  style={{ width: '100%', justifyContent: 'center', padding: '12px 0', fontSize: 13, opacity: (!summary || !component) ? 0.5 : 1 }}>
+                  disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}
+                  style={{ width: '100%', justifyContent: 'center', padding: '12px 0', fontSize: 13, opacity: (!summary || !component || (isSuperAdmin && !selectedCompanyId)) ? 0.5 : 1 }}>
                   {loading ? <><RefreshCw size={13} className="spin" /> Submitting…</> : <><Send size={13} /> Submit bug</>}
                 </button>
               </div>

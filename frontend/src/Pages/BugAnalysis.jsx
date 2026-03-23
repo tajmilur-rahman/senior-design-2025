@@ -32,7 +32,9 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
     setAnalyzing(true); setError(null); setPrediction(null); setFeedbackSent(false); setShowCorrection(false);
     if (overrideQuery) setQuery(overrideQuery);
     try {
-      const res = await axios.post(`/api/analyze_bug?bug_text=${encodeURIComponent(text)}&model=${selectedModel}`);
+      const res = await axios.get('/api/analyze_bug', {
+        params: { bug_text: text, model_source: 'universal' },
+      });
       setPrediction(res.data.severity);
       setDuplicates(res.data.similar_bugs || []);
     } catch (err) {
@@ -51,13 +53,13 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
     if (!prediction) return;
     setSubmittingFeedback(true);
     try {
-      await axios.post('/api/feedback', { summary: query, predicted_severity: prediction.label, actual_severity: correctedSev, confidence: prediction.confidence || 0.85, component: 'General' });
+      await axios.post('/api/feedback', { summary: query, predicted_severity: prediction.prediction, actual_severity: correctedSev, confidence: prediction.confidence || 0.6, component: 'General', consent_global_model: true });
       setFeedbackSent(true); setShowCorrection(false);
     } catch { setFeedbackSent(true); setShowCorrection(false); }
     finally { setSubmittingFeedback(false); }
   };
 
-  const sevDef = SEVERITY_DEFS.find(d => d.code === prediction?.label);
+  const sevDef = SEVERITY_DEFS.find(d => d.code === prediction?.prediction);
 
   return (
     <div style={{ maxWidth: 780, margin: '0 auto', padding: '36px 24px', minHeight: 'calc(100vh - 100px)' }} className="fade-in">
@@ -170,12 +172,13 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <span style={{ padding: '6px 20px', borderRadius: 9, fontSize: 22, fontWeight: 800, background: sevDef?.bg || 'var(--hover-bg)', color: sevDef?.color || 'var(--text-main)', border: `2px solid ${sevDef?.border || 'var(--border)'}`, fontFamily: 'var(--font-mono)' }}>
-                {prediction.label}
+                {prediction.prediction}
               </span>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: sevDef?.color || 'var(--text-main)', marginBottom: 3 }}>{sevDef?.label}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-sec)' }}>
-                  Confidence: <strong style={{ color: 'var(--text-main)' }}>{prediction.confidence}%</strong>
+                  Confidence: <strong style={{ color: 'var(--text-main)' }}>{Math.round((prediction.confidence || 0) * 100)}%</strong>
+                  {prediction.model_source && <span style={{ marginLeft: 8, opacity: 0.7 }}>via {prediction.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}</span>}
                 </div>
               </div>
             </div>
@@ -184,7 +187,7 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
 
             <div style={{ padding: '12px 16px', background: sevDef?.bg || 'var(--hover-bg)', borderRadius: 8, borderLeft: `3px solid ${sevDef?.color || 'var(--border)'}`, marginBottom: prediction && !feedbackSent ? 16 : 0 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Recommended action</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{prediction.action}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{sevDef?.action || prediction.diagnosis}</div>
             </div>
 
             {/* Feedback */}

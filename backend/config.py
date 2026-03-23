@@ -11,15 +11,42 @@ DB = {
 
 # --- ML ARTIFACT PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# FIX: Go up one level (..) to find the folder in the root directory
+# Go up one level to find the global model folder in the root directory
 ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "Random Forest ML"))
+# Company-specific models are stored under backend/models/company_<id>/
+COMPANY_MODELS_DIR = os.path.join(BASE_DIR, "models")
 
+# Global (universal) model artifacts — backward-compatible
 ART_RF = {
     "model": os.path.join(ML_DIR, "rf_model.pkl"),
-    "vec": os.path.join(ML_DIR, "tfidf_vectorizer.pkl"),
-    "enc": os.path.join(ML_DIR, "label_encoders.pkl"),
-    "met": os.path.join(ML_DIR, "rf_metrics.json")
+    "vec":   os.path.join(ML_DIR, "tfidf_vectorizer.pkl"),
+    "enc":   os.path.join(ML_DIR, "label_encoders.pkl"),
+    "met":   os.path.join(ML_DIR, "rf_metrics.json"),
 }
+
+
+def get_artifact_paths(company_id=None) -> dict:
+    """
+    Returns ML artifact paths for either the global model (company_id=None)
+    or a company-specific model (company_id=<int>).
+    Company models are stored under backend/models/company_<id>/.
+    """
+    if company_id is None or company_id == "global":
+        return ART_RF  # global model (existing location unchanged)
+
+    company_dir = os.path.join(COMPANY_MODELS_DIR, f"company_{company_id}")
+    return {
+        "model": os.path.join(company_dir, "rf_model.pkl"),
+        "vec":   os.path.join(company_dir, "tfidf_vectorizer.pkl"),
+        "enc":   os.path.join(company_dir, "label_encoders.pkl"),
+        "met":   os.path.join(company_dir, "rf_metrics.json"),
+    }
+
+
+def company_model_exists(company_id) -> bool:
+    """Returns True if a trained model exists for the given company."""
+    paths = get_artifact_paths(company_id)
+    return os.path.exists(paths["model"]) and os.path.exists(paths["vec"])
 
 # --- ML CONSTANTS ---
 META = ["component", "product", "priority", "platform", "op_sys", "type", "resolution", "status"]
