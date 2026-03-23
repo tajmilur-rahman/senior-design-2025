@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import time
+import urllib.request
 
 def kill_port(port):
     """Finds and kills any process using the specified port on Windows."""
@@ -37,6 +38,17 @@ def main():
         [sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
         cwd="backend"
     )
+
+    # Wait for backend to be ready before starting frontend
+    print("-> Waiting for backend to be ready...", end="", flush=True)
+    for _ in range(30):
+        try:
+            urllib.request.urlopen("http://localhost:8000/docs", timeout=1)
+            break
+        except Exception:
+            time.sleep(1)
+            print(".", end="", flush=True)
+    print(" ready!")
 
     # Step 3: Start React Frontend
     print("-> Starting React Frontend...")

@@ -508,8 +508,35 @@ async def create_bug(request: BugPayload, current_user: dict = Depends(auth.get_
 
 @app.delete("/api/bug/{bug_id}")
 async def delete_bug(bug_id: int, current_user: dict = Depends(auth.get_current_user)):
+    import requests as http_requests
+    from database import SUPABASE_URL, SUPABASE_KEY
+
     cid = current_user.get("company_id")
-    supabase.table("bugs").delete().eq("bug_id", bug_id).eq("company_id", cid).execute()
+    table = get_company_table(cid)
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Prefer": "return=representation",
+    }
+    true_role = current_user.get("role")
+    params = {"bug_id": f"eq.{bug_id}"}
+    # Only scope by company_id for non-shared tables AND non-super_admins
+    if not is_shared_table(table) and true_role != "super_admin":
+        params["company_id"] = f"eq.{cid}"
+
+    resp = http_requests.delete(
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        headers=headers,
+        params=params,
+    )
+    print(f"[delete] table={table} bug_id={bug_id} status={resp.status_code} body={resp.text[:200]}")
+
+    if not resp.ok:
+        raise HTTPException(status_code=500, detail=f"DB error: {resp.text}")
+    if not resp.json():
+        raise HTTPException(status_code=404, detail="Bug not found")
+
     return {"message": "Bug deleted"}
 
 

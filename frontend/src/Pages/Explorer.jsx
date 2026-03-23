@@ -16,7 +16,7 @@ function statusColor(status) {
     return 'var(--text-sec)';
 }
 
-function CustomSelect({ value, onChange, options, placeholder }) {
+function CustomSelect({ value, onChange, options, placeholder, dropUp = false }) {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
     useEffect(() => {
@@ -39,7 +39,14 @@ function CustomSelect({ value, onChange, options, placeholder }) {
             </div>
             {open && (
                 <div style={{
-                    position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 1000,
+                    position: 'fixed',
+                    width: ref.current ? ref.current.offsetWidth : 'auto',
+                    left: ref.current ? ref.current.getBoundingClientRect().left : 0,
+                    ...(dropUp
+                        ? { bottom: window.innerHeight - (ref.current ? ref.current.getBoundingClientRect().top : 0) + 6 }
+                        : { top: ref.current ? ref.current.getBoundingClientRect().bottom + 6 : 0 }
+                    ),
+                    zIndex: 9999,
                     background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10,
                     boxShadow: '0 20px 40px rgba(0,0,0,0.2)', overflow: 'hidden',
                 }}>
@@ -310,7 +317,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                 <div className="table-footer">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>Rows per page</span>
-                        <div style={{ width: 108 }}><CustomSelect value={itemsPerPage} onChange={v => { setItemsPerPage(Number(v)); setPage(1); }} options={perPageOptions} placeholder="10 rows" /></div>
+                        <div style={{ width: 108 }}><CustomSelect value={itemsPerPage} onChange={v => { setItemsPerPage(Number(v)); setPage(1); }} options={perPageOptions} placeholder="10 rows" dropUp={true} /></div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>

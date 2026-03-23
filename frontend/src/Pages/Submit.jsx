@@ -184,9 +184,16 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   };
 
   const handleDeleteBug = async (bugId) => {
-    setBugs(prev => prev.filter(b => b.id !== bugId)); newBugIdsRef.current.delete(String(bugId));
-    try { await axios.delete(`/api/bug/${bugId}`); showMsg('Bug removed'); }
-    catch { showMsg('Could not remove bug', 'error'); fetchBugs(); }
+    setBugs(prev => prev.filter(b => b.id !== bugId));
+    newBugIdsRef.current.delete(String(bugId));
+    try {
+      await axios.delete(`/api/bug/${bugId}`);
+      showMsg('Bug removed');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Could not remove bug';
+      showMsg(msg, 'error');
+      fetchBugs();
+    }
   };
 
   const handleDeleteBatch = async (batchId) => {
