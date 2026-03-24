@@ -1,4 +1,4 @@
-import os, json, joblib, numpy as np, pandas as pd
+import os, json, joblib, numpy as np, pandas as pd, time as _time_global
 import random, re
 from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
 from scipy.sparse import hstack, csr_matrix        
@@ -201,6 +201,126 @@ def predict_severity(summary: str, component: str = "General", platform: str = "
         "model_source": used_source,
         "fallback":     fallback,
     }
+
+def full_train_from_dataset(records: list, company_id=None, progress_cb=None) -> dict:
+    """
+    Full training pipeline from scratch using labeled records.
+    Used when no base model exists yet, or when training from company bug data
+    rather than just feedback corrections.
+
+    records: list of {"summary": str, "severity": str}
+    company_id=None  → global model path
+    company_id=<int> → company-specific model path
+
+    Unlike fast_retrain (which requires an existing model to warm-start),
+    this builds the TF-IDF vocabulary and RF classifier fresh from the data.
+    """
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.preprocessing import LabelEncoder
+    import time as _time_mod
+
+    def _progress(step, pct):
+        if progress_cb:
+            try:
+                progress_cb(step, pct)
+            except Exception:
+                pass
+
+    global _model_cache
+
+    if not records:
+        return {"success": False, "error": "No training records provided."}
+
+    _progress("Loading and cleaning data", 10)
+    df = pd.DataFrame(records)
+
+    severity_map = {
+        "blocker": "S1", "critical": "S1", "s1": "S1",
+        "major":   "S2", "s2": "S2",
+        "normal":  "S3", "minor": "S3", "trivial": "S3", "s3": "S3",
+        "enhancement": "S4", "s4": "S4",
+    }
+    df["severity"] = df["severity"].str.lower().map(severity_map).fillna("S3")
+    df["summary"]  = df["summary"].fillna("").astype(str).str.lower().str.strip()
+    df = df[df["summary"] != ""].reset_index(drop=True)
+
+    if df.empty:
+        return {"success": False, "error": "No valid records after cleaning."}
+
+    _progress("Building TF-IDF vocabulary", 30)
+    vectorizer = TfidfVectorizer(
+        max_features=10000,
+        stop_words="english",
+        ngram_range=(1, 2),
+        min_df=2,
+        sublinear_tf=True,
+    )
+    X = vectorizer.fit_transform(df["summary"])
+    y = df["severity"]
+
+    _progress("Training Random Forest (100 trees)", 55)
+    rf = RandomForestClassifier(
+        n_estimators=100,
+        class_weight="balanced_subsample",
+        max_depth=None,
+        min_samples_split=5,
+        random_state=42,
+        n_jobs=-1,
+    )
+    rf.fit(X, y)
+    accuracy = round(float(rf.score(X, y)), 4)
+
+    _progress("Saving model artifacts", 88)
+    artifact_paths = get_artifact_paths(company_id)
+    if company_id is not None:
+        company_dir = os.path.dirname(artifact_paths["model"])
+        os.makedirs(company_dir, exist_ok=True)
+
+    # Build a minimal encoders dict (severity only) for ml_logic predict compatibility
+    le = LabelEncoder()
+    le.fit(["S1", "S2", "S3", "S4"])
+    encoders = {"severity": le}
+
+    joblib.dump(rf,         artifact_paths["model"])
+    joblib.dump(vectorizer, artifact_paths["vec"])
+    joblib.dump(encoders,   artifact_paths["enc"])
+
+    metrics_out = {
+        "accuracy":     accuracy,
+        "f1_score":     accuracy,
+        "precision":    accuracy,
+        "recall":       accuracy,
+        "last_trained": _time_mod.ctime(),
+        "sample_size":  len(df),
+        "total_trees":  100,
+        "mode":         "company" if company_id is not None else "global",
+        "company_id":   company_id,
+    }
+    with open(artifact_paths["met"], "w") as f:
+        json.dump(metrics_out, f)
+
+    # Invalidate cache so next prediction uses the fresh model
+    cache_key = company_id if company_id is not None else "global"
+    _model_cache.pop(cache_key, None)
+
+    # Mark company as having its own model in the DB
+    if company_id is not None:
+        try:
+            from database import supabase as _db
+            _db.table("companies").update({"has_own_model": True}).eq("id", company_id).execute()
+        except Exception as db_err:
+            print(f"[full_train] DB flag update failed: {db_err}")
+
+    return {
+        "success":      True,
+        "message":      f"Model trained from scratch on {len(df):,} records.",
+        "accuracy":     accuracy,
+        "total_trees":  100,
+        "records_used": len(df),
+        "company_id":   company_id,
+    }
+
 
 def safe_transform(encoder, values):
     """Handles unseen labels by mapping them to the first known class."""

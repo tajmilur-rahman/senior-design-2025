@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShieldCheck, CheckCircle, Mail, Lock, ArrowRight,
   Activity, Sun, Moon, Eye, EyeOff, Building2,
-  AlertTriangle, User, KeyRound, Loader
+  AlertTriangle, User
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import axios from 'axios';
@@ -30,64 +30,6 @@ function PasswordInput({ value, onChange, placeholder, required = true }) {
   );
 }
 
-// ── Invite code input with live validation ────────────────────────────────────
-function InviteCodeInput({ value, onChange, validationState }) {
-  // validationState: null | 'checking' | { valid: true, company_name } | { valid: false }
-  const borderColor = validationState?.valid === true
-    ? 'rgba(16,185,129,0.6)'
-    : validationState?.valid === false
-    ? 'rgba(239,68,68,0.5)'
-    : 'var(--border)';
-
-  return (
-    <div>
-      <div className="input-group" style={{ position: 'relative' }}>
-        <KeyRound size={18} className="input-icon" style={{ opacity: 0.5 }} />
-        <input
-          className="sys-input login-input"
-          placeholder="Company invite code (e.g. AB12CD34)"
-          value={value}
-          onChange={e => onChange(e.target.value.toUpperCase())}
-          required
-          maxLength={12}
-          style={{
-            paddingRight: 40,
-            border: `1.5px solid ${borderColor}`,
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: value ? 2 : 0,
-            textTransform: 'uppercase',
-            transition: 'border-color 0.2s',
-          }}
-        />
-        {/* Status indicator on the right */}
-        <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}>
-          {validationState === 'checking' && <Loader size={14} color="var(--text-sec)" className="spin" />}
-          {validationState?.valid === true  && <CheckCircle size={14} color="var(--success)" />}
-          {validationState?.valid === false && <AlertTriangle size={14} color="var(--danger)" />}
-        </div>
-      </div>
-
-      {/* Live feedback below the field */}
-      {validationState?.valid === true && (
-        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>
-          <Building2 size={12} />
-          Joining: <strong>{validationState.company_name}</strong>
-        </div>
-      )}
-      {validationState?.valid === false && value.length >= 4 && (
-        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
-          Invalid code — check with your company admin.
-        </div>
-      )}
-      {!validationState && (
-        <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
-          Ask your company admin for this code. It controls which company you join.
-        </p>
-      )}
-    </div>
-  );
-}
-
 export default function Login({ onLogin, theme, toggleTheme }) {
   const [mode, setMode]                       = useState('login');
   const [viewState, setViewState]             = useState('form');
@@ -97,13 +39,15 @@ export default function Login({ onLogin, theme, toggleTheme }) {
   const [companyName, setCompanyName]         = useState('');
   const [username, setUsername]               = useState('');
   const [registerRole, setRegisterRole]       = useState('user');
-  const [inviteCode, setInviteCode]           = useState('');
-  const [inviteValidation, setInviteValidation] = useState(null);
   const [mfaCode, setMfaCode]                 = useState('');
   const [msg, setMsg]                         = useState('');
   const [isLoading, setIsLoading]             = useState(false);
   const [isRecovery, setIsRecovery]           = useState(false);
-  const inviteDebounceRef                     = useRef(null);
+
+  // Request-access state
+  const [reqCompanyId, setReqCompanyId]         = useState('');
+  const [companies, setCompanies]               = useState([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
 
   useEffect(() => {
     supabase.auth.onAuthStateChange(async (event, session) => {
@@ -115,24 +59,16 @@ export default function Login({ onLogin, theme, toggleTheme }) {
     });
   }, []);
 
-  // Live invite code validation with debounce
+  // Load companies list whenever we're on the user register form
   useEffect(() => {
-    if (registerRole !== 'user' || !inviteCode || inviteCode.length < 4) {
-      setInviteValidation(null);
-      return;
-    }
-    setInviteValidation('checking');
-    clearTimeout(inviteDebounceRef.current);
-    inviteDebounceRef.current = setTimeout(async () => {
-      try {
-        const res = await axios.get(`/api/invite/validate?code=${encodeURIComponent(inviteCode)}`);
-        setInviteValidation(res.data);
-      } catch {
-        setInviteValidation({ valid: false });
-      }
-    }, 500);
-    return () => clearTimeout(inviteDebounceRef.current);
-  }, [inviteCode, registerRole]);
+    if (mode !== 'register' || registerRole !== 'user') return;
+    if (companies.length > 0) return;
+    setLoadingCompanies(true);
+    axios.get('/api/invite/companies')
+      .then(r => setCompanies(r.data || []))
+      .catch(() => setCompanies([]))
+      .finally(() => setLoadingCompanies(false));
+  }, [mode, registerRole]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -143,9 +79,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
     }
     if (mode === 'register' && registerRole === 'admin' && !companyName.trim()) {
       setMsg("Please enter a company name."); setIsLoading(false); return;
-    }
-    if (mode === 'register' && registerRole === 'user' && inviteValidation?.valid !== true) {
-      setMsg("Please enter a valid invite code before continuing."); setIsLoading(false); return;
     }
     if (mode === 'register' && !username.trim()) {
       setMsg("Please enter a display name."); setIsLoading(false); return;
@@ -163,13 +96,14 @@ export default function Login({ onLogin, theme, toggleTheme }) {
         }
 
       } else if (mode === 'register') {
+        // Only admins reach handleAuth for registration — users go to handleRequestAccess
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email, password,
           options: {
             data: {
               username:     username.trim(),
-              company_name: registerRole === 'admin' ? companyName.trim() : '',
-              is_admin:     registerRole === 'admin',
+              company_name: companyName.trim(),
+              is_admin:     true,
             },
           },
         });
@@ -185,31 +119,20 @@ export default function Login({ onLogin, theme, toggleTheme }) {
 
         try {
           await axios.post('/api/register', {
-            company_name: registerRole === 'admin' ? companyName.trim() : '',
+            company_name: companyName.trim(),
             username:     username.trim(),
             email:        email.trim(),
             uuid:         authUuid,
-            role:         registerRole,
-            invite_code:  registerRole === 'user' ? inviteCode.trim() : '',
+            role:         'admin',
+            invite_code:  '',
+            password:     password,
           });
         } catch (regErr) {
           const detail = regErr.response?.data?.detail || '';
-          // Surface invite code errors to the user — these are meaningful
-          if (detail.toLowerCase().includes('invite') || detail.toLowerCase().includes('invalid')) {
-            throw new Error(detail);
-          }
           if (!detail.includes('Already registered') && !detail.includes('already taken')) {
             console.warn('[register] backend note:', detail);
           }
         }
-
-        // Re-fetch DB row to confirm correct role before showing success
-        try {
-          const { data: rows } = await supabase.from('users').select('role').eq('uuid', authUuid);
-          if (rows && rows.length > 0 && rows[0].role) {
-            // Role confirmed from DB — good to show success
-          }
-        } catch { /* non-fatal */ }
 
         setViewState('success');
 
@@ -250,12 +173,46 @@ export default function Login({ onLogin, theme, toggleTheme }) {
     }
   };
 
+  const handleRequestAccess = async (e) => {
+    e.preventDefault();
+    if (!username.trim() || !email.trim() || !password || !reqCompanyId) {
+      setMsg('Please fill in all fields.'); return;
+    }
+    if (password !== confirmPassword) {
+      setMsg("Passwords don't match."); return;
+    }
+    if (password.length < 6) {
+      setMsg('Password must be at least 6 characters.'); return;
+    }
+    setIsLoading(true); setMsg('');
+    try {
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email, password });
+      if (signUpErr) throw signUpErr;
+      if (signUpData?.user?.identities?.length === 0) {
+        throw new Error('This email already has an account. Try signing in instead.');
+      }
+      const authUuid = signUpData?.user?.id;
+
+      await axios.post('/api/invite/request', {
+        username:   username.trim(),
+        email:      email.trim().toLowerCase(),
+        company_id: parseInt(reqCompanyId, 10),
+        uuid:       authUuid || '',
+      });
+      setViewState('request_sent');
+    } catch (err) {
+      setMsg(err.response?.data?.detail || err.message || 'Failed to submit request. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const switchTo = (newMode) => {
     setMode(newMode); setViewState('form'); setIsRecovery(false);
     setMsg(''); setEmail(''); setPassword(''); setConfirmPassword('');
     setCompanyName(''); setUsername(''); setMfaCode('');
-    setInviteCode(''); setInviteValidation(null);
     setRegisterRole('user');
+    setReqCompanyId('');
   };
 
   const headings = {
@@ -274,9 +231,9 @@ export default function Login({ onLogin, theme, toggleTheme }) {
     reset:    isRecovery ? 'Update Password' : 'Send Reset Link',
   };
 
-  // Disable submit if user registration and invite not yet valid
-  const submitDisabled = isLoading ||
-    (mode === 'register' && registerRole === 'user' && inviteValidation?.valid !== true);
+  const submitDisabled = isLoading || (
+    mode === 'register' && registerRole === 'user' && (!reqCompanyId || !password || !confirmPassword)
+  );
 
   return (
     <div className="login-backdrop-enterprise">
@@ -296,23 +253,40 @@ export default function Login({ onLogin, theme, toggleTheme }) {
 
         <div className="login-form-side">
 
-          {/* Success */}
-          {viewState === 'success' && (
+          {/* Request sent confirmation */}
+          {viewState === 'request_sent' && (
             <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, background: 'rgba(16,185,129,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <CheckCircle size={32} color="#10b981" />
+              <div style={{ width: 64, height: 64, background: 'rgba(99,102,241,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <Mail size={32} color="#6366f1" />
               </div>
-              <h2 className="login-title" style={{ marginBottom: 8 }}>Account created</h2>
+              <h2 className="login-title" style={{ marginBottom: 8 }}>Request submitted</h2>
               <p className="login-sub" style={{ marginBottom: 10 }}>
-                {registerRole === 'admin'
-                  ? <>Your admin account for <strong>{companyName}</strong> is ready.</>
-                  : <>You've joined <strong>{inviteValidation?.company_name || 'your company'}</strong>.</>}
+                Your access request has been sent to <strong>{companies.find(c => String(c.id) === String(reqCompanyId))?.name || 'your company'}</strong>'s admin.
               </p>
               <p className="login-sub" style={{ marginBottom: 28, fontSize: 13 }}>
-                Check your inbox to confirm your email, then sign in.
+                Once approved, you'll receive an email at <strong>{email}</strong> with an invite code. Log in with your email and password, then enter the code when prompted.
               </p>
               <button className="sys-btn full" onClick={() => switchTo('login')}>
-                Go to Sign In <ArrowRight size={16} />
+                Back to Sign In <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Admin registration submitted (pending super admin approval) */}
+          {viewState === 'success' && (
+            <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
+              <div style={{ width: 64, height: 64, background: 'rgba(245,158,11,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <CheckCircle size={32} color="#f59e0b" />
+              </div>
+              <h2 className="login-title" style={{ marginBottom: 8 }}>Registration submitted</h2>
+              <p className="login-sub" style={{ marginBottom: 10 }}>
+                Your admin account for <strong>{companyName}</strong> is pending review.
+              </p>
+              <p className="login-sub" style={{ marginBottom: 28, fontSize: 13 }}>
+                A super admin will approve your registration. You'll receive an email with a link to access your workspace once approved.
+              </p>
+              <button className="sys-btn full" onClick={() => switchTo('login')}>
+                Back to Sign In <ArrowRight size={16} />
               </button>
             </div>
           )}
@@ -341,7 +315,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
               <h2 className="login-title">{headings[mode]}</h2>
               <p className="login-sub">{subheadings[mode]}</p>
 
-              <form onSubmit={handleAuth} className="modern-form">
+              <form onSubmit={mode === 'register' && registerRole === 'user' ? handleRequestAccess : handleAuth} className="modern-form">
 
                 {/* REGISTER: role toggle */}
                 {mode === 'register' && (
@@ -351,13 +325,12 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       {[
-                        { value: 'user',  icon: <User size={20} />,        label: 'Regular User',  sub: 'Join with invite code' },
+                        { value: 'user',  icon: <User size={20} />,        label: 'Regular User',  sub: 'Request access to join' },
                         { value: 'admin', icon: <ShieldCheck size={20} />, label: 'Company Admin',  sub: 'Create a new company' },
                       ].map(opt => (
                         <button key={opt.value} type="button" onClick={() => {
                           setRegisterRole(opt.value);
-                          setInviteCode('');
-                          setInviteValidation(null);
+                          setReqCompanyId('');
                         }}
                           style={{
                             padding: '14px 12px', borderRadius: 10, cursor: 'pointer',
@@ -411,17 +384,31 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                             Company name cannot be an email address.
                           </p>
                         )}
+                        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                          A super admin will review and approve your registration.
+                        </p>
                       </div>
                     )}
 
-                    {/* Regular user: invite code with live validation */}
+                    {/* Regular user: company dropdown */}
                     {registerRole === 'user' && (
                       <div className="fade-in">
-                        <InviteCodeInput
-                          value={inviteCode}
-                          onChange={setInviteCode}
-                          validationState={inviteValidation}
-                        />
+                        <div className="input-group">
+                          <Building2 size={18} className="input-icon" style={{ opacity: 0.5 }} />
+                          <select
+                            className="sys-input login-input"
+                            value={reqCompanyId}
+                            onChange={e => setReqCompanyId(e.target.value)}
+                            required
+                            style={{ paddingLeft: 40 }}
+                          >
+                            <option value="">{loadingCompanies ? 'Loading…' : 'Select your company'}</option>
+                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                          Once your admin approves you, you'll receive an email with an invite code.
+                        </p>
                       </div>
                     )}
 
@@ -437,7 +424,11 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                 <button className="sys-btn full login-btn-ent" type="submit"
                   disabled={submitDisabled}
                   style={{ opacity: submitDisabled ? 0.5 : 1 }}>
-                  {isLoading ? 'Please wait…' : buttonLabels[mode]}
+                  {isLoading ? 'Please wait…' : (
+                    mode === 'register' && registerRole === 'user'
+                      ? 'Request Access'
+                      : buttonLabels[mode]
+                  )}
                   {!isLoading && <ArrowRight size={16} />}
                 </button>
               </form>

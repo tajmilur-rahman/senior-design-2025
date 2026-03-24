@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { supabase } from '../supabaseClient';
-import { User, Lock, Save, CheckCircle, AlertTriangle, Building2, ShieldCheck } from 'lucide-react';
+import { User, Lock, Save, CheckCircle, AlertTriangle, Building2, Bug, ShieldCheck } from 'lucide-react';
 
 const ROLE_LABELS = {
   super_admin: 'Super Admin',
@@ -23,6 +23,13 @@ export default function ProfileSettings({ user, onUpdate }) {
   const [savingPassword,  setSavingPassword]  = useState(false);
   const [profileMsg,      setProfileMsg]      = useState(null);  // { type, text }
   const [passwordMsg,     setPasswordMsg]     = useState(null);
+  const [profileData,     setProfileData]     = useState(null);  // { company_name, bug_count, onboarding_completed, has_own_model }
+
+  useEffect(() => {
+    axios.get('/api/users/me/profile')
+      .then(res => setProfileData(res.data))
+      .catch(() => {});
+  }, []);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -82,11 +89,24 @@ export default function ProfileSettings({ user, onUpdate }) {
         <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 16 }}>Account Info</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           {[
-            { label: 'Email',   value: user?.email   || '—' },
-            { label: 'Role',    value: ROLE_LABELS[user?.role] || user?.role || '—' },
-            { label: 'Company', value: user?.company_id ? `ID ${user.company_id}` : '—',
-              icon: <Building2 size={13} style={{ marginRight: 5, opacity: 0.6 }} /> },
-            { label: 'Status',  value: statusCfg.label, color: statusCfg.color },
+            { label: 'Email',    value: user?.email || '—' },
+            { label: 'Role',     value: ROLE_LABELS[user?.role] || user?.role || '—' },
+            {
+              label: 'Company',
+              value: profileData?.company_name || (user?.company_id ? `Company ${user.company_id}` : '—'),
+              icon: <Building2 size={13} style={{ marginRight: 5, opacity: 0.6 }} />,
+            },
+            { label: 'Status',   value: statusCfg.label, color: statusCfg.color },
+            {
+              label: 'Bugs in DB',
+              value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…',
+              icon: <Bug size={13} style={{ marginRight: 5, opacity: 0.6 }} />,
+            },
+            {
+              label: 'Onboarding',
+              value: profileData?.onboarding_completed ? 'Completed ✓' : 'Setup Pending',
+              color: profileData?.onboarding_completed ? 'var(--success)' : '#f59e0b',
+            },
           ].map(f => (
             <div key={f.label} style={{ padding: '12px 14px', background: 'var(--hover-bg)', borderRadius: 9, border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 10, color: 'var(--text-sec)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{f.label}</div>

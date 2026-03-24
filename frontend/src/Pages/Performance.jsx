@@ -17,6 +17,7 @@ export default function Performance() {
       previous:         null,
       confusion_matrix: null,
       feedback_stats:   null,
+      trained_count:    null,  // actual records model is trained on
   });
   const [viewVersion,   setViewVersion]   = useState('enterprise');
   const [loading,       setLoading]       = useState(true);
@@ -52,13 +53,14 @@ export default function Performance() {
               headers: { Authorization: `Bearer ${token}` }
           });
           if (res.data && res.data.current) {
-              const { current, baseline, previous, confusion_matrix, feedback_stats } = res.data;
+              const { current, baseline, previous, confusion_matrix, feedback_stats, trained_count } = res.data;
               setModelData({
                   baseline:         baseline || current,
                   current:          current,
                   previous:         previous || current,
                   confusion_matrix: confusion_matrix || null,
                   feedback_stats:   feedback_stats || null,
+                  trained_count:    trained_count ?? null,
               });
           } else {
               setModelData({
@@ -371,7 +373,9 @@ export default function Performance() {
                       Confusion Matrix
                   </h3>
                   <span style={{ fontSize: 10, color: 'var(--text-sec)', background: 'var(--hover-bg)', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
-                      {feedbackStats.total_corrections > 0 ? `${feedbackStats.total_corrections} corrections` : 'Demo data'}
+                      {feedbackStats.total_corrections > 0
+                          ? `${feedbackStats.total_corrections} corrections · ${modelData.trained_count != null ? Number(modelData.trained_count).toLocaleString() + ' total trained' : ''}`
+                          : 'No corrections yet — submit feedback to populate'}
                   </span>
               </div>
               <div style={{ overflowX: 'auto' }}>
@@ -450,15 +454,24 @@ export default function Performance() {
               <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>Training corpus</div>
                   <div style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 2 }}>
-                      {metricsToUse.dataset_size
-                          ? `${Number(metricsToUse.dataset_size).toLocaleString()} records · Last trained: ${metricsToUse.last_trained}`
-                          : `220,000+ baseline Mozilla bugs · ${metricsToUse.total_trees} decision trees`
+                      {modelData.trained_count != null
+                          ? `${Number(modelData.trained_count).toLocaleString()} records (company bugs + corrections) · ${metricsToUse.total_trees} trees`
+                          : metricsToUse.dataset_size
+                            ? `${Number(metricsToUse.dataset_size).toLocaleString()} records · ${metricsToUse.total_trees} decision trees`
+                            : `Company data + feedback corrections · ${metricsToUse.total_trees} decision trees`
                       }
                   </div>
               </div>
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--hover-bg)', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                  <Clock size={13} color="var(--text-sec)" />
-                  <span style={{ fontSize: 12, color: 'var(--text-sec)', fontWeight: 600 }}>{metricsToUse.last_trained || 'N/A'}</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--hover-bg)', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <Clock size={13} color="var(--text-sec)" />
+                      <span style={{ fontSize: 12, color: 'var(--text-sec)', fontWeight: 600 }}>{metricsToUse.last_trained || 'N/A'}</span>
+                  </div>
+                  {modelData.feedback_stats && (
+                      <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>
+                          {modelData.feedback_stats.total_corrections} corrections · {modelData.feedback_stats.total_feedback} feedback records
+                      </div>
+                  )}
               </div>
           </div>
       </div>

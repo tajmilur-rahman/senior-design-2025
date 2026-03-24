@@ -13,6 +13,7 @@ import SuperAdmin        from './Pages/SuperAdmin';
 import UserManagement    from './Pages/UserManagement';
 import ResolutionSupport from './Pages/ResolutionSupport';
 import PendingApproval   from './Pages/PendingApproval';
+import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
 import { ShieldCheck, LogOut, Moon, Sun, Crown, Users, ChevronDown, UserCog } from 'lucide-react';
@@ -43,29 +44,30 @@ const ROLE_CONFIG = {
 
 // ── Retry helper ──────────────────────────────────────────────────────────────
 // On fresh registration the onAuthStateChange fires before /api/register has
-// finished writing the public.users row. We poll up to maxAttempts times with
-// a short delay until the row appears.
+// finished writing the public.users row. We poll up to maxAttempts times.
+//
+// For email-invited users the pre-created row has no UUID yet — it only gets
+// linked when auth.py processes an API call. So on the first UUID miss we fire
+// a lightweight API call (/api/users/me/profile) to trigger that linking, then
+// continue retrying the direct Supabase query.
 async function fetchUserRowWithRetry(uuid, maxAttempts = 6, delayMs = 600) {
   for (let i = 0; i < maxAttempts; i++) {
-    const { data: rows } = await supabase
-      .from('users')
-      .select('*')
-      .eq('uuid', uuid);
-
-    // Row exists AND has a real role set (not just an auto-provisioned stub)
-    if (rows && rows.length > 0 && rows[0].role) {
-      return rows[0];
-    }
-
-    // Not ready yet — wait and retry
-    if (i < maxAttempts - 1) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
+    const { data: rows } = await supabase.from('users').select('*').eq('uuid', uuid);
+    if (rows && rows.length > 0 && rows[0].role) return rows[0];
+    if (i < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
   }
+  // All direct retries failed — one last attempt via the API (handles edge cases
+  // where the row exists by email only, e.g. legacy pre-invited rows)
+  try {
+    await axios.get('/api/users/me/profile');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const { data: rows } = await supabase.from('users').select('*').eq('uuid', uuid);
+    if (rows && rows.length > 0 && rows[0].role) return rows[0];
+  } catch { /* ignore */ }
   return null;
 }
 
-function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
+function Dashboard({ user, onLogout, theme, toggleTheme, initialTab, onUpdateUser }) {
   const [tab, setTab]               = useState(initialTab || 'overview');
   const [externalQuery, setExtQ]    = useState('');
   const [submitPrefill, setPrefill] = useState(null);
@@ -159,7 +161,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab }) {
         {tab === 'resolution'  && <ResolutionSupport />}
         {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
         {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin     user={user} />}
-        {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={u => setUser(prev => ({ ...prev, ...u }))} />}
+        {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
         {tab === 'company'     && isAdmin       && <CompanyProfile  user={user} />}
       </main>
     </div>
@@ -220,11 +222,14 @@ export default function App() {
             onboarding_completed: db.onboarding_completed || false,
             status:               db.status || 'active',
           });
-          // Show onboarding only on the first explicit SIGNED_IN event per session.
-          // Supabase fires SIGNED_IN multiple times (token refresh, approval callback, etc.)
-          // so we guard with a ref — once decided, skip all subsequent SIGNED_IN triggers.
+          // Onboarding is for company admins who haven't completed workspace setup.
+          // • Regular users join via invite — nothing to set up.
+          // • Super admins manage the whole system — no workspace setup needed.
+          // • Company admins see onboarding once after approval, then never again.
+          const isCompanyAdmin = db.role === 'admin';
+
           if (!fromInitialSession && event === 'SIGNED_IN') {
-            if (!db.onboarding_completed && !onboardingShownRef.current) {
+            if (isCompanyAdmin && !db.onboarding_completed && !onboardingShownRef.current) {
               onboardingShownRef.current = true;
               setShowOnboarding(true);
             } else {
@@ -243,7 +248,8 @@ export default function App() {
             role: 'user', context_role: 'user',
             company_id: null, onboarding_completed: false,
           });
-          setShowOnboarding(!fromInitialSession && event === 'SIGNED_IN');
+          // No DB row yet — only show onboarding if this looks like a fresh admin signup
+          setShowOnboarding(false);
         }
       } catch (err) {
         console.error('[App] initAuth:', err);
@@ -265,7 +271,12 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleOnboardingComplete = async (companyName, displayName, navigateTo = null) => {
+  // skipped=true means the user dismissed without making a real choice.
+  // Real choices: populate, submit, demo, or completing the tour.
+  // Skipped: onboarding is marked incomplete in DB (Setup Pending in profile).
+  //          onboardingShownRef prevents it re-appearing this session.
+  // Completed: onboarding_completed=true written to DB immediately.
+  const handleOnboardingComplete = async (companyName, displayName, navigateTo = null, skipped = false) => {
     if (navigateTo) setInitialTab(navigateTo);
     if (companyName) {
       try {
@@ -288,17 +299,21 @@ export default function App() {
       }
     }
 
-    // Always mark done in DB so the onboarding never shows again
-    try {
-      await supabase
-        .from('users')
-        .update({ onboarding_completed: true })
-        .eq('uuid', user?.uuid || user?.id);
-    } catch (err) {
-      console.error('[App] marking onboarding complete:', err);
+    if (!skipped) {
+      // Real action taken — mark onboarding as fully completed in DB
+      try {
+        await supabase
+          .from('users')
+          .update({ onboarding_completed: true })
+          .eq('uuid', user?.uuid || user?.id);
+      } catch (err) {
+        console.error('[App] marking onboarding complete:', err);
+      }
+      setUser(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     }
+    // If skipped: leave DB flag as-is (false = Setup Pending shown in profile)
+    // onboardingShownRef prevents the modal re-showing this session
 
-    setUser(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     setShowOnboarding(false);
   };
 
@@ -309,17 +324,30 @@ export default function App() {
   };
 
   const handleLogin = async (loginUser) => {
-    // Read the authoritative role from DB — don't trust the JWT claim
-    let dbRole = 'user';
+    // Read the full DB row — don't trust the JWT claim and ensure status is set
+    // so every status gate (pending, invite_requested, pending_code) fires correctly.
+    let db = null;
     try {
-      const db = await fetchUserRowWithRetry(loginUser.id, 3, 300);
-      dbRole = db?.role || 'user';
+      db = await fetchUserRowWithRetry(loginUser.id, 3, 300);
     } catch (err) {
-      console.error('[App] handleLogin role fetch:', err);
+      console.error('[App] handleLogin DB fetch:', err);
     }
 
+    const dbRole   = db?.role   || 'user';
+    const dbStatus = db?.status || 'active';
     localStorage.setItem('user_context_role', dbRole);
-    setUser({ ...loginUser, role: dbRole, context_role: dbRole });
+    setUser({
+      ...loginUser,
+      id:                   loginUser.id,
+      uuid:                 loginUser.id,
+      username:             db?.username || loginUser.email?.split('@')[0],
+      role:                 dbRole,
+      context_role:         resolveContextRole(dbRole),
+      status:               dbStatus,
+      company_id:           db?.company_id   ?? null,
+      is_admin:             db?.is_admin     ?? false,
+      onboarding_completed: db?.onboarding_completed ?? false,
+    });
   };
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
@@ -349,8 +377,24 @@ export default function App() {
     />
   );
   // Block pending and inactive accounts before showing any dashboard content
-  if (user.status === 'pending' || user.status === 'inactive') return (
+  if (['pending', 'inactive', 'invite_requested'].includes(user.status)) return (
     <PendingApproval user={user} onLogout={handleLogout} status={user.status} />
+  );
+  // User was approved but must enter the invite code they received by email
+  if (user.status === 'pending_code') return (
+    <CodeWall
+      user={user}
+      onLogout={handleLogout}
+      onVerified={async () => {
+        // Refetch user row from DB — status is now 'active'
+        const db = await fetchUserRowWithRetry(user.uuid || user.id, 4, 400);
+        if (db) {
+          setUser(prev => ({ ...prev, ...db, status: db.status || 'active' }));
+        } else {
+          setUser(prev => ({ ...prev, status: 'active' }));
+        }
+      }}
+    />
   );
   if (showOnboarding) return (
     <Onboarding onComplete={handleOnboardingComplete} user={user} />
@@ -362,6 +406,7 @@ export default function App() {
       theme={theme}
       toggleTheme={toggleTheme}
       initialTab={initialTab}
+      onUpdateUser={u => setUser(prev => ({ ...prev, ...u }))}
     />
   );
 }

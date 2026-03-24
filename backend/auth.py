@@ -102,12 +102,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 
 
 def require_active(current_user: dict = Depends(get_current_user)) -> dict:
-    """Dependency: blocks pending or inactive accounts from accessing data."""
+    """Dependency: blocks pending, inactive, invite-requested, and pending-code accounts."""
     status = current_user.get("status", "active")
+
     if status == "pending":
         raise HTTPException(status_code=403, detail="account_pending")
     if status == "inactive":
         raise HTTPException(status_code=403, detail="account_inactive")
+    if status == "invite_requested":
+        raise HTTPException(status_code=403, detail="account_pending")
+    if status == "pending_code":
+        raise HTTPException(status_code=403, detail="account_pending_code")
     return current_user
 
 

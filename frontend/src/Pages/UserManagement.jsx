@@ -4,7 +4,8 @@ import {
   Users, Trash2, RefreshCw, UserX, Building2,
   AlertTriangle, CheckCircle, X, Crown, Globe,
   KeyRound, Copy, RotateCcw, Eye, EyeOff,
-  ShieldCheck, UserMinus, UserCheck, ArrowUpCircle, ArrowDownCircle
+  ShieldCheck, UserMinus, UserCheck, ArrowUpCircle, ArrowDownCircle,
+  Mail, Send, UserPlus
 } from 'lucide-react';
 
 function RoleBadge({ role }) {
@@ -231,6 +232,109 @@ function InviteCodePanel() {
   );
 }
 
+function AccessRequestsPanel({ showToast }) {
+  const [requests, setRequests]   = useState([]);
+  const [loading,  setLoading]    = useState(true);
+  const [actioning, setActioning] = useState(null); // id being approved/rejected
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get('/api/admin/invite_requests');
+      setRequests(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setRequests([]);
+    } finally {
+      setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  const handleApprove = async (req) => {
+    setActioning(req.id);
+    try {
+      const res = await axios.post(`/api/admin/invite_requests/${req.id}/approve`);
+      const code = res.data?.invite_code;
+      const msg  = code
+        ? `${req.username} approved! Invite code: ${code} — sent to ${req.email}.`
+        : (res.data?.message || `Invite sent to ${req.email}.`);
+      showToast(msg);
+      setRequests(prev => prev.filter(r => r.id !== req.id));
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to send invite.', 'error');
+    } finally { setActioning(null); }
+  };
+
+  const handleReject = async (req) => {
+    if (!window.confirm(`Reject access request from ${req.username} (${req.email})?`)) return;
+    setActioning(req.id);
+    try {
+      await axios.delete(`/api/admin/invite_requests/${req.id}`);
+      showToast(`Request from ${req.username} rejected.`);
+      setRequests(prev => prev.filter(r => r.id !== req.id));
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to reject request.', 'error');
+    } finally { setActioning(null); }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="sys-card" style={{ padding: 20, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: requests.length ? 14 : 0 }}>
+        <UserPlus size={16} color="#6366f1" />
+        <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)' }}>Access Requests</span>
+        {requests.length > 0 && (
+          <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>
+            {requests.length}
+          </span>
+        )}
+        <button onClick={fetchRequests} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', display: 'flex', padding: 4 }}>
+          <RefreshCw size={13} className={loading ? 'spin' : ''} />
+        </button>
+      </div>
+
+      {requests.length === 0 ? (
+        <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: 0 }}>
+          No pending access requests. When someone requests to join your company, they'll appear here.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {requests.map(req => (
+            <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 9 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+                {(req.username?.[0] || 'U').toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.username}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Mail size={11} /> {req.email}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => handleApprove(req)}
+                  disabled={actioning === req.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 7, cursor: actioning === req.id ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--success)', fontFamily: 'var(--font-head)', opacity: actioning === req.id ? 0.6 : 1 }}
+                >
+                  <Send size={11} /> Send Invite
+                </button>
+                <button
+                  onClick={() => handleReject(req)}
+                  disabled={actioning === req.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 7, cursor: actioning === req.id ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, color: '#ef4444', fontFamily: 'var(--font-head)', opacity: actioning === req.id ? 0.6 : 1 }}
+                >
+                  <X size={11} /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UserManagement({ currentUser }) {
   const [users,    setUsers]    = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -356,6 +460,9 @@ export default function UserManagement({ currentUser }) {
 
       {/* Invite code panel — only for company admins, not super_admin */}
       {isAdmin && !isSuperAdmin && <InviteCodePanel />}
+
+      {/* Access requests — pending email-based join requests */}
+      {isAdmin && !isSuperAdmin && <AccessRequestsPanel showToast={showToast} />}
 
       {error && (
         <div style={{ padding: '14px 18px', marginBottom: 20, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, fontSize: 13, color: 'var(--danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 10 }}>

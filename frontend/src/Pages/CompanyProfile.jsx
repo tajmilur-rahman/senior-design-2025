@@ -146,10 +146,18 @@ export default function CompanyProfile({ user }) {
               <Save size={14} /> {saving ? 'Saving…' : 'Save Changes'}
             </button>
 
-            {/* Model status badge */}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: profile?.has_own_model ? 'var(--success)' : 'var(--text-sec)', fontWeight: 600 }}>
-              <ShieldCheck size={14} />
-              {profile?.has_own_model ? 'Company model trained' : 'Using universal model'}
+            {/* Model status badge with explanation */}
+            <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                color: profile?.has_own_model ? 'var(--success)' : '#f59e0b', fontWeight: 700 }}>
+                <ShieldCheck size={14} />
+                {profile?.has_own_model ? 'Company model active' : 'Global model (shared)'}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-sec)', textAlign: 'right', maxWidth: 200 }}>
+                {profile?.has_own_model
+                  ? 'Your company has a custom RF model trained on your own data and feedback corrections.'
+                  : 'Your company uses the global RF model. Submit feedback corrections or bulk-upload to train your own.'}
+              </div>
             </div>
           </div>
         </form>

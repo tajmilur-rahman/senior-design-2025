@@ -277,9 +277,9 @@ export default function Onboarding({ onComplete, user }) {
 
   const handleChoice = async (id) => {
     if (id === "submit") {
-      onComplete(null, null, "submit");
+      onComplete(null, null, "submit", false);   // verified — completed
     } else if (id === "demo") {
-      onComplete(null, null, "database");
+      onComplete(null, null, "database", false); // verified — completed
     } else if (id === "populate") {
       setChoice("populate");
       setSeeding(true);
@@ -305,7 +305,8 @@ export default function Onboarding({ onComplete, user }) {
     }
   };
 
-  const handleTourDone = () => onComplete(null, null, null);
+  const handleTourDone    = () => onComplete(null, null, null, false); // tour completed = verified
+  const handleSkip        = () => onComplete(null, null, null, true);  // skipped = incomplete
 
   const cur    = TOUR_STEPS[step];
   const isLast = step === TOUR_STEPS.length - 1;
@@ -336,7 +337,7 @@ export default function Onboarding({ onComplete, user }) {
                 <button className="onboarding-btn-back" onClick={() => { setChoice(null); setSeedResult(null); }}>
                   <ArrowLeft size={15} /> Try again
                 </button>
-                <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database")}>
+                <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database", false)}>
                   Go to Dashboard <ArrowRight size={15} />
                 </button>
               </div>
@@ -350,7 +351,7 @@ export default function Onboarding({ onComplete, user }) {
               <p className="onboarding-subtitle" style={{ margin: 0 }}>
                 {seedResult?.count ? `${seedResult.count.toLocaleString()} sample bugs` : "Sample bugs"} have been loaded into your company's database.
               </p>
-              <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database")}>
+              <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database", false)}>
                 Explore my database <ArrowRight size={15} />
               </button>
             </>
@@ -380,7 +381,7 @@ export default function Onboarding({ onComplete, user }) {
           <div style={{ marginTop: 18, textAlign: "center" }}>
             <button
               className="onboarding-skip-text"
-              onClick={() => onComplete(null, null, null)}
+              onClick={handleSkip}
               style={{ fontSize: 12 }}
             >
               Skip and go to dashboard →
@@ -395,7 +396,7 @@ export default function Onboarding({ onComplete, user }) {
   return (
     <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
       <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
-        <button className="onboarding-skip" onClick={handleTourDone} title="Skip tour">
+        <button className="onboarding-skip" onClick={handleSkip} title="Skip tour">
           <X size={18} />
         </button>
         <div className="onboarding-progress">
@@ -411,7 +412,7 @@ export default function Onboarding({ onComplete, user }) {
         </div>
         <cur.Component />
         <div className="onboarding-nav">
-          <button className="onboarding-skip-text" onClick={handleTourDone}>Skip tour</button>
+          <button className="onboarding-skip-text" onClick={handleSkip}>Skip tour</button>
           <div className="onboarding-nav-right">
             {step > 0 && (
               <button className="onboarding-btn-back" onClick={() => setStep(s => s - 1)}>

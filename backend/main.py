@@ -105,6 +105,7 @@ class RegisterRequest(BaseModel):
     uuid:         str
     role:         str = "user"
     invite_code:  str = ""
+    password:     str = ""   # optional — hashed with bcrypt if supplied
 
 class OnboardingRequest(BaseModel):
     """
@@ -218,16 +219,17 @@ def register(req: RegisterRequest):
                 except Exception as tbl_err:
                     print(f"[register] Warning: could not create company table: {tbl_err}")
 
+        pw_hash = auth.get_password_hash(req.password) if req.password else ""
         user_res = supabase.table("users").insert({
             "uuid":                 req.uuid,
             "email":                req.email,
             "username":             req.username,
-            "password_hash":        "",
+            "password_hash":        pw_hash,
             "role":                 "admin",
             "is_admin":             True,
             "company_id":           company_id,
             "onboarding_completed": False,
-            "status":               "pending",
+            "status":               "pending",  # must be approved by Super Admin
         }).execute()
 
         if not user_res.data:
@@ -263,16 +265,17 @@ def register(req: RegisterRequest):
     company_id   = co_res.data[0]["id"]
     company_name = co_res.data[0]["name"]
 
+    pw_hash = auth.get_password_hash(req.password) if req.password else ""
     user_res = supabase.table("users").insert({
         "uuid":                 req.uuid,
         "email":                req.email,
         "username":             req.username,
-        "password_hash":        "",
+        "password_hash":        pw_hash,
         "role":                 "user",
         "is_admin":             False,
         "company_id":           company_id,
-        "onboarding_completed": False,
-        "status":               "pending",
+        "onboarding_completed": True,   # invite code = already authorized; skip onboarding
+        "status":               "active", # invite code IS the approval — no manual queue needed
     }).execute()
 
     if not user_res.data:
@@ -357,8 +360,31 @@ def seed_company_data(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Could not create company table: {e}")
 
+    # ── CRITICAL: Prevent re-seeding if the table already has data ──────────────
+    # An existing admin clicking "populate" again would otherwise double the dataset.
+    # Onboarding should only seed once — for a brand-new company with no data.
+    try:
+        existing_count_res = supabase.table(data_table).select("*", count="exact").limit(1).execute()
+        existing_count = existing_count_res.count or 0
+    except Exception:
+        existing_count = 0
+
+    if existing_count > 0:
+        # Mark onboarding complete so this user never sees the wizard again
+        supabase.table("users").update({"onboarding_completed": True}) \
+            .eq("uuid", current_user.get("uuid")).execute()
+        return {
+            "message": f"Your database already contains {existing_count:,} bugs — seeding skipped to prevent duplicates.",
+            "table":   data_table,
+            "count":   existing_count,
+            "already_seeded": True,
+        }
+
     try:
         inserted = db_provision.seed_company_table(cid, sample_size=sample_size)
+        # Mark onboarding complete after successful seed
+        supabase.table("users").update({"onboarding_completed": True}) \
+            .eq("uuid", current_user.get("uuid")).execute()
         return {
             "message": f"Seeded {inserted:,} sample bugs into your database.",
             "table": data_table,
@@ -393,6 +419,58 @@ def update_me(req: UpdateMeRequest, current_user: dict = Depends(auth.get_curren
 
     updated = supabase.table("users").select("*").eq("uuid", uuid).single().execute()
     return updated.data
+
+
+@app.get("/api/users/me/profile")
+def get_my_profile(current_user: dict = Depends(auth.get_current_user)):
+    """
+    Returns enriched profile info for the currently signed-in user:
+    company name, bug count for their company, and onboarding status.
+    Accessible to all roles (user, admin, super_admin).
+    """
+    uuid = current_user.get("uuid")
+    cid  = current_user.get("company_id")
+
+    # Fetch latest user row (source of truth for onboarding_completed)
+    role     = current_user.get("role", "user")
+    user_row = supabase.table("users").select("onboarding_completed, status").eq("uuid", uuid).single().execute()
+    onboarding_done = user_row.data.get("onboarding_completed", False) if user_row.data else False
+
+    # Auto-correct stale flag: an admin with a company is already set up
+    if not onboarding_done and role == "admin" and cid:
+        try:
+            supabase.table("users").update({"onboarding_completed": True}).eq("uuid", uuid).execute()
+            onboarding_done = True
+        except Exception:
+            pass
+
+    # Company name and has_own_model flag
+    company_name    = None
+    has_own_model   = False
+    if cid:
+        co_res = supabase.table("companies").select("name, has_own_model").eq("id", cid).single().execute()
+        if co_res.data:
+            company_name  = co_res.data.get("name")
+            has_own_model = co_res.data.get("has_own_model", False)
+
+    # Bug count scoped to this company
+    bug_count = 0
+    if cid:
+        try:
+            table = get_company_table(cid)
+            q = supabase.table(table).select("*", count="exact").limit(1)
+            if not is_shared_table(table):
+                q = q.eq("company_id", cid)
+            bug_count = q.execute().count or 0
+        except Exception:
+            bug_count = 0
+
+    return {
+        "company_name":         company_name,
+        "bug_count":            bug_count,
+        "onboarding_completed": onboarding_done,
+        "has_own_model":        has_own_model,
+    }
 
 
 @app.get("/api/auth/session-check")
@@ -757,22 +835,32 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
     """
     Role check uses require_admin dependency — accepts 'admin' OR 'super_admin'.
     """
-    cid = current_user.get("company_id")
+    raw_cid = current_user.get("company_id")
+    cid = int(raw_cid) if raw_cid is not None else None
 
-    # Training corpus size
+    # Training corpus size — use company's own data, not the global 220k Firefox table
     total_live = 0
     feedback_list = []
     last_trained_str = "Recently"
 
     try:
-        base_res = supabase.table("firefox_table").select("bug_id", count="exact").execute()
-        base_count = base_res.count or 0
+        # Company bug count (the actual dataset the model was trained on)
+        table = get_company_table(cid)
+        q_bugs = supabase.table(table).select("*", count="exact").limit(1)
+        if not is_shared_table(table):
+            q_bugs = q_bugs.eq("company_id", cid)
+        company_bug_count = q_bugs.execute().count or 0
 
-        fb_res = supabase.table("feedback").select("*") \
-                         .eq("company_id", cid) \
-                         .order("created_at", desc=True).execute()
+        # Feedback corrections for this company (skip filter when cid is None = super admin global view)
+        fb_q = supabase.table("feedback").select("*").order("created_at", desc=True)
+        if cid is not None:
+            fb_q = fb_q.eq("company_id", cid)
+        fb_res = fb_q.execute()
         feedback_list = fb_res.data or []
-        total_live = base_count + len(feedback_list)
+
+        # dataset_size = bugs in company table + feedback corrections used for retraining
+        corrections_count = len([f for f in feedback_list if f.get("is_correction")])
+        total_live = company_bug_count + corrections_count
 
         if feedback_list:
             from datetime import datetime
@@ -847,7 +935,9 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
         "baseline":         baseline,
         "previous":         previous,
         "confusion_matrix": confusion_matrix,
+        "trained_count":    total_live,       # actual records the model is trained on
         "feedback_stats": {
+            "total_feedback":    len(feedback_list),
             "total_corrections": len(corrections),
             "correction_rate":   round(correction_rate, 4),
             "weak_components":   weak,
@@ -862,8 +952,10 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
 @app.get("/api/batches")
 def get_batches(current_user: dict = Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
+    if cid is None:
+        return []   # no company yet — nothing to show
     res = supabase.table("training_batches").select("*") \
-                  .eq("company_id", cid) \
+                  .eq("company_id", int(cid)) \
                   .order("upload_time", desc=True).limit(20).execute()
     # Normalise field name: training_batches uses `bug_count`, frontend expects `records_processed`
     rows = []
@@ -921,7 +1013,28 @@ async def upload_and_train(
         "status":     "complete",
     }).execute()
 
-    return {"message": "Upload successful", "records_processed": records}
+    # ── Retrain company model on the uploaded dataset ─────────────────────────
+    # Build feedback-compatible dicts from the uploaded rows (summary + severity).
+    # warm_start adds trees on top of the existing model — prior knowledge is retained.
+    retrain_result = None
+    retrain_rows = [
+        {"summary": r["summary"], "actual_severity": r["severity"], "component": r["component"]}
+        for r in rows if r.get("summary") and r.get("severity") not in ("", "S3", None)
+    ]
+    if retrain_rows:
+        try:
+            retrain_result = ml_logic.fast_retrain(retrain_rows, company_id=cid)
+            print(f"[upload_and_train] Retrained on {len(retrain_rows)} rows — "
+                  f"trees: {retrain_result.get('total_trees')}")
+        except Exception as rt_err:
+            print(f"[upload_and_train] Retrain warning: {rt_err}")
+            retrain_result = {"success": False, "error": str(rt_err)}
+
+    return {
+        "message":          "Upload successful",
+        "records_processed": records,
+        "retrain": retrain_result or {"success": False, "message": "No labelled rows to retrain on."},
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -999,18 +1112,32 @@ def retrain(current_user: dict = Depends(auth.require_admin)):
     }
 
 
-def _train_with_progress(key: str, feedback_list: list, target_cid):
-    """Runs fast_retrain in a background thread, updating _training_progress."""
+def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records: list = None):
+    """
+    Runs model training in a background thread, updating _training_progress.
+
+    Two modes:
+    - feedback_list provided → fast_retrain (warm-start on corrections, requires existing model)
+    - bug_records provided   → full_train_from_dataset (train from scratch on labeled bugs)
+    """
     def cb(step: str, pct: int):
         _training_progress[key] = {"step": step, "pct": pct, "done": False, "error": None}
 
     try:
-        cb("Loading feedback data", 5)
-        _time.sleep(0.4)
-        cb("Preparing features", 20)
-        _time.sleep(0.3)
-        cb("Vectorizing text", 40)
-        result = ml_logic.fast_retrain(feedback_list, company_id=target_cid, progress_cb=cb)
+        if bug_records is not None:
+            # ── Full training from company/global bug data ─────────────────────
+            cb("Sampling company data", 5)
+            _time.sleep(0.3)
+            result = ml_logic.full_train_from_dataset(bug_records, company_id=target_cid, progress_cb=cb)
+        else:
+            # ── Incremental warm-start retrain from feedback corrections ────────
+            cb("Loading feedback data", 5)
+            _time.sleep(0.4)
+            cb("Preparing features", 20)
+            _time.sleep(0.3)
+            cb("Vectorizing text", 40)
+            result = ml_logic.fast_retrain(feedback_list, company_id=target_cid, progress_cb=cb)
+
         cb("Saving model", 95)
         _time.sleep(0.3)
         _training_progress[key] = {"step": "Done", "pct": 100, "done": True, "error": None, "result": result}
@@ -1018,32 +1145,95 @@ def _train_with_progress(key: str, feedback_list: list, target_cid):
         _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": str(e), "result": None}
 
 
+# How many labeled bugs to sample for a full training run when no corrections exist.
+# Firefox table has 220k+ rows; we cap at 30k to keep training fast (< 60s).
+_FULL_TRAIN_SAMPLE = 30000
+
+
 @app.post("/api/admin/model/train/start")
 def train_model_start(current_user: dict = Depends(auth.require_admin)):
     """
     Kicks off model training in a background thread.
+    Priority:
+      1. Feedback corrections exist → fast_retrain (adds trees, preserves prior knowledge)
+      2. No corrections but company has labeled bugs → full_train_from_dataset (train from scratch)
+      3. Nothing available → informative error
+
+    For Firefox companies the full-train samples up to 30k rows from firefox_table.
     Poll GET /api/admin/model/train/stream (SSE) for live progress.
     """
-    cid  = current_user.get("company_id")
-    role = current_user.get("role")
+    raw_cid = current_user.get("company_id")
+    cid     = int(raw_cid) if raw_cid is not None else None
+    role    = current_user.get("role")
     target_cid = None if role == "super_admin" else cid
     key = str(target_cid) if target_cid is not None else "global"
 
+    # ── Path 1: feedback corrections → fast_retrain ───────────────────────────
     feedback_res = supabase.table("feedback").select("*").eq("is_correction", True)
     if target_cid is not None:
         feedback_res = feedback_res.eq("company_id", target_cid)
     feedback_list = feedback_res.execute().data or []
 
-    if not feedback_list:
-        return {"success": False, "message": "No corrections found to learn from."}
+    if feedback_list:
+        _training_progress[key] = {"step": "Initializing", "pct": 0, "done": False, "error": None}
+        t = threading.Thread(
+            target=_train_with_progress,
+            args=(key, feedback_list, target_cid),
+            kwargs={"bug_records": None},
+            daemon=True,
+        )
+        t.start()
+        return {
+            "success": True,
+            "message": f"Training started on {len(feedback_list)} feedback corrections.",
+            "key": key,
+            "mode": "fast_retrain",
+            "stream_url": f"/api/admin/model/train/stream?stream_key={key}",
+        }
 
-    # Mark as starting
+    # ── Path 2: no corrections → sample from company bug table ───────────────
+    try:
+        table = get_company_table(target_cid) if target_cid is not None else "firefox_table"
+
+        q = supabase.table(table).select("summary, severity").limit(_FULL_TRAIN_SAMPLE)
+        if not is_shared_table(table) and target_cid is not None:
+            q = q.eq("company_id", target_cid)
+        bug_data = q.execute().data or []
+
+        # Filter to rows that have both a summary and a non-trivial severity label
+        bug_records = [
+            {"summary": r["summary"], "severity": r.get("severity", "S3")}
+            for r in bug_data
+            if r.get("summary") and r.get("severity")
+        ]
+    except Exception as sample_err:
+        bug_records = []
+        print(f"[train/start] bug sampling failed: {sample_err}")
+
+    if not bug_records:
+        return {
+            "success": False,
+            "message": (
+                "No corrections or labeled bugs found to train on. "
+                "Submit a bug prediction and correct its severity — that creates a training signal."
+            ),
+        }
+
     _training_progress[key] = {"step": "Initializing", "pct": 0, "done": False, "error": None}
-
-    t = threading.Thread(target=_train_with_progress, args=(key, feedback_list, target_cid), daemon=True)
+    t = threading.Thread(
+        target=_train_with_progress,
+        args=(key, [], target_cid),
+        kwargs={"bug_records": bug_records},
+        daemon=True,
+    )
     t.start()
-
-    return {"success": True, "message": "Training started", "key": key, "stream_url": f"/api/admin/model/train/stream?stream_key={key}"}
+    return {
+        "success": True,
+        "message": f"Full training started on {len(bug_records):,} labeled bugs.",
+        "key": key,
+        "mode": "full_train",
+        "stream_url": f"/api/admin/model/train/stream?stream_key={key}",
+    }
 
 
 @app.get("/api/admin/model/train/stream")
@@ -1306,22 +1496,61 @@ def superadmin_approve_user(
     user_uuid: str,
     current_user: dict = Depends(auth.require_super_admin),
 ):
-    """Activates a pending user. Also activates their company if it's still pending."""
+    """Activates a pending user, activates their company, and sends an invite email."""
     target_res = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
     if not target_res.data:
         raise HTTPException(status_code=404, detail="User not found")
 
     target = target_res.data[0]
+    email  = target.get("email")
+    name   = target.get("username", email)
+    role   = target.get("role", "user")
+    cid    = target.get("company_id")
+
+    # Activate the user
     supabase.table("users").update({"status": "active"}).eq("uuid", user_uuid).execute()
 
-    # Activate company if it's still pending
-    cid = target.get("company_id")
+    # Activate company if still pending
+    company_name = ""
     if cid:
-        co_res = supabase.table("companies").select("status").eq("id", cid).execute()
-        if co_res.data and co_res.data[0].get("status") == "pending":
-            supabase.table("companies").update({"status": "active"}).eq("id", cid).execute()
+        co_res = supabase.table("companies").select("status, name").eq("id", cid).execute()
+        if co_res.data:
+            company_name = co_res.data[0].get("name", "")
+            if co_res.data[0].get("status") == "pending":
+                supabase.table("companies").update({"status": "active"}).eq("id", cid).execute()
 
-    return {"message": f"User '{target.get('username')}' approved and activated."}
+    # Send invite email using the same delete-then-invite pattern so it always works
+    # regardless of whether the user previously signed up themselves.
+    email_sent = False
+    try:
+        try:
+            supabase.auth.admin.delete_user(user_uuid)
+            print(f"[superadmin approve] Deleted old auth account for {email}")
+        except Exception as del_err:
+            print(f"[superadmin approve] Could not delete old auth account: {del_err}")
+        # Clear stale UUID — auth.py re-links it by email on next login
+        supabase.table("users").update({"uuid": None}).eq("email", email).execute()
+
+        supabase.auth.admin.invite_user_by_email(
+            email,
+            options={"data": {
+                "username":     name,
+                "company_name": company_name,
+                "role":         role,
+            }},
+        )
+        email_sent = True
+        print(f"[superadmin approve] Invite email sent to {email}")
+    except Exception as e:
+        print(f"[superadmin approve] Email send failed: {e}")
+
+    return {
+        "message": (
+            f"'{name}' approved."
+            + (" Approval email sent." if email_sent else " Email failed — notify them manually.")
+        ),
+        "email_sent": email_sent,
+    }
 
 
 @app.patch("/api/superadmin/users/{user_uuid}/reject")
@@ -1354,9 +1583,6 @@ def superadmin_create_user(
     Super Admin creates a user directly — bypasses pending status, no invite code needed.
     Calls Supabase Admin API to send them an email invitation.
     """
-    import requests as http_requests
-    from database import SUPABASE_URL, SUPABASE_KEY
-
     # Verify company exists
     co_res = supabase.table("companies").select("id, name").eq("id", req.company_id).single().execute()
     if not co_res.data:
@@ -1383,25 +1609,14 @@ def superadmin_create_user(
         # uuid left null — linked in auth.py auto-provision on first sign-in
     }).execute()
 
-    # Send invite email via Supabase Admin API
+    # Send invite email via supabase-py admin client
     email_sent = False
     try:
-        resp = http_requests.post(
-            f"{SUPABASE_URL}/auth/v1/admin/invite",
-            json={
-                "email": req.email,
-                "data": {"company_id": req.company_id, "company_name": company_name, "role": role},
-            },
-            headers={
-                "apikey":        SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type":  "application/json",
-            },
-            timeout=10,
+        supabase.auth.admin.invite_user_by_email(
+            req.email,
+            options={"data": {"company_id": req.company_id, "company_name": company_name, "role": role}},
         )
-        email_sent = resp.status_code in (200, 201)
-        if not email_sent:
-            print(f"[superadmin create_user] Supabase invite API returned {resp.status_code}: {resp.text}")
+        email_sent = True
     except Exception as e:
         print(f"[superadmin create_user] Failed to send invite email: {e}")
 
@@ -1458,6 +1673,199 @@ class InviteUserRequest(BaseModel):
     email:    str
     username: str
     role:     str = "user"   # 'user' or 'admin'
+
+@app.get("/api/invite/companies")
+def public_companies_list():
+    """Public endpoint — lists company names/ids for the access-request form."""
+    res = supabase.table("companies").select("id, name").order("name").execute()
+    return [c for c in (res.data or []) if c.get("name") != "System"]
+
+
+class InviteRequestCreate(BaseModel):
+    username:   str
+    email:      str
+    company_id: int
+    uuid:       str = ""   # Supabase auth UUID, set upfront since user signs up before requesting
+
+
+@app.post("/api/invite/request")
+def submit_invite_request(req: InviteRequestCreate):
+    """
+    Public — no auth. User has already created a Supabase auth account (with their
+    chosen password). This registers their users row as 'invite_requested' so the
+    admin can approve it. Once approved, the user can log in immediately with the
+    credentials they already set.
+    """
+    email_clean = req.email.strip().lower()
+
+    # Block duplicate emails / already-pending requests
+    existing = supabase.table("users").select("email, status").eq("email", email_clean).execute()
+    if existing.data:
+        raise HTTPException(
+            status_code=400,
+            detail="This email already has an account or a pending access request."
+        )
+
+    # Verify company exists
+    co_res = supabase.table("companies").select("id").eq("id", req.company_id).execute()
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    supabase.table("users").insert({
+        "uuid":                 req.uuid.strip() if req.uuid else None,
+        "email":                email_clean,
+        "username":             req.username.strip(),
+        "role":                 "user",
+        "is_admin":             False,
+        "company_id":           req.company_id,
+        "onboarding_completed": True,
+        "status":               "invite_requested",
+    }).execute()
+
+    return {"message": "Request submitted. Your admin will review it — you'll be able to log in once approved."}
+
+
+@app.get("/api/admin/invite_requests")
+def list_invite_requests(current_user: dict = Depends(auth.require_admin)):
+    """Admin: returns all pending access requests for their company."""
+    cid = current_user.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="No company assigned")
+    res = supabase.table("users") \
+                  .select("id, username, email") \
+                  .eq("company_id", cid) \
+                  .eq("status", "invite_requested") \
+                  .execute()
+    return res.data or []
+
+
+@app.post("/api/admin/invite_requests/{request_id}/approve")
+def approve_invite_request(
+    request_id: int,
+    current_user: dict = Depends(auth.require_admin),
+):
+    """
+    Admin approves an access request:
+    1. Status → 'pending_code' (user can log in but hits the code wall).
+    2. Fetches the company invite code and emails it to the user.
+    3. Returns the invite code so the admin can see/share it from the toast.
+    """
+    cid = current_user.get("company_id")
+
+    row_res = supabase.table("users") \
+                      .select("*") \
+                      .eq("id", request_id) \
+                      .eq("company_id", cid) \
+                      .eq("status", "invite_requested") \
+                      .execute()
+    if not row_res.data:
+        raise HTTPException(status_code=404, detail="Request not found or already processed.")
+
+    row   = row_res.data[0]
+    email = row["email"]
+    name  = row.get("username", email)
+    uuid  = row.get("uuid")  # set when user called signUp() during request flow
+
+    # Get the company's invite code to send to the user
+    co_res = supabase.table("companies").select("name, invite_code").eq("id", cid).single().execute()
+    company_name = co_res.data.get("name", "")        if co_res.data else ""
+    company_code = co_res.data.get("invite_code", "") if co_res.data else ""
+
+    # Advance status to pending_code — user can log in but must enter the code
+    supabase.table("users").update({"status": "pending_code"}).eq("id", request_id).execute()
+
+    # invite_user_by_email only works for users with no existing auth account.
+    # Since our request-access flow has the user call signUp() first, they already
+    # have an auth account and the invite would fail with "already registered".
+    # Fix: delete the old auth account, clear the UUID from the public row, then
+    # send the invite. auth.py will re-link their new UUID by email on next login.
+    email_sent = False
+    try:
+        if uuid:
+            try:
+                supabase.auth.admin.delete_user(uuid)
+                print(f"[approve_invite] Deleted old auth account for {email}")
+            except Exception as del_err:
+                print(f"[approve_invite] Could not delete old auth account: {del_err}")
+            # Clear stale UUID so auth.py re-links it when they accept the invite
+            supabase.table("users").update({"uuid": None}).eq("id", request_id).execute()
+
+        supabase.auth.admin.invite_user_by_email(
+            email,
+            options={"data": {
+                "invite_code":  company_code,
+                "company_name": company_name,
+                "username":     name,
+            }},
+        )
+        email_sent = True
+        print(f"[approve_invite] Invite email sent to {email}")
+    except Exception as e:
+        print(f"[approve_invite] Email send failed: {e}")
+
+    return {
+        "message":    (
+            f"{name} approved! Invite code: {company_code} — "
+            + ("email sent with the code." if email_sent else "email failed, share the code manually.")
+        ),
+        "invite_code": company_code,
+        "email_sent":  email_sent,
+    }
+
+
+class VerifyInviteCodeRequest(BaseModel):
+    code: str
+
+
+@app.post("/api/invite/verify_code")
+def verify_invite_code(req: VerifyInviteCodeRequest, current_user: dict = Depends(auth.get_current_user)):
+    """
+    Called from the code-wall screen after admin approval.
+    The user is authenticated (logged in) but blocked at status='pending_code'.
+    They submit the invite code they received — if it matches their company's code,
+    status is set to 'active' and they enter the dashboard.
+    """
+    status = current_user.get("status", "")
+    if status != "pending_code":
+        raise HTTPException(status_code=400, detail="No code verification required for your account.")
+
+    cid = current_user.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="No company assigned to this account.")
+
+    co_res = supabase.table("companies").select("invite_code").eq("id", cid).single().execute()
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    expected = (co_res.data.get("invite_code") or "").strip().upper()
+    submitted = req.code.strip().upper()
+
+    if submitted != expected:
+        raise HTTPException(status_code=400, detail="Invalid code. Check the email your admin sent and try again.")
+
+    uuid = current_user.get("uuid")
+    supabase.table("users").update({"status": "active"}).eq("uuid", uuid).execute()
+    return {"message": "Code accepted. Welcome aboard!"}
+
+
+@app.delete("/api/admin/invite_requests/{request_id}")
+def reject_invite_request(
+    request_id: int,
+    current_user: dict = Depends(auth.require_admin),
+):
+    """Admin rejects (deletes) an access request."""
+    cid = current_user.get("company_id")
+    row_res = supabase.table("users") \
+                      .select("id") \
+                      .eq("id", request_id) \
+                      .eq("company_id", cid) \
+                      .eq("status", "invite_requested") \
+                      .execute()
+    if not row_res.data:
+        raise HTTPException(status_code=404, detail="Request not found.")
+    supabase.table("users").delete().eq("id", request_id).execute()
+    return {"message": "Request rejected."}
+
 
 @app.get("/api/invite/validate")
 def validate_invite_code(code: str):
@@ -1547,29 +1955,16 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create user record")
 
-    # Send a real email invitation via Supabase Auth Admin API
+    # Send invite email via supabase-py admin client
     email_sent = False
     try:
-        import requests as http_requests
-        from database import SUPABASE_URL, SUPABASE_KEY
         co_res = supabase.table("companies").select("name").eq("id", cid).single().execute()
         company_name = co_res.data.get("name", "") if co_res.data else ""
-        invite_resp = http_requests.post(
-            f"{SUPABASE_URL}/auth/v1/admin/invite",
-            json={
-                "email": req.email,
-                "data": {"company_id": cid, "company_name": company_name, "role": req.role},
-            },
-            headers={
-                "apikey":        SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type":  "application/json",
-            },
-            timeout=10,
+        supabase.auth.admin.invite_user_by_email(
+            req.email,
+            options={"data": {"company_id": cid, "company_name": company_name, "role": req.role}},
         )
-        email_sent = invite_resp.status_code in (200, 201)
-        if not email_sent:
-            print(f"[invite] Supabase invite API returned {invite_resp.status_code}: {invite_resp.text}")
+        email_sent = True
     except Exception as e:
         print(f"[invite] Failed to send invite email: {e}")
 
@@ -1689,115 +2084,130 @@ def admin_reactivate_user(user_uuid: str, current_user: dict = Depends(auth.requ
     return {"message": "User reactivated."}
 
 
+# ── Cascade-delete helpers ────────────────────────────────────────────────────
+
+def _delete_auth_user(uuid: str):
+    """Delete a Supabase Auth user, ignoring 'not found' errors."""
+    if not uuid:
+        return
+    try:
+        supabase.auth.admin.delete_user(uuid)
+    except Exception as e:
+        print(f"[cascade] auth delete {uuid}: {e}")
+
+
+def _cascade_delete_user_row(user_row: dict):
+    """
+    Delete all rows that FK-reference this user, then delete the users row itself.
+    Handles: feedback (user_id → users.id), and any other per-user FKs.
+    """
+    user_int_id = user_row.get("id")
+    user_uuid   = user_row.get("uuid")
+
+    # feedback.user_id → users.id  (nullable FK; ignore if column absent)
+    if user_int_id:
+        try:
+            supabase.table("feedback").delete().eq("user_id", user_int_id).execute()
+        except Exception:
+            pass  # column may not exist in all deployments
+
+    # Delete the public.users row
+    if user_uuid:
+        supabase.table("users").delete().eq("uuid", user_uuid).execute()
+    elif user_int_id:
+        supabase.table("users").delete().eq("id", user_int_id).execute()
+
+
+def _cascade_delete_company(company_id: int):
+    """
+    Delete everything owned by a company:
+      1. Revoke all member auth accounts + their user rows
+      2. Delete feedback, training_batches for this company
+      3. Delete the company row
+      4. Drop the company data table and ML artifacts
+    """
+    # 1. Delete every user in the company (auth + public row)
+    members_res = supabase.table("users").select("*").eq("company_id", company_id).execute()
+    for member in (members_res.data or []):
+        _delete_auth_user(member.get("uuid"))
+        _cascade_delete_user_row(member)
+
+    # 2. Dependent rows that FK → companies.id
+    for tbl in ("feedback", "training_batches"):
+        try:
+            supabase.table(tbl).delete().eq("company_id", company_id).execute()
+        except Exception as e:
+            print(f"[cascade] clearing {tbl} for company {company_id}: {e}")
+
+    # 3. Fetch data_table name before deleting the company row
+    co_info = supabase.table("companies").select("data_table").eq("id", company_id).execute()
+    co_table = (co_info.data or [{}])[0].get("data_table") if co_info.data else None
+
+    # 4. Delete company row
+    supabase.table("companies").delete().eq("id", company_id).execute()
+
+    # 5. Drop the per-company Postgres table (skip shared tables)
+    if co_table and co_table not in ("bugs", "firefox_table"):
+        try:
+            db_provision.drop_company_table(company_id)
+            print(f"[cascade] dropped company table: {co_table}")
+        except Exception as drop_err:
+            print(f"[cascade] could not drop table {co_table}: {drop_err}")
+
+    # 6. Remove per-company ML model artifacts
+    models_dir = os.path.join(BASE_DIR, "models", f"company_{company_id}")
+    if os.path.isdir(models_dir):
+        shutil.rmtree(models_dir, ignore_errors=True)
+        print(f"[cascade] removed ML artifacts: {models_dir}")
+
+
 # ── 6. Admin: delete a user ───────────────────────────────────────────────────
 @app.delete("/api/admin/users/{user_uuid}")
 def admin_delete_user(
         user_uuid: str,
-        delete_company: bool = False,  # NEW: super_admin can pass ?delete_company=true
+        delete_company: bool = False,
         current_user: dict = Depends(auth.require_admin),
 ):
     """
-    Deletes a user from BOTH public.users and auth.users.
-
-    Super admin extra:
-    - If delete_company=true and the user was the last member of their company,
-      the company row is also deleted.
-    - Admins cannot delete companies — only super_admins.
+    Fully deletes a user: all FK-dependent rows → public.users → auth.users.
+    Super admin + delete_company=true: also wipes the company and every member.
     """
-    cid = current_user.get("company_id")
+    cid       = current_user.get("company_id")
     true_role = current_user.get("role")
 
     if user_uuid == current_user.get("uuid"):
         raise HTTPException(status_code=400, detail="You cannot remove your own account")
 
-    # Verify target user exists and (for non-super-admins) belongs to same company
     if true_role == "super_admin":
         target = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
     else:
         target = supabase.table("users").select("*").eq("uuid", user_uuid).eq("company_id", cid).execute()
 
     if not target.data:
-        raise HTTPException(status_code=404, detail="User not found in your company")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    target_user = target.data[0]
+    target_user    = target.data[0]
     target_company = target_user.get("company_id")
-
-    # Step 1: Delete from public.users
-    supabase.table("users").delete().eq("uuid", user_uuid).execute()
-
-    # Step 2: Delete from auth.users via Supabase Admin API
-    auth_deleted = True
-    try:
-        from database import SUPABASE_URL, SUPABASE_KEY
-        import requests as http_requests
-
-        response = http_requests.delete(
-            f"{SUPABASE_URL}/auth/v1/admin/users/{user_uuid}",
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-            },
-            timeout=10,
-        )
-        if response.status_code not in (200, 204):
-            print(f"[delete_user] auth.users deletion failed for {user_uuid}: "
-                  f"{response.status_code} {response.text}")
-            auth_deleted = False
-    except Exception as e:
-        print(f"[delete_user] auth.users deletion exception for {user_uuid}: {e}")
-        auth_deleted = False
-
-    # Step 3: Super admin — optionally delete the company if it's now empty
-    company_deleted = False
-    company_delete_error = None
+    display_name   = target_user.get("username") or target_user.get("email")
 
     if delete_company and true_role == "super_admin" and target_company:
-        try:
-            # Check how many users still belong to this company
-            remaining = supabase.table("users").select("id", count="exact") \
-                .eq("company_id", target_company).execute()
-            remaining_count = remaining.count or 0
+        # Wipe the entire company (all members + all data)
+        _cascade_delete_company(target_company)
+        return {
+            "message":         f"User '{display_name}' and their entire company deleted.",
+            "company_deleted": True,
+            "uuid":            user_uuid,
+        }
 
-            if remaining_count == 0:
-                # Fetch data_table before deleting company row
-                co_info = supabase.table("companies").select("data_table").eq("id", target_company).execute()
-                co_table = co_info.data[0].get("data_table") if co_info.data else None
+    # Single-user delete: FK rows → public row → auth
+    _cascade_delete_user_row(target_user)
+    _delete_auth_user(user_uuid)
 
-                # Safe to delete company row — no users left
-                supabase.table("companies").delete().eq("id", target_company).execute()
-                company_deleted = True
-
-                # Drop the per-company table (skip shared tables like firefox_table)
-                if co_table and co_table not in ("bugs", "firefox_table"):
-                    try:
-                        db_provision.drop_company_table(target_company)
-                        print(f"[delete_user] Dropped company table: {co_table}")
-                    except Exception as drop_err:
-                        print(f"[delete_user] Warning: could not drop table {co_table}: {drop_err}")
-
-                # Drop per-company ML model artifacts
-                models_dir = os.path.join(BASE_DIR, "models", f"company_{target_company}")
-                if os.path.isdir(models_dir):
-                    shutil.rmtree(models_dir, ignore_errors=True)
-                    print(f"[delete_user] Removed ML artifacts: {models_dir}")
-            else:
-                company_delete_error = f"Company not deleted — {remaining_count} user(s) still belong to it."
-        except Exception as e:
-            company_delete_error = str(e)
-
-    result = {
-        "message": f"User '{target_user.get('username') or target_user.get('email')}' deleted.",
-        "warning": not auth_deleted,
-        "uuid": user_uuid,
-        "company_deleted": company_deleted,
+    return {
+        "message":         f"User '{display_name}' deleted.",
+        "company_deleted": False,
+        "uuid":            user_uuid,
     }
-    if company_delete_error:
-        result["company_warning"] = company_delete_error
-    if not auth_deleted:
-        result["message"] += " Auth record may need manual cleanup."
-
-    return result
 
 
 @app.get("/api/superadmin/company_detail/{company_id}")
