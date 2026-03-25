@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS, STATUS_DEFS } from '../Components/Glossary';
 
-// Status color helper
 function statusColor(status) {
     const s = (status || '').toUpperCase();
     if (s === 'VERIFIED') return '#6366f1';
@@ -82,11 +81,9 @@ function SevBadge({ sev }) {
     );
 }
 
-// Infer the likely origin of a bug from its fields
 function inferOrigin(bug) {
     const status = (bug.status || '').toUpperCase();
     const id = bug.id;
-    // Bugzilla bugs have numeric IDs in the millions (Mozilla's real IDs)
     if (id > 100000) return { label: 'Bugzilla', icon: <Globe size={11} />, color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', desc: 'Synced from Mozilla Bugzilla. Status values (UNCONFIRMED, RESOLVED, etc.) are preserved directly from Bugzilla\'s own workflow.' };
     if (status === 'PROCESSED') return { label: 'Dataset', icon: <Database size={11} />, color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.25)', desc: 'From the pre-loaded Firefox historical dataset (220k+ bugs used for ML training).' };
     if (bug.batch_id || status === 'BULK') return { label: 'Bulk upload', icon: <UploadCloud size={11} />, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)', desc: 'Uploaded via admin bulk import (JSON/CSV file).' };
@@ -95,31 +92,54 @@ function inferOrigin(bug) {
 
 function OriginBadge({ origin }) {
     return (
-        <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 5,
-            fontSize: 10, fontWeight: 700, color: origin.color, background: origin.bg, border: `1px solid ${origin.border}`,
-            fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
-        }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700, color: origin.color, background: origin.bg, border: `1px solid ${origin.border}`, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
             {origin.icon} {origin.label}
         </span>
     );
 }
 
+const SEV_OPTIONS = [
+    { value: '', label: 'All severities' }, { value: 'S1', label: 'S1 — Critical' },
+    { value: 'S2', label: 'S2 — High' },    { value: 'S3', label: 'S3 — Medium' },
+    { value: 'S4', label: 'S4 — Low' },
+];
+const STATUS_OPTIONS = [
+    { value: '', label: 'All statuses' },        { value: 'NEW', label: 'New' },
+    { value: 'UNCONFIRMED', label: 'Unconfirmed' }, { value: 'CONFIRMED', label: 'Confirmed' },
+    { value: 'RESOLVED', label: 'Resolved' },    { value: 'VERIFIED', label: 'Verified' },
+];
+const COMP_OPTIONS = [
+    { value: '', label: 'All components' }, { value: 'Core', label: 'Core' },
+    { value: 'DevTools', label: 'DevTools' }, { value: 'Frontend', label: 'Frontend' },
+    { value: 'Security', label: 'Security' }, { value: 'Layout', label: 'Layout' },
+    { value: 'Networking', label: 'Networking' },
+];
+const PER_PAGE_OPTIONS = [
+    { value: 10, label: '10 rows' }, { value: 25, label: '25 rows' },
+    { value: 50, label: '50 rows' }, { value: 100, label: '100 rows' },
+];
+const QUICK_FILTERS = [
+    { key: 'critical', label: 'Critical',  icon: <Zap size={11} /> },
+    { key: 'triage',   label: 'Triage',    icon: <Clock size={11} /> },
+    { key: 'resolved', label: 'Resolved',  icon: <CheckCircle size={11} /> },
+    { key: 'security', label: 'Security',  icon: <ShieldAlert size={11} /> },
+];
+
 export default function Explorer({ user, initialQuery = "", onNavigate }) {
-    const [bugs, setBugs] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [exporting, setExporting] = useState(false);
-    const [showGlossary, setShowGlossary] = useState(false);
-    const [search, setSearch] = useState(initialQuery);
+    const [bugs,            setBugs]            = useState([]);
+    const [total,           setTotal]           = useState(0);
+    const [loading,         setLoading]         = useState(true);
+    const [exporting,       setExporting]       = useState(false);
+    const [showGlossary,    setShowGlossary]    = useState(false);
+    const [search,          setSearch]          = useState(initialQuery);
     const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
-    const [sevFilter, setSevFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [compFilter, setCompFilter] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
-    const [page, setPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [selectedBug, setSelectedBug] = useState(null);
+    const [sevFilter,       setSevFilter]       = useState('');
+    const [statusFilter,    setStatusFilter]    = useState('');
+    const [compFilter,      setCompFilter]      = useState('');
+    const [sortConfig,      setSortConfig]      = useState({ key: 'id', direction: 'desc' });
+    const [page,            setPage]            = useState(1);
+    const [itemsPerPage,    setItemsPerPage]    = useState(10);
+    const [selectedBug,     setSelectedBug]     = useState(null);
 
     useEffect(() => { setSearch(initialQuery); setPage(1); }, [initialQuery]);
     useEffect(() => {
@@ -132,14 +152,9 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         try {
             const response = await axios.get('/api/hub/explorer', {
                 params: {
-                    page,
-                    limit: itemsPerPage,
-                    search: debouncedSearch,
-                    sort_key: sortConfig.key,
-                    sort_dir: sortConfig.direction,
-                    sev: sevFilter,
-                    status: statusFilter,
-                    comp: compFilter,
+                    page, limit: itemsPerPage, search: debouncedSearch,
+                    sort_key: sortConfig.key, sort_dir: sortConfig.direction,
+                    sev: sevFilter, status: statusFilter, comp: compFilter,
                     requested_role: user?.context_role || user?.role || 'user',
                 }
             });
@@ -159,7 +174,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
     const applyQuickFilter = (type) => {
         clearFilters();
         if (type === 'critical') { setSevFilter('S1'); setStatusFilter('NEW'); }
-        if (type === 'triage') setStatusFilter('UNCONFIRMED');
+        if (type === 'triage')   setStatusFilter('UNCONFIRMED');
         if (type === 'resolved') setStatusFilter('RESOLVED');
         if (type === 'security') setCompFilter('Security');
     };
@@ -180,31 +195,10 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
 
     const hasFilters = !!(sevFilter || statusFilter || compFilter || search);
 
-    const sevOptions = [
-        { value: '', label: 'All severities' }, { value: 'S1', label: 'S1 — Critical' },
-        { value: 'S2', label: 'S2 — High' }, { value: 'S3', label: 'S3 — Medium' }, { value: 'S4', label: 'S4 — Low' },
-    ];
-    const statusOptions = [
-        { value: '', label: 'All statuses' }, { value: 'NEW', label: 'New' },
-        { value: 'UNCONFIRMED', label: 'Unconfirmed' }, { value: 'CONFIRMED', label: 'Confirmed' },
-        { value: 'RESOLVED', label: 'Resolved' }, { value: 'VERIFIED', label: 'Verified' },
-    ];
-    const compOptions = [
-        { value: '', label: 'All components' }, { value: 'Core', label: 'Core' },
-        { value: 'DevTools', label: 'DevTools' }, { value: 'Frontend', label: 'Frontend' },
-        { value: 'Security', label: 'Security' }, { value: 'Layout', label: 'Layout' },
-        { value: 'Networking', label: 'Networking' },
-    ];
-    const perPageOptions = [
-        { value: 10, label: '10 rows' }, { value: 25, label: '25 rows' },
-        { value: 50, label: '50 rows' }, { value: 100, label: '100 rows' },
-    ];
-
     return (
         <div className="page-content fade-in" style={{ position: 'relative' }}>
             {showGlossary && <GlossaryDrawer onClose={() => setShowGlossary(false)} />}
 
-            {/* Header */}
             <div className="explorer-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
@@ -215,12 +209,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
                         <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Labels & statuses" />
-                        {[
-                            { key: 'critical', label: 'Critical',  icon: <Zap size={11} /> },
-                            { key: 'triage',   label: 'Triage',    icon: <Clock size={11} /> },
-                            { key: 'resolved', label: 'Resolved',  icon: <CheckCircle size={11} /> },
-                            { key: 'security', label: 'Security',  icon: <ShieldAlert size={11} /> },
-                        ].map(f => (
+                        {QUICK_FILTERS.map(f => (
                             <button key={f.key} className="quick-chip" onClick={() => applyQuickFilter(f.key)} style={{ fontSize: 12 }}>
                                 {f.icon} {f.label}
                             </button>
@@ -229,7 +218,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                     </div>
                 </div>
 
-                {/* Filter bar */}
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
                         <Search size={14} color="var(--text-sec)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
@@ -239,9 +227,9 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                             onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }} />
                         {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', padding: 4, display: 'flex' }}><X size={12} /></button>}
                     </div>
-                    <div style={{ width: 152 }}><CustomSelect value={sevFilter} onChange={v => { setSevFilter(v); setPage(1); }} options={sevOptions} placeholder="All severities" /></div>
-                    <div style={{ width: 152 }}><CustomSelect value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }} options={statusOptions} placeholder="All statuses" /></div>
-                    <div style={{ width: 158 }}><CustomSelect value={compFilter} onChange={v => { setCompFilter(v); setPage(1); }} options={compOptions} placeholder="All components" /></div>
+                    <div style={{ width: 152 }}><CustomSelect value={sevFilter} onChange={v => { setSevFilter(v); setPage(1); }} options={SEV_OPTIONS} placeholder="All severities" /></div>
+                    <div style={{ width: 152 }}><CustomSelect value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }} options={STATUS_OPTIONS} placeholder="All statuses" /></div>
+                    <div style={{ width: 158 }}><CustomSelect value={compFilter} onChange={v => { setCompFilter(v); setPage(1); }} options={COMP_OPTIONS} placeholder="All components" /></div>
                     <button className="sys-btn outline" onClick={handleExport} disabled={exporting}
                         style={{ height: 40, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: 'var(--card-bg)', whiteSpace: 'nowrap' }}>
                         {exporting ? <Loader size={13} className="spin" /> : <Download size={13} />} Export
@@ -249,7 +237,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                 </div>
             </div>
 
-            {/* Table */}
             <div className="sys-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -262,11 +249,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                                     { key: 'summary',   label: 'Summary',   w: null },
                                     { key: 'status',    label: 'Status',    w: 130 },
                                 ].map(col => (
-                                    <th key={col.key} onClick={() => requestSort(col.key)} style={{
-                                        padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 800,
-                                        color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8,
-                                        cursor: 'pointer', whiteSpace: 'nowrap', width: col.w || undefined, userSelect: 'none',
-                                    }}>
+                                    <th key={col.key} onClick={() => requestSort(col.key)} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8, cursor: 'pointer', whiteSpace: 'nowrap', width: col.w || undefined, userSelect: 'none' }}>
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                             {col.label}
                                             {sortConfig.key === col.key && <span style={{ color: 'var(--accent)' }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
@@ -313,11 +296,10 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                     </table>
                 </div>
 
-                {/* Pagination */}
                 <div className="table-footer">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>Rows per page</span>
-                        <div style={{ width: 108 }}><CustomSelect value={itemsPerPage} onChange={v => { setItemsPerPage(Number(v)); setPage(1); }} options={perPageOptions} placeholder="10 rows" dropUp={true} /></div>
+                        <div style={{ width: 108 }}><CustomSelect value={itemsPerPage} onChange={v => { setItemsPerPage(Number(v)); setPage(1); }} options={PER_PAGE_OPTIONS} placeholder="10 rows" dropUp={true} /></div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>
@@ -331,7 +313,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                 </div>
             </div>
 
-            {/* Bug inspector */}
             {selectedBug && (() => {
                 const origin = inferOrigin(selectedBug);
                 const sevDef = SEVERITY_DEFS.find(d => d.code === selectedBug.severity);
@@ -374,7 +355,6 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                                 </div>
                             </div>
 
-                            {/* Lifecycle / origin panel */}
                             <div style={{ padding: 16, background: 'var(--bg)', borderRadius: 10, border: '1px dashed var(--border)', marginBottom: 16 }}>
                                 <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                                     <Clock size={11} /> How this bug entered the system
@@ -386,51 +366,30 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                                 <div style={{ fontSize: 12, color: 'var(--text-sec)', paddingLeft: 10, borderLeft: '2px solid var(--border)', marginLeft: 4, lineHeight: 1.9, marginTop: 8 }}>
                                     {origin.label === 'Bugzilla' ? (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Pulled from Mozilla Bugzilla API via 24-hour background sync
-                                            </div>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Status</strong> — <span style={{ color: statusColor(selectedBug.status), fontWeight: 700 }}>{selectedBug.status}</span> reflects Bugzilla's own workflow state, not our AI triage
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Severity re-classified to <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> using our Random Forest model
-                                            </div>
+                                            <div style={{ marginBottom: 6 }}><strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Pulled from Mozilla Bugzilla API via 24-hour background sync</div>
+                                            <div style={{ marginBottom: 6 }}><strong style={{ color: 'var(--text-main)' }}>Status</strong> — <span style={{ color: statusColor(selectedBug.status), fontWeight: 700 }}>{selectedBug.status}</span> reflects Bugzilla's own workflow state, not our AI triage</div>
+                                            <div><strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Severity re-classified to <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> using our Random Forest model</div>
                                         </>
                                     ) : origin.label === 'Manual' ? (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Submitted by a team member via the Severity Analysis tab
-                                            </div>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Status</strong> — Set to <strong>NEW</strong> on creation; updated as it moves through triage
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Classified as <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> by the ML model at submission time
-                                            </div>
+                                            <div style={{ marginBottom: 6 }}><strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Submitted by a team member via the Severity Analysis tab</div>
+                                            <div style={{ marginBottom: 6 }}><strong style={{ color: 'var(--text-main)' }}>Status</strong> — Set to <strong>NEW</strong> on creation; updated as it moves through triage</div>
+                                            <div><strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Classified as <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> by the ML model at submission time</div>
                                         </>
                                     ) : origin.label === 'Bulk upload' ? (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Ingested from an admin-uploaded JSON or CSV batch file
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Batch-classified as <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> during upload processing
-                                            </div>
+                                            <div style={{ marginBottom: 6 }}><strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Ingested from an admin-uploaded JSON or CSV batch file</div>
+                                            <div><strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Batch-classified as <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> during upload processing</div>
                                         </>
                                     ) : (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Pre-loaded from the Firefox historical bug dataset
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>Purpose</strong> — Used as baseline training data for the Random Forest classifier
-                                            </div>
+                                            <div style={{ marginBottom: 6 }}><strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Pre-loaded from the Firefox historical bug dataset</div>
+                                            <div><strong style={{ color: 'var(--text-main)' }}>Purpose</strong> — Used as baseline training data for the Random Forest classifier</div>
                                         </>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Status explanation note */}
                             {(selectedBug.status === 'UNCONFIRMED' || selectedBug.status === 'CONFIRMED') && (
                                 <div style={{ display: 'flex', gap: 8, padding: '10px 13px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8 }}>
                                     <Info size={13} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} />

@@ -15,16 +15,16 @@ const SAMPLE_BUGS = [
 ];
 
 export default function BugAnalysis({ selectedModel = 'rf' }) {
-  const [query, setQuery] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [prediction, setPrediction] = useState(null);
-  const [duplicates, setDuplicates] = useState([]);
-  const [error, setError] = useState(null);
-  const [feedbackSent, setFeedbackSent] = useState(false);
-  const [showCorrection, setShowCorrection] = useState(false);
-  const [correctedSev, setCorrectedSev] = useState('S2');
+  const [query,              setQuery]              = useState('');
+  const [analyzing,          setAnalyzing]          = useState(false);
+  const [prediction,         setPrediction]         = useState(null);
+  const [duplicates,         setDuplicates]         = useState([]);
+  const [error,              setError]              = useState(null);
+  const [feedbackSent,       setFeedbackSent]       = useState(false);
+  const [showCorrection,     setShowCorrection]     = useState(false);
+  const [correctedSev,       setCorrectedSev]       = useState('S2');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
-  const [showGlossary, setShowGlossary] = useState(false);
+  const [showGlossary,       setShowGlossary]       = useState(false);
 
   const handleAnalyze = async (overrideQuery = null) => {
     const text = overrideQuery || query;
@@ -32,9 +32,7 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
     setAnalyzing(true); setError(null); setPrediction(null); setFeedbackSent(false); setShowCorrection(false);
     if (overrideQuery) setQuery(overrideQuery);
     try {
-      const res = await axios.get('/api/analyze_bug', {
-        params: { bug_text: text, model_source: 'universal' },
-      });
+      const res = await axios.get('/api/analyze_bug', { params: { bug_text: text, model_source: 'universal' } });
       setPrediction(res.data.severity);
       setDuplicates(res.data.similar_bugs || []);
     } catch (err) {
@@ -65,7 +63,6 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
     <div style={{ maxWidth: 780, margin: '0 auto', padding: '36px 24px', minHeight: 'calc(100vh - 100px)' }} className="fade-in">
       {showGlossary && <GlossaryDrawer onClose={() => setShowGlossary(false)} />}
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -79,66 +76,36 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
         <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Severity guide" />
       </div>
 
-      {/* Search input */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Search size={16} color="var(--text-sec)" style={{ position: 'absolute', left: 14, pointerEvents: 'none' }} />
-            <input
-              type="text"
-              placeholder="Describe the bug in plain language…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
-              style={{
-                width: '100%', height: 52, paddingLeft: 44, paddingRight: 16,
-                background: 'var(--card-bg)', border: '1.5px solid var(--border)',
-                borderRadius: 10, fontSize: 14, color: 'var(--text-main)',
-                outline: 'none', fontFamily: 'var(--font-head)',
-                transition: 'border-color 0.2s, box-shadow 0.2s',
-                boxSizing: 'border-box',
-              }}
+            <input type="text" placeholder="Describe the bug in plain language…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
+              style={{ width: '100%', height: 52, paddingLeft: 44, paddingRight: 16, background: 'var(--card-bg)', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 14, color: 'var(--text-main)', outline: 'none', fontFamily: 'var(--font-head)', transition: 'border-color 0.2s, box-shadow 0.2s', boxSizing: 'border-box' }}
               onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.1)'; }}
-              onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
-            />
+              onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }} />
           </div>
-          <button
-            onClick={() => handleAnalyze()}
-            disabled={analyzing || !query.trim()}
-            style={{
-              height: 52, padding: '0 24px', background: 'var(--accent)', color: 'white',
-              border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
-              opacity: !query.trim() ? 0.5 : 1, transition: 'opacity 0.2s, transform 0.1s',
-              fontFamily: 'var(--font-head)',
-            }}
+          <button onClick={() => handleAnalyze()} disabled={analyzing || !query.trim()}
+            style={{ height: 52, padding: '0 24px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', opacity: !query.trim() ? 0.5 : 1, transition: 'opacity 0.2s, transform 0.1s', fontFamily: 'var(--font-head)' }}
             onMouseEnter={e => { if (query.trim()) e.currentTarget.style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
             {analyzing ? <><RefreshCw size={14} className="spin" /> Analysing…</> : <><Zap size={14} /> Analyse</>}
           </button>
           {(prediction || query) && (
-            <button onClick={handleReset} title="Reset" style={{
-              height: 52, width: 52, background: 'var(--hover-bg)', border: '1px solid var(--border)',
-              borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              transition: 'all 0.15s',
-            }}
+            <button onClick={handleReset} title="Reset"
+              style={{ height: 52, width: 52, background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--danger)'; e.currentTarget.style.color = 'var(--danger)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-sec)'; }}>
               <RotateCcw size={15} color="currentColor" />
             </button>
           )}
         </div>
-
-        {/* RAG note */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 8, justifyContent: 'flex-end' }}>
           <Database size={11} color="var(--text-sec)" />
-          <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>
-            Similar issues retrieved via <strong style={{ color: 'var(--text-main)' }}>semantic search (RAG)</strong>
-          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>Similar issues retrieved via <strong style={{ color: 'var(--text-main)' }}>semantic search (RAG)</strong></span>
         </div>
       </div>
 
-      {/* Sample bugs */}
       {!prediction && !analyzing && (
         <div className="fade-in" style={{ marginTop: 36, textAlign: 'center' }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, letterSpacing: 0.6, textTransform: 'uppercase' }}>
@@ -160,16 +127,12 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
         </div>
       )}
 
-      {/* Results — vertical stack */}
       {prediction && (
         <div className="fade-in" style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-          {/* Severity result */}
           <div className="sys-card" style={{ padding: 24 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
               <AlertTriangle size={12} /> Severity prediction
             </div>
-
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <span style={{ padding: '6px 20px', borderRadius: 9, fontSize: 22, fontWeight: 800, background: sevDef?.bg || 'var(--hover-bg)', color: sevDef?.color || 'var(--text-main)', border: `2px solid ${sevDef?.border || 'var(--border)'}`, fontFamily: 'var(--font-mono)' }}>
                 {prediction.prediction}
@@ -182,15 +145,11 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
                 </div>
               </div>
             </div>
-
             <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: '0 0 16px', lineHeight: 1.7 }}>{sevDef?.desc}</p>
-
             <div style={{ padding: '12px 16px', background: sevDef?.bg || 'var(--hover-bg)', borderRadius: 8, borderLeft: `3px solid ${sevDef?.color || 'var(--border)'}`, marginBottom: prediction && !feedbackSent ? 16 : 0 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Recommended action</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{sevDef?.action || prediction.diagnosis}</div>
             </div>
-
-            {/* Feedback */}
             {!feedbackSent && !showCorrection && (
               <div style={{ paddingTop: 16, borderTop: '1px dashed var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-sec)', fontWeight: 600 }}>Is this accurate?</span>
@@ -229,26 +188,19 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
             )}
           </div>
 
-          {/* Similar bugs */}
           <div className="sys-card" style={{ padding: 24 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Database size={12} /> Similar bugs found via RAG
             </div>
             {duplicates.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-sec)', fontSize: 13, padding: '20px 0' }}>
-                No similar bugs found in the database.
-              </div>
+              <div style={{ textAlign: 'center', color: 'var(--text-sec)', fontSize: 13, padding: '20px 0' }}>No similar bugs found in the database.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {duplicates.slice(0, 6).map((dup, i) => (
                   <div key={i} style={{ padding: '12px 16px', background: 'var(--hover-bg)', borderRadius: 9, border: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flexShrink: 0 }}>
                       {dup.severity && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 4, fontFamily: 'var(--font-mono)',
-                          background: dup.severity === 'S1' ? 'rgba(239,68,68,0.1)' : dup.severity === 'S2' ? 'rgba(245,158,11,0.1)' : dup.severity === 'S3' ? 'rgba(59,130,246,0.1)' : 'var(--hover-bg)',
-                          color: dup.severity === 'S1' ? '#ef4444' : dup.severity === 'S2' ? '#f59e0b' : dup.severity === 'S3' ? '#3b82f6' : 'var(--text-sec)',
-                        }}>{dup.severity}</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 4, fontFamily: 'var(--font-mono)', background: dup.severity === 'S1' ? 'rgba(239,68,68,0.1)' : dup.severity === 'S2' ? 'rgba(245,158,11,0.1)' : dup.severity === 'S3' ? 'rgba(59,130,246,0.1)' : 'var(--hover-bg)', color: dup.severity === 'S1' ? '#ef4444' : dup.severity === 'S2' ? '#f59e0b' : dup.severity === 'S3' ? '#3b82f6' : 'var(--text-sec)' }}>{dup.severity}</span>
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -263,7 +215,6 @@ export default function BugAnalysis({ selectedModel = 'rf' }) {
               </div>
             )}
           </div>
-
         </div>
       )}
     </div>

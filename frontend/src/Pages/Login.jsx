@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   ShieldCheck, CheckCircle, Mail, Lock, ArrowRight,
-  Activity, Sun, Moon, Eye, EyeOff, Building2,
-  AlertTriangle, User
+  Activity, Sun, Moon, Eye, EyeOff, Building2, User
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import axios from 'axios';
@@ -30,7 +29,7 @@ function PasswordInput({ value, onChange, placeholder, required = true }) {
   );
 }
 
-export default function Login({ onLogin, theme, toggleTheme }) {
+export default function Login({ onLogin, theme, toggleTheme, forceResetRecovery = false, onResetDone = null }) {
   const [mode, setMode]                       = useState('login');
   const [viewState, setViewState]             = useState('form');
   const [email, setEmail]                     = useState('');
@@ -44,7 +43,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
   const [isLoading, setIsLoading]             = useState(false);
   const [isRecovery, setIsRecovery]           = useState(false);
 
-  // Request-access state
   const [reqCompanyId, setReqCompanyId]         = useState('');
   const [companies, setCompanies]               = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
@@ -59,7 +57,17 @@ export default function Login({ onLogin, theme, toggleTheme }) {
     });
   }, []);
 
-  // Load companies list whenever we're on the user register form
+  useEffect(() => {
+    if (!forceResetRecovery) return;
+    setMode('reset');
+    setViewState('form');
+    setIsRecovery(true);
+    setMsg('Recovery session active. Please enter your new password.');
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) setEmail(data.user.email);
+    }).catch(() => {});
+  }, [forceResetRecovery]);
+
   useEffect(() => {
     if (mode !== 'register' || registerRole !== 'user') return;
     if (companies.length > 0) return;
@@ -86,7 +94,8 @@ export default function Login({ onLogin, theme, toggleTheme }) {
 
     try {
       if (mode === 'login') {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const normalizedEmail = email.trim().toLowerCase();
+        const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
         const { data: factors } = await supabase.auth.mfa.listFactors();
         if (factors?.totp?.length > 0) {
@@ -96,9 +105,9 @@ export default function Login({ onLogin, theme, toggleTheme }) {
         }
 
       } else if (mode === 'register') {
-        // Only admins reach handleAuth for registration — users go to handleRequestAccess
+        const normalizedEmail = email.trim().toLowerCase();
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-          email, password,
+          email: normalizedEmail, password,
           options: {
             data: {
               username:     username.trim(),
@@ -121,7 +130,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
           await axios.post('/api/register', {
             company_name: companyName.trim(),
             username:     username.trim(),
-            email:        email.trim(),
+            email:        normalizedEmail,
             uuid:         authUuid,
             role:         'admin',
             invite_code:  '',
@@ -142,7 +151,10 @@ export default function Login({ onLogin, theme, toggleTheme }) {
           if (error) throw error;
           setMsg('Password updated successfully.');
           setIsRecovery(false);
-          setTimeout(() => switchTo('login'), 3000);
+          setTimeout(() => {
+            if (onResetDone) onResetDone();
+            switchTo('login');
+          }, 3000);
         } else {
           const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
           if (error) throw error;
@@ -151,7 +163,12 @@ export default function Login({ onLogin, theme, toggleTheme }) {
         }
       }
     } catch (err) {
-      setMsg(err.message || 'Something went wrong. Please try again.');
+      const errMsg = err?.message || 'Something went wrong. Please try again.';
+      if (mode === 'login' && /invalid login credentials/i.test(errMsg)) {
+        setMsg('Invalid email or password. If your account was recently approved, try the latest invite link to set/reset your password.');
+      } else {
+        setMsg(errMsg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -175,7 +192,8 @@ export default function Login({ onLogin, theme, toggleTheme }) {
 
   const handleRequestAccess = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !email.trim() || !password || !reqCompanyId) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!username.trim() || !normalizedEmail || !password || !reqCompanyId) {
       setMsg('Please fill in all fields.'); return;
     }
     if (password !== confirmPassword) {
@@ -186,7 +204,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
     }
     setIsLoading(true); setMsg('');
     try {
-      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email, password });
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: normalizedEmail, password });
       if (signUpErr) throw signUpErr;
       if (signUpData?.user?.identities?.length === 0) {
         throw new Error('This email already has an account. Try signing in instead.');
@@ -195,7 +213,7 @@ export default function Login({ onLogin, theme, toggleTheme }) {
 
       await axios.post('/api/invite/request', {
         username:   username.trim(),
-        email:      email.trim().toLowerCase(),
+        email:      normalizedEmail,
         company_id: parseInt(reqCompanyId, 10),
         uuid:       authUuid || '',
       });
@@ -252,8 +270,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
         </div>
 
         <div className="login-form-side">
-
-          {/* Request sent confirmation */}
           {viewState === 'request_sent' && (
             <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
               <div style={{ width: 64, height: 64, background: 'rgba(99,102,241,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
@@ -272,7 +288,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
             </div>
           )}
 
-          {/* Admin registration submitted (pending super admin approval) */}
           {viewState === 'success' && (
             <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
               <div style={{ width: 64, height: 64, background: 'rgba(245,158,11,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
@@ -291,7 +306,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
             </div>
           )}
 
-          {/* MFA */}
           {viewState === 'mfa_challenge' && (
             <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
               <div style={{ width: 64, height: 64, background: 'var(--pill-bg)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
@@ -309,15 +323,12 @@ export default function Login({ onLogin, theme, toggleTheme }) {
             </div>
           )}
 
-          {/* Main form */}
           {viewState === 'form' && (
             <div className="fade-in form-content-wrapper">
               <h2 className="login-title">{headings[mode]}</h2>
               <p className="login-sub">{subheadings[mode]}</p>
 
               <form onSubmit={mode === 'register' && registerRole === 'user' ? handleRequestAccess : handleAuth} className="modern-form">
-
-                {/* REGISTER: role toggle */}
                 {mode === 'register' && (
                   <div style={{ marginBottom: 20 }}>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 10, textTransform: 'uppercase' }}>
@@ -349,7 +360,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                   </div>
                 )}
 
-                {/* Email */}
                 <div className="input-group">
                   <Mail size={18} className="input-icon" style={{ opacity: 0.5 }} />
                   <input className="sys-input login-input" type="email" placeholder="Work email" value={email}
@@ -363,10 +373,8 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                   <PasswordInput value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm password" />
                 )}
 
-                {/* Register-only fields */}
                 {mode === 'register' && (
                   <>
-                    {/* Admin: company name */}
                     {registerRole === 'admin' && (
                       <div className="fade-in">
                         <div className="input-group">
@@ -390,7 +398,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                       </div>
                     )}
 
-                    {/* Regular user: company dropdown */}
                     {registerRole === 'user' && (
                       <div className="fade-in">
                         <div className="input-group">
@@ -412,7 +419,6 @@ export default function Login({ onLogin, theme, toggleTheme }) {
                       </div>
                     )}
 
-                    {/* Display name */}
                     <div className="input-group fade-in">
                       <User size={18} className="input-icon" style={{ opacity: 0.5 }} />
                       <input className="sys-input login-input" placeholder="Your display name" value={username}

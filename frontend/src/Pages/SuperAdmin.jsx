@@ -19,7 +19,7 @@ export default function SuperAdmin({ user }) {
   const [showCreate,   setShowCreate]   = useState(false);
   const [createForm,   setCreateForm]   = useState(BLANK_USER);
   const [creating,     setCreating]     = useState(false);
-  const [createMsg,    setCreateMsg]    = useState(null); // { type, text }
+  const [createMsg,    setCreateMsg]    = useState(null);
 
   const DEMO = [
     { id: 1, name: 'Apex Demo Corp',    total: 222847, critical: 1203, resolved: 186400, users: 14, model_acc: 86.3, last_active: '2 min ago' },
@@ -107,8 +107,6 @@ export default function SuperAdmin({ user }) {
 
   return (
     <div className="page-content fade-in">
-
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -151,7 +149,6 @@ export default function SuperAdmin({ user }) {
         </div>
       )}
 
-      {/* Summary stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
         {[
           { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={18} color="var(--accent)" />,     sub: 'Across all orgs' },
@@ -170,7 +167,6 @@ export default function SuperAdmin({ user }) {
         ))}
       </div>
 
-      {/* Pending Approvals */}
       {(pending.length > 0 || actionMsg) && (
         <div className="sys-card fade-in" style={{ padding: 0, overflow: 'hidden', marginBottom: 24, border: '1px solid rgba(245,158,11,0.3)' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -229,7 +225,6 @@ export default function SuperAdmin({ user }) {
         </div>
       )}
 
-      {/* Organisations table */}
       <div className="sys-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Globe size={15} color="var(--accent)" />
@@ -305,7 +300,6 @@ export default function SuperAdmin({ user }) {
         </table>
       </div>
 
-      {/* Create User Modal */}
       {showCreate && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
@@ -366,7 +360,6 @@ export default function SuperAdmin({ user }) {
         </div>
       )}
 
-      {/* Selected org detail */}
       {selected && (
         <div className="sys-card fade-in" style={{ padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>

@@ -41,21 +41,14 @@ function PipelineStrip() {
   const [expanded, setExpanded] = useState(false);
   return (
     <div style={{ marginBottom: 20 }}>
-      <button onClick={() => setExpanded(e => !e)} style={{
-        display: 'flex', alignItems: 'center', gap: 6, background: 'none',
-        border: 'none', cursor: 'pointer', padding: 0,
-        fontSize: 12, fontWeight: 700, color: 'var(--text-sec)',
-        fontFamily: 'var(--font-head)', textTransform: 'uppercase', letterSpacing: 0.6,
-      }}>
+      <button onClick={() => setExpanded(e => !e)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', fontFamily: 'var(--font-head)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
         <Info size={13} color="var(--accent)" />
         Bug Lifecycle Pipeline
         <span style={{ color: 'var(--accent)', fontSize: 11, marginLeft: 2 }}>{expanded ? '▲' : '▼'}</span>
       </button>
       {expanded && (
         <div className="fade-in" style={{ marginTop: 14, padding: '20px 24px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: '0 0 20px', lineHeight: 1.7 }}>
-            Every bug moves through these stages — from first report to final close.
-          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: '0 0 20px', lineHeight: 1.7 }}>Every bug moves through these stages — from first report to final close.</p>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
             {PIPELINE_STEPS.map((step, i) => (
               <div key={step.label} style={{ display: 'flex', alignItems: 'flex-start', flexShrink: 0 }}>
@@ -97,27 +90,27 @@ function SevBadge({ sev }) {
 }
 
 export default function SubmitTab({ user, prefill, onClearPrefill }) {
-  const [mode, setMode] = useState('manual');
-  const [team, setTeam] = useState('');
-  const [category, setCategory] = useState('');
-  const [component, setComponent] = useState('');
-  const [summary, setSummary] = useState('');
-  const [severity, setSeverity] = useState('S3');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState({ text: '', type: '' });
-  const [file, setFile] = useState(null);
-  const [bugs, setBugs] = useState([]);
-  const [batches, setBatches] = useState([]);
-  const [showGlossary, setShowGlossary] = useState(false);
-  const [refreshingBugs, setRefreshingBugs] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeResult, setAnalyzeResult] = useState(null);
-  const [consentGlobal, setConsentGlobal] = useState(true);
-  const [hasOwnModel, setHasOwnModel] = useState(false);
-  const [companies, setCompanies] = useState([]);
+  const [mode,             setMode]             = useState('manual');
+  const [team,             setTeam]             = useState('');
+  const [category,         setCategory]         = useState('');
+  const [component,        setComponent]        = useState('');
+  const [summary,          setSummary]          = useState('');
+  const [severity,         setSeverity]         = useState('S3');
+  const [loading,          setLoading]          = useState(false);
+  const [msg,              setMsg]              = useState({ text: '', type: '' });
+  const [file,             setFile]             = useState(null);
+  const [bugs,             setBugs]             = useState([]);
+  const [batches,          setBatches]          = useState([]);
+  const [showGlossary,     setShowGlossary]     = useState(false);
+  const [refreshingBugs,   setRefreshingBugs]   = useState(false);
+  const [analyzing,        setAnalyzing]        = useState(false);
+  const [analyzeResult,    setAnalyzeResult]    = useState(null);
+  const [consentGlobal,    setConsentGlobal]    = useState(true);
+  const [hasOwnModel,      setHasOwnModel]      = useState(false);
+  const [companies,        setCompanies]        = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const pollIntervalRef = useRef(null);
-  const newBugIdsRef = useRef(new Set());
+  const newBugIdsRef    = useRef(new Set());
 
   const isSuperAdmin = user?.role === 'super_admin';
 
@@ -128,14 +121,12 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
   useEffect(() => {
     if (prefill) {
-      setSummary(prefill.summary || '');
-      setSeverity(prefill.severity || 'S3');
+      setSummary(prefill.summary || ''); setSeverity(prefill.severity || 'S3');
       if (prefill.component) setComponent(prefill.component);
       onClearPrefill?.();
     }
   }, [prefill, onClearPrefill]);
 
-  // Fetch company model status (for non-super-admin users with a company)
   useEffect(() => {
     if (!isSuperAdmin && user?.company_id) {
       axios.get('/api/admin/company_profile').then(res => {
@@ -144,7 +135,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
     }
   }, [isSuperAdmin, user?.company_id]);
 
-  // Fetch companies list for super admin bug creation
   useEffect(() => {
     if (isSuperAdmin) {
       axios.get('/api/companies/list').then(res => setCompanies(res.data || [])).catch(() => {});
@@ -163,7 +153,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
     catch (err) { console.error(err); }
   }, []);
 
-  // Use /api/hub/explorer — the correct endpoint (not /api/bugs which 404s)
   const fetchBugs = useCallback(async (silent = false) => {
     if (!silent) setRefreshingBugs(true);
     try {
@@ -182,25 +171,23 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const startFastRefresh = useCallback(() => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     let count = 0;
-    pollIntervalRef.current = setInterval(() => { fetchBugs(true); count++; if (count >= 6) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; } }, 2000);
+    pollIntervalRef.current = setInterval(() => {
+      fetchBugs(true);
+      if (++count >= 6) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+    }, 2000);
   }, [fetchBugs]);
 
   useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }, []);
 
   const handleAnalyze = async (source) => {
     if (!summary) { showMsg('Please enter a bug summary first.', 'error'); return; }
-    setAnalyzing(true);
-    setAnalyzeResult(null);
+    setAnalyzing(true); setAnalyzeResult(null);
     try {
-      const res = await axios.get('/api/analyze_bug', {
-        params: { bug_text: summary, model_source: source },
-      });
+      const res = await axios.get('/api/analyze_bug', { params: { bug_text: summary, model_source: source } });
       setAnalyzeResult({ ...res.data?.severity, _source: source });
     } catch (err) {
       showMsg(err.response?.data?.detail || 'Analysis failed', 'error');
-    } finally {
-      setAnalyzing(false);
-    }
+    } finally { setAnalyzing(false); }
   };
 
   const handleManualSubmit = async () => {
@@ -234,8 +221,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
       await axios.delete(`/api/bug/${bugId}`);
       showMsg('Bug removed');
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Could not remove bug';
-      showMsg(msg, 'error');
+      showMsg(err.response?.data?.detail || 'Could not remove bug', 'error');
       fetchBugs();
     }
   };
@@ -276,7 +262,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)', gap: 24, width: '100%', alignItems: 'start' }}>
 
-        {/* Column 1 */}
         <div className="sys-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)' }}>
             <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, margin: 0, fontWeight: 800, color: 'var(--text-main)' }}>
@@ -291,40 +276,30 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
           <div style={{ padding: '24px 22px', flex: 1, overflowY: 'auto' }}>
             {mode === 'manual' ? (
               <div className="fade-in">
-
-                {/* Component — clearly separated stacked selects */}
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
                     <FolderTree size={13} color="var(--accent)" />
                     <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1 }}>Component</span>
                     <span style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 700, background: 'rgba(239,68,68,0.08)', padding: '1px 6px', borderRadius: 4 }}>required</span>
                   </div>
-
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-sec)', marginBottom: 6 }}>Team</label>
-                      <select className="sys-input" value={team} onChange={handleTeamChange}
-                        style={{ height: 44, fontSize: 13, width: '100%', cursor: 'pointer' }}>
+                      <select className="sys-input" value={team} onChange={handleTeamChange} style={{ height: 44, fontSize: 13, width: '100%', cursor: 'pointer' }}>
                         <option value="" disabled>Select a team…</option>
                         {teams.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-
                     <div>
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-sec)', marginBottom: 6 }}>Category</label>
-                      <select className="sys-input" value={category} onChange={handleCategoryChange}
-                        disabled={!team}
-                        style={{ height: 44, fontSize: 13, width: '100%', cursor: team ? 'pointer' : 'not-allowed', opacity: !team ? 0.45 : 1 }}>
+                      <select className="sys-input" value={category} onChange={handleCategoryChange} disabled={!team} style={{ height: 44, fontSize: 13, width: '100%', cursor: team ? 'pointer' : 'not-allowed', opacity: !team ? 0.45 : 1 }}>
                         <option value="" disabled>{team ? 'Select a category…' : 'Select a team first'}</option>
                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
-
                     <div>
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-sec)', marginBottom: 6 }}>Component</label>
-                      <select className="sys-input" value={component} onChange={e => setComponent(e.target.value)}
-                        disabled={!category}
-                        style={{ height: 44, fontSize: 13, width: '100%', cursor: category ? 'pointer' : 'not-allowed', opacity: !category ? 0.45 : 1 }}>
+                      <select className="sys-input" value={component} onChange={e => setComponent(e.target.value)} disabled={!category} style={{ height: 44, fontSize: 13, width: '100%', cursor: category ? 'pointer' : 'not-allowed', opacity: !category ? 0.45 : 1 }}>
                         <option value="" disabled>{category ? 'Select a component…' : 'Select a category first'}</option>
                         {components.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
@@ -332,7 +307,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   </div>
                 </div>
 
-                {/* Summary */}
                 <div style={{ marginBottom: 22 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1 }}>Summary</span>
@@ -344,17 +318,11 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     style={{ resize: 'vertical', fontSize: 13, lineHeight: 1.6, width: '100%', boxSizing: 'border-box' }} />
                 </div>
 
-                {/* Severity */}
                 <div style={{ marginBottom: 26 }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Severity</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                     {SEVERITY_DEFS.map(def => (
-                      <button key={def.code} onClick={() => setSeverity(def.code)} style={{
-                        padding: '10px 6px', borderRadius: 8,
-                        border: `1.5px solid ${severity === def.code ? def.border : 'var(--border)'}`,
-                        background: severity === def.code ? def.bg : 'var(--hover-bg)',
-                        cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center',
-                      }}>
+                      <button key={def.code} onClick={() => setSeverity(def.code)} style={{ padding: '10px 6px', borderRadius: 8, border: `1.5px solid ${severity === def.code ? def.border : 'var(--border)'}`, background: severity === def.code ? def.bg : 'var(--hover-bg)', cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center' }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: severity === def.code ? def.color : 'var(--text-sec)' }}>{def.code}</div>
                         <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 2 }}>{def.label}</div>
                       </button>
@@ -367,7 +335,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   )}
                 </div>
 
-                {/* Super Admin: company selector */}
                 {isSuperAdmin && (
                   <div style={{ marginBottom: 18 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -375,52 +342,33 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                       <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1 }}>Company</span>
                       <span style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 700, background: 'rgba(239,68,68,0.08)', padding: '1px 6px', borderRadius: 4 }}>required</span>
                     </div>
-                    <select className="sys-input" value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)}
-                      style={{ height: 44, fontSize: 13, width: '100%', cursor: 'pointer' }}>
+                    <select className="sys-input" value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ height: 44, fontSize: 13, width: '100%', cursor: 'pointer' }}>
                       <option value="" disabled>Select a company…</option>
                       {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                 )}
 
-                {/* AI Severity Analysis */}
                 <div style={{ marginBottom: 18, padding: '14px 16px', background: 'var(--hover-bg)', borderRadius: 10, border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>AI Severity Analysis</div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: analyzeResult ? 12 : 0 }}>
-                    <button
-                      onClick={() => handleAnalyze('universal')}
-                      disabled={analyzing || !summary}
-                      style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        padding: '9px 0', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: (!summary || analyzing) ? 'not-allowed' : 'pointer',
-                        background: 'var(--accent)', color: 'white', border: 'none', opacity: (!summary || analyzing) ? 0.5 : 1,
-                      }}>
+                    <button onClick={() => handleAnalyze('universal')} disabled={analyzing || !summary}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: (!summary || analyzing) ? 'not-allowed' : 'pointer', background: 'var(--accent)', color: 'white', border: 'none', opacity: (!summary || analyzing) ? 0.5 : 1 }}>
                       <Globe size={13} /> Universal Model
                     </button>
                     <div style={{ position: 'relative', flex: 1 }}>
-                      <button
-                        onClick={() => hasOwnModel && handleAnalyze('company')}
-                        disabled={analyzing || !summary || !hasOwnModel}
+                      <button onClick={() => hasOwnModel && handleAnalyze('company')} disabled={analyzing || !summary || !hasOwnModel}
                         title={!hasOwnModel ? 'Train your company model first via the Retrain button' : undefined}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          padding: '9px 0', borderRadius: 7, fontSize: 12, fontWeight: 700,
-                          cursor: (!summary || analyzing || !hasOwnModel) ? 'not-allowed' : 'pointer',
-                          background: hasOwnModel ? '#6366f1' : 'var(--hover-bg)', color: hasOwnModel ? 'white' : 'var(--text-sec)',
-                          border: `1px solid ${hasOwnModel ? '#6366f1' : 'var(--border)'}`, opacity: (!summary || !hasOwnModel) ? 0.6 : 1,
-                        }}>
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: (!summary || analyzing || !hasOwnModel) ? 'not-allowed' : 'pointer', background: hasOwnModel ? '#6366f1' : 'var(--hover-bg)', color: hasOwnModel ? 'white' : 'var(--text-sec)', border: `1px solid ${hasOwnModel ? '#6366f1' : 'var(--border)'}`, opacity: (!summary || !hasOwnModel) ? 0.6 : 1 }}>
                         {hasOwnModel ? <Zap size={13} /> : <Lock size={13} />} Company Model
                       </button>
                     </div>
                   </div>
-
                   {analyzeResult && (
                     <div className="fade-in" style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <SevBadge sev={analyzeResult.prediction} />
-                        <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                          {Math.round((analyzeResult.confidence || 0) * 100)}% confidence
-                        </span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{Math.round((analyzeResult.confidence || 0) * 100)}% confidence</span>
                         <span style={{ marginLeft: 'auto', fontSize: 10, color: analyzeResult.fallback ? '#f59e0b' : 'var(--text-sec)', fontWeight: 600 }}>
                           via {analyzeResult.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}
                           {analyzeResult.fallback ? ' (fallback)' : ''}
@@ -447,14 +395,8 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   )}
                 </div>
 
-                {/* Consent checkbox */}
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 18, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={consentGlobal}
-                    onChange={e => setConsentGlobal(e.target.checked)}
-                    style={{ marginTop: 2, accentColor: 'var(--accent)', width: 14, height: 14, flexShrink: 0 }}
-                  />
+                  <input type="checkbox" checked={consentGlobal} onChange={e => setConsentGlobal(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--accent)', width: 14, height: 14, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.5 }}>
                     Allow this report to improve the <strong style={{ color: 'var(--text-main)' }}>Universal Model</strong> (shared across all companies)
                   </span>
@@ -507,7 +449,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
           </div>
         </div>
 
-        {/* Column 2: Recent bugs */}
         <div className="sys-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: 14, margin: 0, fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -522,16 +463,9 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0', minHeight: 300 }}>
             {bugs.length === 0 ? (
-              <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-sec)', fontSize: 13 }}>
-                No bugs yet — submit your first one above.
-              </div>
+              <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-sec)', fontSize: 13 }}>No bugs yet — submit your first one above.</div>
             ) : bugs.slice(0, 30).map(b => (
-              <div key={b.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px',
-                borderLeft: b._isNew ? '3px solid var(--accent)' : '3px solid transparent',
-                background: b._isNew ? 'var(--pill-bg)' : 'transparent',
-                transition: 'all 0.3s',
-              }}>
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderLeft: b._isNew ? '3px solid var(--accent)' : '3px solid transparent', background: b._isNew ? 'var(--pill-bg)' : 'transparent', transition: 'all 0.3s' }}>
                 <SevBadge sev={b.severity} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.summary}</div>
@@ -547,7 +481,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
           </div>
         </div>
 
-        {/* Column 3: Severity guide */}
         <div className="sys-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)' }}>
             <h2 style={{ fontSize: 14, margin: 0, fontWeight: 800, color: 'var(--text-main)' }}>Severity guide</h2>

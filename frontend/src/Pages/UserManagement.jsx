@@ -122,13 +122,12 @@ function Toast({ msg, onClose }) {
   );
 }
 
-// ── Invite Code Panel (shown to admins only, not super_admin) ─────────────────
 function InviteCodePanel() {
-  const [inviteData,    setInviteData]    = useState(null);
-  const [loading,       setLoading]       = useState(true);
-  const [regenerating,  setRegenerating]  = useState(false);
-  const [showCode,      setShowCode]      = useState(false);
-  const [copied,        setCopied]        = useState(false);
+  const [inviteData,   setInviteData]   = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
+  const [showCode,     setShowCode]     = useState(false);
+  const [copied,       setCopied]       = useState(false);
 
   const fetchCode = useCallback(async () => {
     setLoading(true);
@@ -148,7 +147,7 @@ function InviteCodePanel() {
       const res = await axios.post('/api/admin/invite_code/regenerate');
       setInviteData(prev => ({ ...prev, invite_code: res.data.invite_code }));
       setShowCode(true);
-    } catch { /* ignore */ }
+    } catch { }
     finally { setRegenerating(false); }
   };
 
@@ -160,8 +159,7 @@ function InviteCodePanel() {
     });
   };
 
-  if (loading) return null;
-  if (!inviteData) return null;
+  if (loading || !inviteData) return null;
 
   return (
     <div className="sys-card" style={{ padding: 20, marginBottom: 20 }}>
@@ -170,61 +168,27 @@ function InviteCodePanel() {
         <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)' }}>Company invite code</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-sec)' }}>{inviteData.company_name}</span>
       </div>
-
       <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: '0 0 14px', lineHeight: 1.6 }}>
-        Share this code with new team members when they register as a Regular User.
-        Without it, no one can join your company.
+        Share this code with new team members when they register as a Regular User. Without it, no one can join your company.
       </p>
-
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Code display */}
-        <div style={{
-          flex: 1, padding: '10px 16px',
-          background: 'var(--hover-bg)', border: '1.5px solid var(--border)',
-          borderRadius: 8, fontFamily: 'var(--font-mono)',
-          fontSize: 18, fontWeight: 800, letterSpacing: 4,
-          color: showCode ? 'var(--text-main)' : 'transparent',
-          textShadow: showCode ? 'none' : '0 0 12px var(--text-sec)',
-          userSelect: showCode ? 'text' : 'none',
-          filter: showCode ? 'none' : 'blur(6px)',
-          transition: 'filter 0.2s',
-        }}>
+        <div style={{ flex: 1, padding: '10px 16px', background: 'var(--hover-bg)', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 800, letterSpacing: 4, color: showCode ? 'var(--text-main)' : 'transparent', textShadow: showCode ? 'none' : '0 0 12px var(--text-sec)', userSelect: showCode ? 'text' : 'none', filter: showCode ? 'none' : 'blur(6px)', transition: 'filter 0.2s' }}>
           {inviteData.invite_code}
         </div>
-
-        {/* Toggle visibility */}
-        <button
-          onClick={() => setShowCode(s => !s)}
-          title={showCode ? 'Hide code' : 'Reveal code'}
-          style={{ padding: '10px 12px', background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-sec)', transition: 'all 0.15s' }}
+        <button onClick={() => setShowCode(s => !s)} title={showCode ? 'Hide code' : 'Reveal code'} style={{ padding: '10px 12px', background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-sec)', transition: 'all 0.15s' }}
           onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-        >
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
           {showCode ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
-
-        {/* Copy */}
-        <button
-          onClick={handleCopy}
-          title="Copy to clipboard"
-          style={{ padding: '10px 12px', background: copied ? 'rgba(16,185,129,0.1)' : 'var(--hover-bg)', border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', color: copied ? 'var(--success)' : 'var(--text-sec)', transition: 'all 0.15s' }}
-        >
+        <button onClick={handleCopy} title="Copy to clipboard" style={{ padding: '10px 12px', background: copied ? 'rgba(16,185,129,0.1)' : 'var(--hover-bg)', border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', color: copied ? 'var(--success)' : 'var(--text-sec)', transition: 'all 0.15s' }}>
           {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
         </button>
-
-        {/* Regenerate */}
-        <button
-          onClick={handleRegenerate}
-          disabled={regenerating}
-          title="Rotate invite code (invalidates current code)"
-          style={{ padding: '10px 12px', background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, cursor: regenerating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-sec)', opacity: regenerating ? 0.6 : 1, transition: 'all 0.15s' }}
+        <button onClick={handleRegenerate} disabled={regenerating} title="Rotate invite code (invalidates current code)" style={{ padding: '10px 12px', background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, cursor: regenerating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', color: 'var(--text-sec)', opacity: regenerating ? 0.6 : 1, transition: 'all 0.15s' }}
           onMouseEnter={e => { if (!regenerating) { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#ef4444'; } }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-sec)'; }}
-        >
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-sec)'; }}>
           <RotateCcw size={16} className={regenerating ? 'spin' : ''} />
         </button>
       </div>
-
       <p style={{ margin: '10px 0 0', fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
         The rotate button generates a new code and immediately invalidates the old one — useful if a code was shared accidentally.
       </p>
@@ -233,19 +197,17 @@ function InviteCodePanel() {
 }
 
 function AccessRequestsPanel({ showToast }) {
-  const [requests, setRequests]   = useState([]);
-  const [loading,  setLoading]    = useState(true);
-  const [actioning, setActioning] = useState(null); // id being approved/rejected
+  const [requests,  setRequests]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [actioning, setActioning] = useState(null);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get('/api/admin/invite_requests');
       setRequests(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      setRequests([]);
-    } finally {
-      setLoading(false); }
+    } catch { setRequests([]); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
@@ -255,10 +217,7 @@ function AccessRequestsPanel({ showToast }) {
     try {
       const res = await axios.post(`/api/admin/invite_requests/${req.id}/approve`);
       const code = res.data?.invite_code;
-      const msg  = code
-        ? `${req.username} approved! Invite code: ${code} — sent to ${req.email}.`
-        : (res.data?.message || `Invite sent to ${req.email}.`);
-      showToast(msg);
+      showToast(code ? `${req.username} approved! Invite code: ${code} — sent to ${req.email}.` : (res.data?.message || `Invite sent to ${req.email}.`));
       setRequests(prev => prev.filter(r => r.id !== req.id));
     } catch (err) {
       showToast(err.response?.data?.detail || 'Failed to send invite.', 'error');
@@ -285,15 +244,12 @@ function AccessRequestsPanel({ showToast }) {
         <UserPlus size={16} color="#6366f1" />
         <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)' }}>Access Requests</span>
         {requests.length > 0 && (
-          <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>
-            {requests.length}
-          </span>
+          <span style={{ marginLeft: 4, fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}>{requests.length}</span>
         )}
         <button onClick={fetchRequests} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', display: 'flex', padding: 4 }}>
           <RefreshCw size={13} className={loading ? 'spin' : ''} />
         </button>
       </div>
-
       {requests.length === 0 ? (
         <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: 0 }}>
           No pending access requests. When someone requests to join your company, they'll appear here.
@@ -312,18 +268,10 @@ function AccessRequestsPanel({ showToast }) {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                <button
-                  onClick={() => handleApprove(req)}
-                  disabled={actioning === req.id}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 7, cursor: actioning === req.id ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--success)', fontFamily: 'var(--font-head)', opacity: actioning === req.id ? 0.6 : 1 }}
-                >
+                <button onClick={() => handleApprove(req)} disabled={actioning === req.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 7, cursor: actioning === req.id ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--success)', fontFamily: 'var(--font-head)', opacity: actioning === req.id ? 0.6 : 1 }}>
                   <Send size={11} /> Send Invite
                 </button>
-                <button
-                  onClick={() => handleReject(req)}
-                  disabled={actioning === req.id}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 7, cursor: actioning === req.id ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, color: '#ef4444', fontFamily: 'var(--font-head)', opacity: actioning === req.id ? 0.6 : 1 }}
-                >
+                <button onClick={() => handleReject(req)} disabled={actioning === req.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 7, cursor: actioning === req.id ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, color: '#ef4444', fontFamily: 'var(--font-head)', opacity: actioning === req.id ? 0.6 : 1 }}>
                   <X size={11} /> Reject
                 </button>
               </div>
@@ -336,14 +284,14 @@ function AccessRequestsPanel({ showToast }) {
 }
 
 export default function UserManagement({ currentUser }) {
-  const [users,    setUsers]    = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [toDelete, setToDelete] = useState(null);
-  const [toast,    setToast]    = useState({ text: '', type: '' });
-  const [search,   setSearch]   = useState('');
-  const [actioning, setActioning] = useState(null); // uuid of user being acted on
+  const [users,     setUsers]     = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState(null);
+  const [deleting,  setDeleting]  = useState(false);
+  const [toDelete,  setToDelete]  = useState(null);
+  const [toast,     setToast]     = useState({ text: '', type: '' });
+  const [search,    setSearch]    = useState('');
+  const [actioning, setActioning] = useState(null);
 
   const myUuid       = currentUser?.uuid || currentUser?.id || null;
   const myRole       = currentUser?.role || 'user';
@@ -353,6 +301,20 @@ export default function UserManagement({ currentUser }) {
   const showToast = (text, type = 'success') => {
     setToast({ text, type });
     setTimeout(() => setToast({ text: '', type: '' }), 4000);
+  };
+
+  const STATUS_STYLE = {
+    active:   { label: 'Active',   color: 'var(--success)', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.25)' },
+    pending:  { label: 'Pending',  color: '#f59e0b',         bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
+    inactive: { label: 'Inactive', color: 'var(--text-sec)', bg: 'var(--hover-bg)',      border: 'var(--border)' },
+  };
+  const StatusBadge = (st) => {
+    const cfg = STATUS_STYLE[st] || { label: st, color: 'var(--text-sec)', bg: 'var(--hover-bg)', border: 'var(--border)' };
+    return (
+      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+        {cfg.label}
+      </span>
+    );
   };
 
   const fetchUsers = useCallback(async () => {
@@ -390,8 +352,7 @@ export default function UserManagement({ currentUser }) {
     setActioning(u.uuid);
     try {
       await axios.patch(`/api/admin/users/${u.uuid}/${action}`);
-      const newStatus = isActive ? 'inactive' : 'active';
-      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: newStatus } : x));
+      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: isActive ? 'inactive' : 'active' } : x));
       showToast(`${u.username} ${isActive ? 'deactivated' : 'reactivated'}.`);
     } catch (err) {
       showToast(err.response?.data?.detail || 'Status update failed.', 'error');
@@ -415,6 +376,7 @@ export default function UserManagement({ currentUser }) {
     } finally { setDeleting(false); }
   };
 
+  const ROLE_ORDER = { super_admin: 0, admin: 1, user: 2 };
   const filtered = users
     .filter(u => {
       if (!u) return false;
@@ -427,22 +389,19 @@ export default function UserManagement({ currentUser }) {
         (u.company_name || '').toLowerCase().includes(q)
       );
     })
-    .sort((a, b) => ({ super_admin: 0, admin: 1, user: 2 }[a.role] ?? 2) - ({ super_admin: 0, admin: 1, user: 2 }[b.role] ?? 2));
+    .sort((a, b) => (ROLE_ORDER[a.role] ?? 2) - (ROLE_ORDER[b.role] ?? 2));
 
   return (
     <div className="page-content fade-in">
       <Toast msg={toast} onClose={() => setToast({ text: '', type: '' })} />
       {toDelete && (
         <DeleteConfirmModal
-          user={toDelete}
-          isSuperAdmin={isSuperAdmin}
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => setToDelete(null)}
+          user={toDelete} isSuperAdmin={isSuperAdmin}
+          onConfirm={handleDeleteConfirm} onCancel={() => setToDelete(null)}
           loading={deleting}
         />
       )}
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: 'var(--text-main)', letterSpacing: -0.5, display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -458,10 +417,7 @@ export default function UserManagement({ currentUser }) {
         </button>
       </div>
 
-      {/* Invite code panel — only for company admins, not super_admin */}
       {isAdmin && !isSuperAdmin && <InviteCodePanel />}
-
-      {/* Access requests — pending email-based join requests */}
       {isAdmin && !isSuperAdmin && <AccessRequestsPanel showToast={showToast} />}
 
       {error && (
@@ -471,7 +427,6 @@ export default function UserManagement({ currentUser }) {
         </div>
       )}
 
-      {/* Search */}
       <div style={{ marginBottom: 16, position: 'relative' }}>
         <input className="sys-input" placeholder="Search by name, email, role or company…" value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 14, height: 42, fontSize: 13 }} />
         {search && (
@@ -481,7 +436,6 @@ export default function UserManagement({ currentUser }) {
         )}
       </div>
 
-      {/* Table */}
       <div className="sys-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 500 }}>
@@ -533,54 +487,26 @@ export default function UserManagement({ currentUser }) {
                     </td>
                     <td style={{ padding: '13px 18px' }}><RoleBadge role={u.role || 'user'} /></td>
                     {isSuperAdmin && <td style={{ padding: '13px 18px' }}><CompanyCell user={u} /></td>}
-                    <td style={{ padding: '13px 18px' }}>
-                      {(() => {
-                        const st = u.status || 'active';
-                        const cfg = {
-                          active:   { label: 'Active',   color: 'var(--success)', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.25)' },
-                          pending:  { label: 'Pending',  color: '#f59e0b',         bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
-                          inactive: { label: 'Inactive', color: 'var(--text-sec)', bg: 'var(--hover-bg)',      border: 'var(--border)' },
-                        }[st] || { label: st, color: 'var(--text-sec)', bg: 'var(--hover-bg)', border: 'var(--border)' };
-                        return (
-                          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-                            {cfg.label}
-                          </span>
-                        );
-                      })()}
-                    </td>
+                    <td style={{ padding: '13px 18px' }}>{StatusBadge(u.status || 'active')}</td>
                     <td style={{ padding: '13px 18px' }}>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {/* Promote / Demote — only for admin managing non-super-admin, non-self */}
                         {!isSelf && u.role !== 'super_admin' && (
-                          <button
-                            onClick={() => handlePromote(u)}
-                            disabled={actioning === u.uuid}
-                            title={u.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: u.role === 'admin' ? 'rgba(245,158,11,0.07)' : 'rgba(99,102,241,0.07)', border: `1px solid ${u.role === 'admin' ? 'rgba(245,158,11,0.3)' : 'rgba(99,102,241,0.3)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: u.role === 'admin' ? '#f59e0b' : '#6366f1', fontFamily: 'var(--font-head)' }}
-                          >
+                          <button onClick={() => handlePromote(u)} disabled={actioning === u.uuid} title={u.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: u.role === 'admin' ? 'rgba(245,158,11,0.07)' : 'rgba(99,102,241,0.07)', border: `1px solid ${u.role === 'admin' ? 'rgba(245,158,11,0.3)' : 'rgba(99,102,241,0.3)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: u.role === 'admin' ? '#f59e0b' : '#6366f1', fontFamily: 'var(--font-head)' }}>
                             {u.role === 'admin' ? <ArrowDownCircle size={11} /> : <ArrowUpCircle size={11} />}
                             {u.role === 'admin' ? 'Demote' : 'Promote'}
                           </button>
                         )}
-                        {/* Deactivate / Reactivate */}
                         {!isSelf && u.role !== 'super_admin' && (
-                          <button
-                            onClick={() => handleToggleStatus(u)}
-                            disabled={actioning === u.uuid}
-                            title={(u.status || 'active') === 'active' ? 'Deactivate user' : 'Reactivate user'}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: (u.status || 'active') === 'active' ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.07)', border: `1px solid ${(u.status || 'active') === 'active' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.3)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: (u.status || 'active') === 'active' ? '#ef4444' : 'var(--success)', fontFamily: 'var(--font-head)' }}
-                          >
+                          <button onClick={() => handleToggleStatus(u)} disabled={actioning === u.uuid} title={(u.status || 'active') === 'active' ? 'Deactivate user' : 'Reactivate user'}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: (u.status || 'active') === 'active' ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.07)', border: `1px solid ${(u.status || 'active') === 'active' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.3)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: (u.status || 'active') === 'active' ? '#ef4444' : 'var(--success)', fontFamily: 'var(--font-head)' }}>
                             {(u.status || 'active') === 'active' ? <UserMinus size={11} /> : <UserCheck size={11} />}
                             {(u.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
                           </button>
                         )}
-                        {/* Delete */}
                         {!isSelf && (
-                          <button
-                            onClick={() => setToDelete(u)}
-                            title={`Delete ${displayName}`}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#ef4444', fontFamily: 'var(--font-head)' }}
-                          >
+                          <button onClick={() => setToDelete(u)} title={`Delete ${displayName}`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#ef4444', fontFamily: 'var(--font-head)' }}>
                             <Trash2 size={11} /> Delete
                           </button>
                         )}

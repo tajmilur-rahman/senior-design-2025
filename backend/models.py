@@ -1,4 +1,3 @@
-# backend/models.py
 from sqlalchemy import Column, Integer, String, JSON, ForeignKey, Float, DateTime, Boolean
 from database import Base
 from datetime import datetime
@@ -7,7 +6,7 @@ class Company(Base):
     __tablename__ = "companies"
     id          = Column(Integer, primary_key=True, index=True)
     name        = Column(String, unique=True)
-    status      = Column(String, default="active")   # active | pending
+    status      = Column(String, default="active")
     description = Column(String, default="")
     website     = Column(String, default="")
     created_at  = Column(DateTime, default=datetime.utcnow)
@@ -17,9 +16,9 @@ class User(Base):
     __tablename__ = "users"
     username      = Column(String, primary_key=True)
     password_hash = Column(String)
-    role          = Column(String)           # user | admin | super_admin
+    role          = Column(String)
     company_id    = Column(Integer, ForeignKey("companies.id"))
-    status        = Column(String, default="active")  # active | pending | inactive
+    status        = Column(String, default="active")
 
 class Bug(Base):
     __tablename__ = "bugs"
@@ -45,7 +44,7 @@ class Feedback(Base):
     id                   = Column(Integer, primary_key=True, index=True, autoincrement=True)
     summary              = Column(String)
     predicted_severity   = Column(String)
-    actual_severity      = Column(String, nullable=True)   # nullable: set on correction
+    actual_severity      = Column(String, nullable=True)
     company_id           = Column(Integer, ForeignKey("companies.id"))
     confidence           = Column(Float)
     component            = Column(String)

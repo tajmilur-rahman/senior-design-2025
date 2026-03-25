@@ -42,22 +42,12 @@ const ROLE_CONFIG = {
   user:        { label: 'User',        color: 'var(--accent)', bg: 'var(--pill-bg)' },
 };
 
-// ── Retry helper ──────────────────────────────────────────────────────────────
-// On fresh registration the onAuthStateChange fires before /api/register has
-// finished writing the public.users row. We poll up to maxAttempts times.
-//
-// For email-invited users the pre-created row has no UUID yet — it only gets
-// linked when auth.py processes an API call. So on the first UUID miss we fire
-// a lightweight API call (/api/users/me/profile) to trigger that linking, then
-// continue retrying the direct Supabase query.
 async function fetchUserRowWithRetry(uuid, maxAttempts = 6, delayMs = 600) {
   for (let i = 0; i < maxAttempts; i++) {
     const { data: rows } = await supabase.from('users').select('*').eq('uuid', uuid);
     if (rows && rows.length > 0 && rows[0].role) return rows[0];
     if (i < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
   }
-  // All direct retries failed — one last attempt via the API (handles edge cases
-  // where the row exists by email only, e.g. legacy pre-invited rows)
   try {
     await axios.get('/api/users/me/profile');
     await new Promise(resolve => setTimeout(resolve, 400));
@@ -95,6 +85,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab, onUpdateUse
             {NAV_TABS.map(t => {
               if (t.superAdminOnly && !isSuperAdmin) return null;
               if (t.adminOnly      && !isAdmin)      return null;
+              const label = (t.id === 'company' && isSuperAdmin) ? 'System' : t.label;
               return (
                 <button
                   key={t.id}
@@ -103,7 +94,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab, onUpdateUse
                   style={t.superAdminOnly ? { color: tab === t.id ? '#f59e0b' : undefined } : {}}
                 >
                   {t.superAdminOnly && <Crown size={11} style={{ marginRight: 4, opacity: 0.8 }} />}
-                  {t.label}
+                  {label}
                 </button>
               );
             })}
@@ -156,7 +147,7 @@ function Dashboard({ user, onLogout, theme, toggleTheme, initialTab, onUpdateUse
         {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
         {tab === 'performance' && isAdmin       && <Performance   user={user} />}
         {tab === 'analysis'    && <BugAnalysis />}
-        {tab === 'directory'   && <Directory    onNavigate={navigate} />}
+        {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
         {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} onNavigate={navigate} />}
         {tab === 'resolution'  && <ResolutionSupport />}
         {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
@@ -172,9 +163,10 @@ export default function App() {
   const [user,           setUser]           = useState(null);
   const [loading,        setLoading]        = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [forceRecoveryReset, setForceRecoveryReset] = useState(
+    () => window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')
+  );
   const [initialTab,     setInitialTab]     = useState(null);
-  // Tracks whether onboarding has already been shown in this browser session.
-  // Prevents repeated SIGNED_IN events (token refresh, approval) from re-triggering it.
   const onboardingShownRef = useRef(false);
   const [theme,          setTheme]          = useState(localStorage.getItem('theme') || 'dark');
 
@@ -198,15 +190,11 @@ export default function App() {
         if (!session) {
           setUser(null);
           setShowOnboarding(false);
-          onboardingShownRef.current = false; // reset so next login re-evaluates
+          onboardingShownRef.current = false;
           return;
         }
 
         const uuid = session.user.id;
-
-        // Use the retry helper — this handles the race condition where
-        // onAuthStateChange fires before /api/register finishes writing the
-        // public.users row on first registration.
         const db = await fetchUserRowWithRetry(uuid);
 
         if (db) {
@@ -222,12 +210,7 @@ export default function App() {
             onboarding_completed: db.onboarding_completed || false,
             status:               db.status || 'active',
           });
-          // Onboarding is for company admins who haven't completed workspace setup.
-          // • Regular users join via invite — nothing to set up.
-          // • Super admins manage the whole system — no workspace setup needed.
-          // • Company admins see onboarding once after approval, then never again.
           const isCompanyAdmin = db.role === 'admin';
-
           if (!fromInitialSession && event === 'SIGNED_IN') {
             if (isCompanyAdmin && !db.onboarding_completed && !onboardingShownRef.current) {
               onboardingShownRef.current = true;
@@ -239,8 +222,6 @@ export default function App() {
             setShowOnboarding(false);
           }
         } else {
-          // Row still not found after all retries — show onboarding
-          // which will handle linking the user to a company
           setUser({
             id: uuid, uuid,
             email:    session.user.email,
@@ -248,7 +229,6 @@ export default function App() {
             role: 'user', context_role: 'user',
             company_id: null, onboarding_completed: false,
           });
-          // No DB row yet — only show onboarding if this looks like a fresh admin signup
           setShowOnboarding(false);
         }
       } catch (err) {
@@ -264,6 +244,9 @@ export default function App() {
       initAuth(session, { fromInitialSession: true })
     );
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setForceRecoveryReset(true);
+      }
       if (event !== 'INITIAL_SESSION') {
         initAuth(session, { event, fromInitialSession: false });
       }
@@ -271,11 +254,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // skipped=true means the user dismissed without making a real choice.
-  // Real choices: populate, submit, demo, or completing the tour.
-  // Skipped: onboarding is marked incomplete in DB (Setup Pending in profile).
-  //          onboardingShownRef prevents it re-appearing this session.
-  // Completed: onboarding_completed=true written to DB immediately.
   const handleOnboardingComplete = async (companyName, displayName, navigateTo = null, skipped = false) => {
     if (navigateTo) setInitialTab(navigateTo);
     if (companyName) {
@@ -300,7 +278,6 @@ export default function App() {
     }
 
     if (!skipped) {
-      // Real action taken — mark onboarding as fully completed in DB
       try {
         await supabase
           .from('users')
@@ -311,9 +288,6 @@ export default function App() {
       }
       setUser(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     }
-    // If skipped: leave DB flag as-is (false = Setup Pending shown in profile)
-    // onboardingShownRef prevents the modal re-showing this session
-
     setShowOnboarding(false);
   };
 
@@ -324,8 +298,6 @@ export default function App() {
   };
 
   const handleLogin = async (loginUser) => {
-    // Read the full DB row — don't trust the JWT claim and ensure status is set
-    // so every status gate (pending, invite_requested, pending_code) fires correctly.
     let db = null;
     try {
       db = await fetchUserRowWithRetry(loginUser.id, 3, 300);
@@ -374,19 +346,27 @@ export default function App() {
       onLogin={handleLogin}
       theme={theme}
       toggleTheme={toggleTheme}
+      forceResetRecovery={forceRecoveryReset}
+      onResetDone={() => setForceRecoveryReset(false)}
     />
   );
-  // Block pending and inactive accounts before showing any dashboard content
+  if (forceRecoveryReset) return (
+    <Login
+      onLogin={handleLogin}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      forceResetRecovery={true}
+      onResetDone={() => setForceRecoveryReset(false)}
+    />
+  );
   if (['pending', 'inactive', 'invite_requested'].includes(user.status)) return (
     <PendingApproval user={user} onLogout={handleLogout} status={user.status} />
   );
-  // User was approved but must enter the invite code they received by email
   if (user.status === 'pending_code') return (
     <CodeWall
       user={user}
       onLogout={handleLogout}
       onVerified={async () => {
-        // Refetch user row from DB — status is now 'active'
         const db = await fetchUserRowWithRetry(user.uuid || user.id, 4, 400);
         if (db) {
           setUser(prev => ({ ...prev, ...db, status: db.status || 'active' }));

@@ -67,8 +67,6 @@ export default function Overview({ user, onNavigate }) {
 
   return (
     <div className="page-content fade-in" style={{ maxWidth: 1100, margin: '0 auto' }}>
-
-      {/* ── Hero banner ── */}
       <div style={{ marginBottom: 32, paddingBottom: 28, borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div>
@@ -97,9 +95,7 @@ export default function Overview({ user, onNavigate }) {
         </div>
       </div>
 
-      {/* ── Stat cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
-        {/* Total */}
         <div className="sys-card" onClick={() => onNavigate('database', '')} style={{ padding: 22, cursor: 'pointer', transition: 'all 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
@@ -116,7 +112,6 @@ export default function Overview({ user, onNavigate }) {
           </div>
         </div>
 
-        {/* Processed */}
         <div className="sys-card" onClick={() => onNavigate('database', 'Fixed')} style={{ padding: 22, cursor: 'pointer', transition: 'all 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
@@ -133,7 +128,6 @@ export default function Overview({ user, onNavigate }) {
           </div>
         </div>
 
-        {/* Critical */}
         <div className="sys-card" onClick={() => onNavigate('database', 'S1')} style={{ padding: 22, cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', transition: 'all 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
@@ -151,10 +145,7 @@ export default function Overview({ user, onNavigate }) {
         </div>
       </div>
 
-      {/* ── Content row: feed + chart ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-        {/* Live feed */}
         <div className="sys-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -172,7 +163,6 @@ export default function Overview({ user, onNavigate }) {
           </div>
         </div>
 
-        {/* Component chart */}
         <div className="sys-card" style={{ padding: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
             <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -211,7 +201,6 @@ export default function Overview({ user, onNavigate }) {
           )}
         </div>
       </div>
-
     </div>
   );
 }
