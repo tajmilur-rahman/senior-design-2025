@@ -1,0 +1,1 @@
+{"accuracy": 0.992, "f1_score": 0.992, "precision": 0.992, "recall": 0.992, "last_trained": "Wed Mar 25 23:50:01 2026", "sample_size": 1000, "total_trees": 100, "mode": "company", "company_id": 2, "dataset_label": "Company bug database", "build": "active"}
