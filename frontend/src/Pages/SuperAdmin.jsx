@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
   Crown, Building2, Bug, AlertTriangle, Users, TrendingUp,
@@ -106,87 +107,90 @@ export default function SuperAdmin({ user }) {
     : '0';
 
   return (
-    <div className="page-content fade-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <Crown size={20} color="#f59e0b" />
-            <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: 'var(--text-main)', letterSpacing: -0.5 }}>
-              Super Admin
-            </h1>
-            <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: 'rgba(245,158,11,0.12)', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
+      
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-500">
+              <Crown size={12} className="text-amber-500" />
+              <span className="text-[10px] font-bold tracking-widest uppercase">Global Control</span>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-1 rounded border bg-red-500/10 border-red-500/20 text-red-400 uppercase tracking-widest">
               Restricted
             </span>
             {usingDemo && (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(99,102,241,0.1)', color: '#6366f1', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              <span className="text-[10px] font-bold px-2 py-1 rounded border bg-indigo-500/10 border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
                 Demo data
               </span>
             )}
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: 0 }}>
-            Global view across all registered organisations.
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
+            Super <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Admin</span>
+          </h1>
+          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
+            Global access panel. Oversee all multi-tenant organizations, manage critical cross-company metrics, and provision user roles.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--accent)', border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'white' }}
-          >
-            <UserPlus size={13} /> Create User
+        <div className="flex items-center gap-3 relative z-10 w-full md:w-auto">
+          <button onClick={load} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button
-            onClick={load}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-sec)' }}
-          >
-            <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh
+          <button onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+            <UserPlus size={16} className="text-black" /> Create User
           </button>
         </div>
+        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-amber-500/20 via-white/5 to-transparent" />
       </div>
 
       {error && (
-        <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 9, marginBottom: 20, fontSize: 13, color: 'var(--danger)', fontWeight: 600 }}>
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-semibold mb-6 flex items-center gap-3">
+          <AlertTriangle size={16} />
           {error}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mb-8">
         {[
-          { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={18} color="var(--accent)" />,     sub: 'Across all orgs' },
-          { label: 'Critical open',  value: total_critical.toLocaleString(), icon: <AlertTriangle size={18} color="#ef4444" />, sub: 'Needs attention' },
-          { label: 'Active users',   value: total_users,                     icon: <Users size={18} color="#10b981" />,         sub: 'All organisations' },
-          { label: 'Avg model acc.', value: avg_acc + '%',                   icon: <TrendingUp size={18} color="#6366f1" />,    sub: 'Cross-org average' },
+          { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={16} className="text-blue-400" />,     sub: 'Across all orgs' },
+          { label: 'Critical open',  value: total_critical.toLocaleString(), icon: <AlertTriangle size={16} className="text-red-400" />, sub: 'Needs attention' },
+          { label: 'Active users',   value: total_users,                     icon: <Users size={16} className="text-emerald-400" />,         sub: 'All organisations' },
+          { label: 'Avg model acc.', value: avg_acc + '%',                   icon: <TrendingUp size={16} className="text-indigo-400" />,    sub: 'Cross-org average' },
         ].map(s => (
-          <div key={s.label} className="sys-card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group hover:bg-white/[0.04] transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="flex items-center gap-2 mb-4 relative z-10">
               {s.icon}
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.7 }}>{s.label}</span>
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-main)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 5 }}>{s.sub}</div>
+            <div className="text-3xl font-bold text-white font-mono tracking-tight mb-2 relative z-10">{s.value}</div>
+            <div className="text-xs text-white/40 font-medium relative z-10">{s.sub}</div>
           </div>
         ))}
       </div>
 
       {(pending.length > 0 || actionMsg) && (
-        <div className="sys-card fade-in" style={{ padding: 0, overflow: 'hidden', marginBottom: 24, border: '1px solid rgba(245,158,11,0.3)' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'rgba(245,158,11,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Clock size={15} color="#f59e0b" />
-            <span style={{ fontSize: 13, fontWeight: 800, color: '#f59e0b' }}>Pending Approvals</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>
+        <div className="bg-amber-500/[0.03] border border-amber-500/30 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden mb-8 animate-in fade-in">
+          <div className="p-5 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-3">
+            <Clock size={16} className="text-amber-500" />
+            <span className="text-xs font-bold text-amber-500 uppercase tracking-widest">Pending Approvals</span>
+            <span className="ml-auto text-[10px] font-bold bg-amber-500/20 text-amber-500 px-2.5 py-1 rounded">
               {pending.length} awaiting review
             </span>
           </div>
           {actionMsg && (
-            <div style={{ padding: '10px 20px', fontSize: 13, color: 'var(--success)', fontWeight: 600, background: 'rgba(16,185,129,0.06)', borderBottom: '1px solid var(--border)' }}>
+            <div className="p-4 text-sm text-emerald-400 font-bold bg-emerald-500/10 border-b border-white/5">
               {actionMsg}
             </div>
           )}
           {pending.length === 0 && actionMsg ? null : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[600px]">
               <thead>
-                <tr style={{ background: 'var(--hover-bg)', borderBottom: '1px solid var(--border)' }}>
+                <tr className="border-b border-amber-500/20 bg-black/20">
                   {['User', 'Email', 'Role', 'Company', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '10px 18px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    <th key={h} className="px-6 py-4 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -194,26 +198,24 @@ export default function SuperAdmin({ user }) {
               </thead>
               <tbody>
                 {pending.map(u => (
-                  <tr key={u.uuid} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '12px 18px', fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>{u.username}</td>
-                    <td style={{ padding: '12px 18px', fontSize: 12, color: 'var(--text-sec)' }}>{u.email}</td>
-                    <td style={{ padding: '12px 18px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
-                        background: u.role === 'admin' ? 'rgba(99,102,241,0.1)' : 'var(--pill-bg)',
-                        color: u.role === 'admin' ? '#6366f1' : 'var(--accent)', textTransform: 'uppercase' }}>
+                  <tr key={u.uuid} className="border-b border-amber-500/10 last:border-0 hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-4 text-sm font-bold text-white">{u.username}</td>
+                    <td className="px-6 py-4 text-sm text-white/50">{u.email}</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded border uppercase tracking-widest ${u.role === 'admin' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
                         {u.role}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 18px', fontSize: 12, color: 'var(--text-sec)' }}>{u.company_name || '—'}</td>
-                    <td style={{ padding: '12px 18px' }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
+                    <td className="px-6 py-4 text-sm text-white/50">{u.company_name || '—'}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
                         <button onClick={() => handleApprove(u.uuid, u.username)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.08)', color: 'var(--success)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-                          <CheckCircle size={12} /> Approve
+                          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                          <CheckCircle size={14} /> Approve
                         </button>
                         <button onClick={() => handleReject(u.uuid, u.username)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)', color: 'var(--danger)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-                          <XCircle size={12} /> Reject
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                          <XCircle size={14} /> Reject
                         </button>
                       </div>
                     </td>
@@ -221,23 +223,25 @@ export default function SuperAdmin({ user }) {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}
 
-      <div className="sys-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Globe size={15} color="var(--accent)" />
-          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>Registered organisations</span>
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-sec)', fontWeight: 600 }}>
+      <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden mb-8">
+        <div className="p-6 border-b border-white/10 bg-black/20 flex items-center gap-3">
+          <Globe size={16} className="text-blue-400" />
+          <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
+          <span className="ml-auto text-[10px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded">
             {companies.length} org{companies.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[700px]">
           <thead>
-            <tr style={{ background: 'var(--hover-bg)', borderBottom: '1px solid var(--border)' }}>
+            <tr className="border-b border-white/10 bg-white/5">
               {['Organisation', 'Total bugs', 'Critical', 'Resolved', 'Users', 'Model acc.', 'Last active', ''].map(h => (
-                <th key={h} style={{ padding: '10px 18px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>
+                <th key={h} className="px-6 py-4 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">
                   {h}
                 </th>
               ))}
@@ -246,70 +250,68 @@ export default function SuperAdmin({ user }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} style={{ padding: '40px 0', textAlign: 'center' }}>
-                  <RefreshCw size={18} className="spin" color="var(--text-sec)" style={{ margin: '0 auto' }} />
+                <td colSpan={8} className="py-16 text-center">
+                  <RefreshCw size={24} className="animate-spin text-white/30 mx-auto" />
                 </td>
               </tr>
             ) : companies.map(co => (
               <tr
                 key={co.id}
                 onClick={() => setSelected(selected?.id === co.id ? null : co)}
-                style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)', background: selected?.id === co.id ? 'var(--pill-bg)' : 'transparent', transition: 'background 0.1s' }}
-                onMouseEnter={e => { if (selected?.id !== co.id) e.currentTarget.style.background = 'var(--hover-bg)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = selected?.id === co.id ? 'var(--pill-bg)' : 'transparent'; }}
+                className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.04] ${selected?.id === co.id ? 'bg-blue-500/5' : ''}`}
               >
-                <td style={{ padding: '13px 18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Building2 size={13} color="white" />
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center flex-shrink-0">
+                      <Building2 size={14} />
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>{co.name}</span>
+                    <span className="font-bold text-sm text-white truncate max-w-[150px]">{co.name}</span>
                   </div>
                 </td>
-                <td style={{ padding: '13px 18px', fontSize: 13, fontWeight: 600, color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
+                <td className="px-6 py-4 text-sm font-bold text-white font-mono">
                   {(co.total || 0).toLocaleString()}
                 </td>
-                <td style={{ padding: '13px 18px' }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: '#ef4444', background: 'rgba(239,68,68,0.08)', padding: '2px 8px', borderRadius: 5 }}>
+                <td className="px-6 py-4">
+                  <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded">
                     {co.critical || 0}
                   </span>
                 </td>
-                <td style={{ padding: '13px 18px', fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>
+                <td className="px-6 py-4 text-sm text-emerald-400 font-bold">
                   {(co.resolved || 0).toLocaleString()}
                 </td>
-                <td style={{ padding: '13px 18px', fontSize: 13, color: 'var(--text-sec)' }}>{co.users || 0}</td>
-                <td style={{ padding: '13px 18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ flex: 1, height: 5, background: 'var(--hover-bg)', borderRadius: 99, maxWidth: 70, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: (co.model_acc || 0) + '%', background: 'var(--accent)', borderRadius: 99 }} />
+                <td className="px-6 py-4 text-sm text-white/50">{co.users || 0}</td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-1.5 bg-white/10 rounded-full max-w-[60px] overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: (co.model_acc || 0) + '%' }} />
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', fontFamily: 'var(--font-mono)', minWidth: 36 }}>
+                    <span className="text-xs font-bold text-white font-mono min-w-[36px]">
                       {co.model_acc}%
                     </span>
                   </div>
                 </td>
-                <td style={{ padding: '13px 18px', fontSize: 11, color: 'var(--text-sec)', whiteSpace: 'nowrap' }}>
+                <td className="px-6 py-4 text-xs text-white/40 whitespace-nowrap">
                   {co.last_active}
                 </td>
-                <td style={{ padding: '13px 18px', textAlign: 'right' }}>
-                  <ChevronRight size={14} color="var(--text-sec)" style={{ transform: selected?.id === co.id ? 'rotate(90deg)' : 'none', transition: '0.2s' }} />
+                <td className="px-6 py-4 text-right">
+                  <ChevronRight size={16} className={`text-white/40 transition-transform duration-300 ${selected?.id === co.id ? 'rotate-90 text-blue-400' : ''}`} />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
-      {showCreate && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-        }} onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
-          <div className="sys-card fade-in" style={{ width: '100%', maxWidth: 440, padding: 28, position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-              <UserPlus size={17} color="var(--accent)" />
-              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-main)' }}>Create User</span>
-              <button onClick={() => setShowCreate(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', display: 'flex' }}>
+      {showCreate && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
+          <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] w-full max-w-md p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+                <UserPlus size={18} />
+              </div>
+              <span className="text-lg font-bold text-white">Create User</span>
+              <button onClick={() => setShowCreate(false)} className="ml-auto text-white/40 hover:text-white p-1 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -318,77 +320,74 @@ export default function SuperAdmin({ user }) {
                 { label: 'Email', key: 'email', type: 'email', placeholder: 'user@company.com' },
                 { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
               ].map(f => (
-                <div key={f.key} style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>{f.label}</label>
-                  <input className="sys-input" type={f.type} required placeholder={f.placeholder}
+                <div key={f.key} className="mb-5">
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{f.label}</label>
+                  <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm" type={f.type} required placeholder={f.placeholder}
                     value={createForm[f.key]}
-                    onChange={e => setCreateForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    style={{ fontSize: 13 }} />
+                    onChange={e => setCreateForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>Role</label>
-                <select className="sys-input" value={createForm.role}
+              <div className="mb-5">
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Role</label>
+                <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none" value={createForm.role}
                   onChange={e => setCreateForm(p => ({ ...p, role: e.target.value }))}
-                  style={{ fontSize: 13, height: 40, cursor: 'pointer' }}>
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                >
+                  <option value="user" className="bg-black text-white">User</option>
+                  <option value="admin" className="bg-black text-white">Admin</option>
                 </select>
               </div>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>Company</label>
-                <select className="sys-input" value={createForm.company_id} required
+              <div className="mb-8">
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Company</label>
+                <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none" value={createForm.company_id} required
                   onChange={e => setCreateForm(p => ({ ...p, company_id: e.target.value }))}
-                  style={{ fontSize: 13, height: 40, cursor: 'pointer' }}>
-                  <option value="" disabled>Select a company…</option>
-                  {companies.filter(c => c.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                >
+                  <option value="" disabled className="bg-black text-white/50">Select a company…</option>
+                  {companies.filter(c => c.id).map(c => <option key={c.id} value={c.id} className="bg-black text-white">{c.name}</option>)}
                 </select>
               </div>
               {createMsg && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, fontSize: 13,
-                  color: createMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
+                <div className={`flex items-center gap-2 mb-6 text-xs font-bold ${createMsg.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
                   {createMsg.type === 'error' ? <AlertTriangle size={13} /> : <CheckCircle size={13} />}
                   {createMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={creating} className="sys-btn"
-                style={{ width: '100%', justifyContent: 'center', opacity: creating ? 0.6 : 1 }}>
-                {creating ? <><RefreshCw size={13} className="spin" /> Creating…</> : <><UserPlus size={13} /> Create & Send Invite</>}
+              <button type="submit" disabled={creating} className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {creating ? <><RefreshCw size={16} className="animate-spin" /> Creating…</> : <><UserPlus size={16} /> Create & Send Invite</>}
               </button>
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {selected && (
-        <div className="sys-card fade-in" style={{ padding: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <Building2 size={16} color="var(--accent)" />
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-main)' }}>{selected.name}</span>
-            <span style={{ fontSize: 11, color: 'var(--text-sec)', marginLeft: 'auto' }}>Last active: {selected.last_active}</span>
+        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 mt-8">
+          <div className="flex items-center gap-3 mb-8">
+            <Building2 size={18} className="text-blue-400" />
+            <span className="text-lg font-bold text-white">{selected.name}</span>
+            <span className="text-xs text-white/40 ml-auto font-medium">Last active: {selected.last_active}</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6 mb-8">
             {[
-              { label: 'Total bugs',      value: (selected.total    || 0).toLocaleString(), color: 'var(--text-main)' },
-              { label: 'Critical open',   value: selected.critical  || 0,                   color: '#ef4444' },
-              { label: 'Resolved',        value: (selected.resolved || 0).toLocaleString(), color: 'var(--success)' },
-              { label: 'Active users',    value: selected.users     || 0,                   color: 'var(--text-main)' },
-              { label: 'Model accuracy',  value: selected.model_acc + '%',                  color: 'var(--accent)' },
-              { label: 'Resolution rate', value: selected.total ? ((selected.resolved / selected.total) * 100).toFixed(1) + '%' : '—', color: '#10b981' },
+              { label: 'Total bugs',      value: (selected.total    || 0).toLocaleString(), color: 'text-white' },
+              { label: 'Critical open',   value: selected.critical  || 0,                   color: 'text-red-400' },
+              { label: 'Resolved',        value: (selected.resolved || 0).toLocaleString(), color: 'text-emerald-400' },
+              { label: 'Active users',    value: selected.users     || 0,                   color: 'text-white' },
+              { label: 'Model accuracy',  value: selected.model_acc + '%',                  color: 'text-blue-400' },
+              { label: 'Resolution rate', value: selected.total ? ((selected.resolved / selected.total) * 100).toFixed(1) + '%' : '—', color: 'text-indigo-400' },
             ].map(s => (
-              <div key={s.label} style={{ padding: '14px 16px', background: 'var(--hover-bg)', borderRadius: 9, border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-sec)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{s.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: 'var(--font-mono)' }}>{s.value}</div>
+              <div key={s.label} className="p-5 rounded-2xl bg-white/5 border border-white/5">
+                <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{s.label}</div>
+                <div className={`text-2xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
               </div>
             ))}
           </div>
-          <div style={{ padding: '12px 16px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 9 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <ShieldCheck size={13} color="#6366f1" />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1' }}>Data isolation confirmed</span>
+          <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-2 text-indigo-400">
+              <ShieldCheck size={14} />
+              <span className="text-xs font-bold uppercase tracking-widest">Data isolation confirmed</span>
             </div>
-            <p style={{ fontSize: 12, color: 'var(--text-sec)', margin: 0, lineHeight: 1.6 }}>
-              This org's data is scoped to <strong>company_id = {selected.id}</strong>. Their users see only their own bugs. Row-Level Security enforced at the Supabase level.
+            <p className="text-xs text-white/50 leading-relaxed max-w-2xl">
+              This organization's data is scoped to <strong className="text-white font-mono">company_id = {selected.id}</strong>. Their users interact solely with their own telemetry. Row-Level Security (RLS) physically enforced at the Supabase persistence layer.
             </p>
           </div>
         </div>

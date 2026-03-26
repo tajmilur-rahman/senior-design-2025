@@ -10,13 +10,14 @@ const ROLE_LABELS = {
 };
 
 const STATUS_CFG = {
-  active:   { label: 'Active',   color: 'var(--success)' },
-  pending:  { label: 'Pending',  color: '#f59e0b' },
-  inactive: { label: 'Inactive', color: 'var(--text-sec)' },
+  active:   { label: 'Active',   color: 'text-emerald-400' },
+  pending:  { label: 'Pending',  color: 'text-amber-500' },
+  inactive: { label: 'Inactive', color: 'text-white/40' },
 };
 
 export default function ProfileSettings({ user, onUpdate }) {
   const [username,        setUsername]        = useState(user?.username || '');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword,     setNewPassword]     = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingProfile,   setSavingProfile]   = useState(false);
@@ -43,14 +44,18 @@ export default function ProfileSettings({ user, onUpdate }) {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
+    if (!currentPassword) { setPasswordMsg({ type: 'error', text: 'Please enter your current password.' }); return; }
     if (newPassword !== confirmPassword) { setPasswordMsg({ type: 'error', text: "Passwords don't match." }); return; }
     if (newPassword.length < 8) { setPasswordMsg({ type: 'error', text: 'Password must be at least 8 characters.' }); return; }
     setSavingPassword(true); setPasswordMsg(null);
     try {
+      // Verify current password before allowing update
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: user?.email, password: currentPassword });
+      if (signInError) { setPasswordMsg({ type: 'error', text: 'Current password is incorrect.' }); return; }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
       setPasswordMsg({ type: 'success', text: 'Password updated successfully.' });
-      setNewPassword(''); setConfirmPassword('');
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
     } catch (err) {
       setPasswordMsg({ type: 'error', text: err.message || 'Password update failed.' });
     } finally { setSavingPassword(false); }
@@ -59,76 +64,106 @@ export default function ProfileSettings({ user, onUpdate }) {
   const statusCfg = STATUS_CFG[user?.status] || STATUS_CFG.active;
 
   return (
-    <div className="page-content fade-in" style={{ maxWidth: 620 }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 4px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 9 }}>
-          <User size={22} color="var(--accent)" /> Profile Settings
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: 0 }}>Manage your personal information and password.</p>
+    <div className="w-full max-w-4xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
+      
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
+              <User size={12} className="text-blue-500" />
+              <span className="text-[10px] font-bold tracking-widest uppercase">Personal Config</span>
+            </div>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
+            Profile <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Settings</span>
+          </h1>
+          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
+            Manage your personal identity, security credentials, and view your organizational access level.
+          </p>
+        </div>
+        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
       </div>
 
-      <div className="sys-card" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 16 }}>Account Info</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {/* Account Info Grid */}
+      <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-6">
+          <ShieldCheck size={14} className="text-white/40" /> Account Context
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
             { label: 'Email',    value: user?.email || '—' },
             { label: 'Role',     value: ROLE_LABELS[user?.role] || user?.role || '—' },
-            { label: 'Company',  value: profileData?.company_name || (user?.company_id ? `Company ${user.company_id}` : '—'), icon: <Building2 size={13} style={{ marginRight: 5, opacity: 0.6 }} /> },
+            { label: 'Company',  value: profileData?.company_name || (user?.company_id ? `Company ${user.company_id}` : '—'), icon: <Building2 size={14} className="mr-2 opacity-50" /> },
             { label: 'Status',   value: statusCfg.label, color: statusCfg.color },
-            { label: 'Bugs in DB', value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…', icon: <Bug size={13} style={{ marginRight: 5, opacity: 0.6 }} /> },
-            { label: 'Onboarding', value: profileData?.onboarding_completed ? 'Completed ✓' : 'Setup Pending', color: profileData?.onboarding_completed ? 'var(--success)' : '#f59e0b' },
+            { label: 'Bugs in DB', value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…', icon: <Bug size={14} className="mr-2 opacity-50" /> },
+            { label: 'Onboarding', value: profileData?.onboarding_completed ? 'Completed ✓' : 'Setup Pending', color: profileData?.onboarding_completed ? 'text-emerald-400' : 'text-amber-500' },
           ].map(f => (
-            <div key={f.label} style={{ padding: '12px 14px', background: 'var(--hover-bg)', borderRadius: 9, border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 10, color: 'var(--text-sec)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{f.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: f.color || 'var(--text-main)', display: 'flex', alignItems: 'center' }}>{f.icon}{f.value}</div>
+            <div key={f.label} className="p-4 rounded-2xl bg-white/5 border border-white/5">
+              <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">{f.label}</div>
+              <div className={`text-sm font-bold flex items-center ${f.color || 'text-white'}`}>{f.icon}{f.value}</div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="sys-card" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 16 }}>Display Name</div>
-        <form onSubmit={handleSaveProfile}>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>Name</label>
-            <input className="sys-input" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} style={{ fontSize: 14 }} />
-          </div>
-          {profileMsg && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: profileMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
-              {profileMsg.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
-              {profileMsg.text}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Display Name */}
+        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50" />
+          <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Display Name</div>
+          <form onSubmit={handleSaveProfile} className="flex flex-col h-full justify-between">
+            <div className="mb-6">
+              <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Name</label>
+              <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} />
             </div>
-          )}
-          <button type="submit" disabled={savingProfile || !username.trim() || username.trim() === user?.username} className="sys-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, opacity: (savingProfile || !username.trim() || username.trim() === user?.username) ? 0.5 : 1 }}>
-            <Save size={14} /> {savingProfile ? 'Saving…' : 'Save Name'}
-          </button>
-        </form>
-      </div>
+            <div>
+              {profileMsg && (
+                <div className={`flex items-center gap-2 mb-4 text-xs font-bold ${profileMsg.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {profileMsg.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
+                  {profileMsg.text}
+                </div>
+              )}
+              <button type="submit" disabled={savingProfile || !username.trim() || username.trim() === user?.username} 
+                className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                <Save size={16} /> {savingProfile ? 'Saving…' : 'Save Name'}
+              </button>
+            </div>
+          </form>
+        </div>
 
-      <div className="sys-card" style={{ padding: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 16 }}>Change Password</div>
-        <form onSubmit={handleChangePassword}>
-          {[
-            { label: 'New password',     value: newPassword,     setter: setNewPassword },
-            { label: 'Confirm password', value: confirmPassword, setter: setConfirmPassword },
-          ].map(f => (
-            <div key={f.label} style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 6 }}>{f.label}</label>
-              <input className="sys-input" type="password" value={f.value} onChange={e => f.setter(e.target.value)} placeholder="••••••••" style={{ fontSize: 14 }} />
+        {/* Password */}
+        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent opacity-50" />
+          <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Change Password</div>
+          <form onSubmit={handleChangePassword} className="flex flex-col h-full justify-between">
+            <div className="mb-6 space-y-4">
+              {[
+                { label: 'Current password', value: currentPassword, setter: setCurrentPassword },
+                { label: 'New password',     value: newPassword,     setter: setNewPassword },
+                { label: 'Confirm password', value: confirmPassword, setter: setConfirmPassword },
+              ].map(f => (
+                <div key={f.label}>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{f.label}</label>
+                  <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-purple-500/50 focus:bg-white/10 outline-none transition-all text-sm tracking-widest" type="password" value={f.value} onChange={e => f.setter(e.target.value)} placeholder="••••••••" />
+                </div>
+              ))}
             </div>
-          ))}
-          {passwordMsg && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: passwordMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
-              {passwordMsg.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
-              {passwordMsg.text}
+            <div>
+              {passwordMsg && (
+                <div className={`flex items-center gap-2 mb-4 text-xs font-bold ${passwordMsg.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {passwordMsg.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
+                  {passwordMsg.text}
+                </div>
+              )}
+              <button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword} 
+                className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                <Lock size={16} /> {savingPassword ? 'Updating…' : 'Update Password'}
+              </button>
             </div>
-          )}
-          <button type="submit" disabled={savingPassword || !newPassword || !confirmPassword} className="sys-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, opacity: (savingPassword || !newPassword || !confirmPassword) ? 0.5 : 1 }}>
-            <Lock size={14} /> {savingPassword ? 'Updating…' : 'Update Password'}
-          </button>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

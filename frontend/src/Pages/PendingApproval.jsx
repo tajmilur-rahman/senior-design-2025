@@ -5,8 +5,6 @@ export default function PendingApproval({ user, onLogout, status = 'pending' }) 
   const isInactive       = status === 'inactive';
   const isInviteRequested = status === 'invite_requested';
 
-  const iconColor = isInactive ? '#ef4444' : '#f59e0b';
-  const iconBg    = isInactive ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)';
   const heading   = isInactive        ? 'Account Deactivated'
                   : isInviteRequested ? 'Waiting for Admin Approval'
                   :                     'Awaiting Approval';
@@ -17,49 +15,36 @@ export default function PendingApproval({ user, onLogout, status = 'pending' }) 
     : 'Your account is pending Super Admin approval. You\'ll receive access once your registration is reviewed.';
 
   return (
-    <div style={{
-      height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg)', flexDirection: 'column', gap: 0, padding: 24,
-    }}>
-      <div style={{
-        maxWidth: 480, width: '100%', background: 'var(--card-bg)',
-        border: '1px solid var(--border)', borderRadius: 16,
-        padding: '48px 40px', textAlign: 'center',
-      }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: '50%', background: iconBg,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px',
-        }}>
-          {isInactive ? <ShieldCheck size={32} color={iconColor} /> : <Clock size={32} color={iconColor} />}
+    <div className="min-h-[100dvh] w-full flex items-center justify-center font-sans bg-black p-6 relative overflow-hidden">
+      {/* Ambient background glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/10 via-black to-black pointer-events-none" />
+      
+      <div className="relative z-10 w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 ${isInactive ? 'bg-red-500/10 border border-red-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+          {isInactive ? <ShieldCheck size={28} className="text-red-500" /> : <Clock size={28} className="text-amber-500" />}
         </div>
 
-        <h2 style={{ margin: '0 0 12px', fontSize: 22, fontWeight: 800, color: 'var(--text-main)' }}>
+        <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">
           {heading}
         </h2>
 
-        <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-sec)', lineHeight: 1.7 }}>
+        <p className="text-sm text-white/60 leading-relaxed mb-6">
           {body}
         </p>
 
         {!isInactive && (
-          <p style={{ margin: '0 0 32px', fontSize: 13, color: 'var(--text-sec)', lineHeight: 1.6 }}>
-            Signed in as <strong style={{ color: 'var(--text-main)' }}>{user?.email}</strong>
+          <p className="text-xs text-white/40 mb-8 font-medium">
+            Signed in as <strong className="text-white font-semibold">{user?.email}</strong>
           </p>
         )}
-        {isInactive && <div style={{ marginBottom: 32 }} />}
+        {isInactive && <div className="mb-8" />}
 
         <button
           onClick={async () => {
             await supabase.auth.signOut();
             if (onLogout) onLogout();
           }}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 24px', borderRadius: 8, border: '1px solid var(--border)',
-            background: 'var(--hover-bg)', color: 'var(--text-main)',
-            cursor: 'pointer', fontSize: 14, fontWeight: 600,
-            fontFamily: 'var(--font-head)',
-          }}
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-bold transition-all w-full"
         >
           <LogOut size={15} /> Sign out
         </button>

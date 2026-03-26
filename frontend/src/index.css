@@ -1,16 +1,47 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
 :root {
-  --accent: #3b82f6;
-  --bg-main: #0f172a;
-  --text-main: #f8fafc;
+  /* Premium SaaS Dark Mode */
+  --background: 0 0% 0%;
+  --foreground: 0 0% 98%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 60%;
+  --border: 0 0% 15%;
+  --radius: 1rem;
 }
 
 body {
   margin: 0;
   padding: 0;
   width: 100vw;
-  height: 100vh;
-  /* background-color and color are now dynamically managed by App.css */
-  overflow: hidden;
+  min-height: 100vh;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+}
+
+@layer utilities {
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.02);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    position: relative;
+    overflow: hidden;
+  }
 }
 
 #root {

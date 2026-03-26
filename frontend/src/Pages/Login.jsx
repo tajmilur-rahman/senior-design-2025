@@ -5,31 +5,32 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import axios from 'axios';
+import { Beams } from './Landing';
+
 
 
 function PasswordInput({ value, onChange, placeholder, required = true }) {
   const [visible, setVisible] = useState(false);
   return (
-    <div className="input-group">
-      <Lock size={18} className="input-icon" style={{ opacity: 0.5 }} />
+    <div className="relative w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-colors focus-within:border-white/30 focus-within:bg-white/10 flex items-center">
+      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" />
       <input
-        className="sys-input login-input"
+        className="w-full bg-transparent px-4 py-4 pl-11 pr-12 text-white placeholder:text-white/40 focus:outline-none text-sm"
         type={visible ? 'text' : 'password'}
         placeholder={placeholder || 'Password'}
         value={value}
         onChange={onChange}
         required={required}
-        style={{ paddingRight: 44 }}
       />
       <button type="button" onClick={() => setVisible(v => !v)} tabIndex={-1}
-        style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', display: 'flex', padding: 4, borderRadius: 4 }}>
+        className="absolute right-4 text-white/50 hover:text-white transition-colors p-1.5 rounded flex items-center justify-center">
         {visible ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
     </div>
   );
 }
 
-export default function Login({ onLogin, theme, toggleTheme, forceResetRecovery = false, onResetDone = null }) {
+export default function Login({ onLogin, forceResetRecovery = false, onResetDone = null, onBack = null }) {
   const [mode, setMode]                       = useState('login');
   const [viewState, setViewState]             = useState('form');
   const [email, setEmail]                     = useState('');
@@ -254,87 +255,95 @@ export default function Login({ onLogin, theme, toggleTheme, forceResetRecovery 
   );
 
   return (
-    <div className="login-backdrop-enterprise">
-      <button className="theme-toggle-btn" onClick={toggleTheme} aria-label="Toggle theme">
-        {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-      </button>
-      <div className="login-card-enterprise fade-in-up">
-        <div className="login-brand-side">
-          <div className="floating-shape shape-1" /><div className="floating-shape shape-2" /><div className="floating-shape shape-3" />
-          <div className="brand-content">
-            <div className="logo-box-large"><ShieldCheck size={44} color="white" /></div>
-            <h1>Apex<span style={{ color: '#3b82f6' }}>OS</span></h1>
-            <p>Machine-learning bug triage that learns from your team — classify, prioritise, and track defects in one place.</p>
-            <div className="brand-stat-ent"><Activity size={14} /> System operational</div>
+    <div className="relative min-h-screen w-full flex items-center justify-center font-sans overflow-hidden bg-black">
+      {/* Full Bleed Beams Background */}
+      <div className="absolute inset-0 z-0">
+        <Beams beamWidth={2.5} beamHeight={18} beamNumber={15} lightColor="#ffffff" speed={2.5} noiseIntensity={2} scale={0.15} rotation={43} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/90 pointer-events-none" />
+      </div>
+
+      {/* Back Button */}
+      {onBack && (
+        <button onClick={onBack} className="absolute top-6 left-6 z-50 text-white/70 hover:text-white flex items-center gap-2 text-sm font-medium transition-colors bg-white/5 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
+          ← Back to Home
+        </button>
+      )}
+
+      {/* Centered Liquid Glass Card */}
+      <div className="relative z-10 w-full max-w-[480px] p-8 sm:p-12 mx-4 bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.5)] flex flex-col my-12 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div className="flex items-center gap-3 mb-10 mx-auto">
+          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+             <ShieldCheck size={22} className="text-black" />
           </div>
+          <span className="font-bold text-2xl tracking-tight text-white">Apex<span className="text-white/50 font-medium">OS</span></span>
         </div>
 
-        <div className="login-form-side">
+        <div className="w-full flex flex-col justify-center">
           {viewState === 'request_sent' && (
-            <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, background: 'rgba(99,102,241,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <Mail size={32} color="#6366f1" />
+            <div className="w-full max-w-[420px] mx-auto text-center animate-in fade-in duration-500">
+              <div className="w-16 h-16 bg-foreground/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-border">
+                <Mail size={28} className="text-foreground" />
               </div>
-              <h2 className="login-title" style={{ marginBottom: 8 }}>Request submitted</h2>
-              <p className="login-sub" style={{ marginBottom: 10 }}>
-                Your access request has been sent to <strong>{companies.find(c => String(c.id) === String(reqCompanyId))?.name || 'your company'}</strong>'s admin.
+              <h2 className="text-2xl font-bold text-foreground mb-2">Request submitted</h2>
+              <p className="text-muted-foreground text-sm mb-3">
+                Your access request has been sent to <strong className="text-foreground">{companies.find(c => String(c.id) === String(reqCompanyId))?.name || 'your company'}</strong>'s admin.
               </p>
-              <p className="login-sub" style={{ marginBottom: 28, fontSize: 13 }}>
-                Once approved, you'll receive an email at <strong>{email}</strong> with an invite code. Log in with your email and password, then enter the code when prompted.
+              <p className="text-muted-foreground/80 text-xs leading-relaxed mb-8">
+                Once approved, you'll receive an email at <strong className="text-white">{email}</strong> with an invite code. Log in with your email and password, then enter the code when prompted.
               </p>
-              <button className="sys-btn full" onClick={() => switchTo('login')}>
+              <button className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 mt-4" onClick={() => switchTo('login')}>
                 Back to Sign In <ArrowRight size={16} />
               </button>
             </div>
           )}
 
           {viewState === 'success' && (
-            <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, background: 'rgba(245,158,11,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <CheckCircle size={32} color="#f59e0b" />
+            <div className="w-full max-w-[420px] mx-auto text-center animate-in fade-in duration-500">
+              <div className="w-16 h-16 bg-foreground/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-border">
+                <CheckCircle size={28} className="text-foreground" />
               </div>
-              <h2 className="login-title" style={{ marginBottom: 8 }}>Registration submitted</h2>
-              <p className="login-sub" style={{ marginBottom: 10 }}>
-                Your admin account for <strong>{companyName}</strong> is pending review.
+              <h2 className="text-2xl font-bold text-foreground mb-2">Registration submitted</h2>
+              <p className="text-muted-foreground text-sm mb-3">
+                Your admin account for <strong className="text-foreground">{companyName}</strong> is pending review.
               </p>
-              <p className="login-sub" style={{ marginBottom: 28, fontSize: 13 }}>
-                A super admin will approve your registration. You'll receive an email with a link to access your workspace once approved.
+              <p className="text-muted-foreground/80 text-xs leading-relaxed mb-8">
+                A super admin will approve your registration. You'll receive an email to access your workspace once approved.
               </p>
-              <button className="sys-btn full" onClick={() => switchTo('login')}>
+              <button className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 mt-4" onClick={() => switchTo('login')}>
                 Back to Sign In <ArrowRight size={16} />
               </button>
             </div>
           )}
 
           {viewState === 'mfa_challenge' && (
-            <div className="fade-in form-content-wrapper" style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, background: 'var(--pill-bg)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <Lock size={28} color="var(--accent)" />
+            <div className="w-full max-w-[420px] mx-auto text-center animate-in fade-in duration-500">
+              <div className="w-16 h-16 bg-foreground/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-border">
+                <Lock size={28} className="text-foreground" />
               </div>
-              <h2 className="login-title" style={{ marginBottom: 8 }}>Two-factor verification</h2>
-              <p className="login-sub" style={{ marginBottom: 28 }}>Enter the 6-digit code from your authenticator app.</p>
-              <input className="sys-input login-input" placeholder="000 000" maxLength="6" value={mfaCode}
+              <h2 className="text-2xl font-bold text-foreground mb-2">Two-factor verification</h2>
+              <p className="text-muted-foreground text-sm mb-8">Enter the 6-digit code from your authenticator app.</p>
+              <input className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 text-white text-center text-3xl tracking-[0.5em] focus:border-white/30 focus:bg-white/10 outline-none transition-all mb-6" placeholder="000000" maxLength="6" value={mfaCode}
                 onChange={e => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                style={{ textAlign: 'center', fontSize: 22, letterSpacing: 10, marginBottom: 16 }} autoComplete="one-time-code" />
-              <button className="sys-btn full" onClick={verifyMfa} disabled={isLoading || mfaCode.length < 6}>
+                autoComplete="one-time-code" />
+              <button className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50" onClick={verifyMfa} disabled={isLoading || mfaCode.length < 6}>
                 {isLoading ? 'Verifying…' : 'Verify'} {!isLoading && <ArrowRight size={16} />}
               </button>
-              {msg && <div className="msg-banner error" style={{ marginTop: 14 }}>{msg}</div>}
+              {msg && <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">{msg}</div>}
             </div>
           )}
 
           {viewState === 'form' && (
-            <div className="fade-in form-content-wrapper">
-              <h2 className="login-title">{headings[mode]}</h2>
-              <p className="login-sub">{subheadings[mode]}</p>
+            <div className="w-full mx-auto animate-in fade-in duration-500">
+              <h2 className="text-3xl font-bold mb-3 tracking-tight text-white text-center">{headings[mode]}</h2>
+              <p className="text-white/60 mb-8 text-sm text-center">{subheadings[mode]}</p>
 
-              <form onSubmit={mode === 'register' && registerRole === 'user' ? handleRequestAccess : handleAuth} className="modern-form">
+              <form onSubmit={mode === 'register' && registerRole === 'user' ? handleRequestAccess : handleAuth} className="flex flex-col gap-4 w-full">
                 {mode === 'register' && (
-                  <div style={{ marginBottom: 20 }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 10, textTransform: 'uppercase' }}>
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-white/60 mb-3 text-center">
                       I am registering as
                     </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="grid grid-cols-2 gap-3">
                       {[
                         { value: 'user',  icon: <User size={20} />,        label: 'Regular User',  sub: 'Request access to join' },
                         { value: 'admin', icon: <ShieldCheck size={20} />, label: 'Company Admin',  sub: 'Create a new company' },
@@ -343,27 +352,26 @@ export default function Login({ onLogin, theme, toggleTheme, forceResetRecovery 
                           setRegisterRole(opt.value);
                           setReqCompanyId('');
                         }}
-                          style={{
-                            padding: '14px 12px', borderRadius: 10, cursor: 'pointer',
-                            textAlign: 'center',
-                            border: `2px solid ${registerRole === opt.value ? 'var(--accent)' : 'var(--border)'}`,
-                            background: registerRole === opt.value ? 'var(--pill-bg)' : 'var(--hover-bg)',
-                            transition: 'all 0.15s', fontFamily: 'var(--font-head)',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                          }}>
-                          <span style={{ color: registerRole === opt.value ? 'var(--accent)' : 'var(--text-sec)' }}>{opt.icon}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: registerRole === opt.value ? 'var(--accent)' : 'var(--text-main)' }}>{opt.label}</span>
-                          <span style={{ fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.3 }}>{opt.sub}</span>
+                          className={`flex flex-col items-center gap-1.5 p-4 rounded-xl cursor-pointer text-center transition-all ${
+                             registerRole === opt.value 
+                               ? 'border-2 border-white/30 bg-white/10' 
+                               : 'border-2 border-transparent bg-white/5 hover:bg-white/10'
+                          }`}>
+                          <span className={registerRole === opt.value ? 'text-white' : 'text-white/40'}>{opt.icon}</span>
+                          <span className={`text-sm font-bold ${registerRole === opt.value ? 'text-white' : 'text-white/60'}`}>{opt.label}</span>
+                          <span className="text-[10px] text-muted-foreground leading-tight">{opt.sub}</span>
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="input-group">
-                  <Mail size={18} className="input-icon" style={{ opacity: 0.5 }} />
-                  <input className="sys-input login-input" type="email" placeholder="Work email" value={email}
-                    onChange={e => setEmail(e.target.value)} required disabled={isRecovery} autoComplete="email" />
+                <div className="flex flex-col gap-1.5">
+                  <div className="relative w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm transition-colors focus-within:border-white/30 focus-within:bg-white/10 flex items-center">
+                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <input className="w-full bg-transparent px-4 py-4 pl-11 text-foreground placeholder:text-muted-foreground focus:outline-none text-sm" type="email" placeholder="Work email" value={email}
+                      onChange={e => setEmail(e.target.value)} required disabled={isRecovery} autoComplete="email" />
+                  </div>
                 </div>
 
                 {(mode !== 'reset' || isRecovery) && (
@@ -376,60 +384,61 @@ export default function Login({ onLogin, theme, toggleTheme, forceResetRecovery 
                 {mode === 'register' && (
                   <>
                     {registerRole === 'admin' && (
-                      <div className="fade-in">
-                        <div className="input-group">
-                          <Building2 size={18} className="input-icon" style={{ opacity: 0.5 }} />
-                          <input className="sys-input login-input" placeholder="Company name" value={companyName}
+                      <div className="animate-in fade-in duration-300 w-full flex flex-col gap-1.5">
+                        <div className="relative w-full rounded-2xl border border-border bg-foreground/5 backdrop-blur-sm transition-colors focus-within:border-primary/50 focus-within:bg-foreground/10 flex items-center">
+                          <Building2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                          <input className="w-full bg-transparent px-4 py-4 pl-11 text-foreground placeholder:text-muted-foreground focus:outline-none text-sm" placeholder="Company name" value={companyName}
                             onChange={e => setCompanyName(e.target.value)} required />
                         </div>
                         {companyName && /[<>"';&|`\\{}]/.test(companyName) && (
-                          <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--danger)', fontWeight: 600 }}>
+                          <p className="mt-1 text-xs text-red-400 font-semibold">
                             Company name contains invalid characters.
                           </p>
                         )}
                         {companyName && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(companyName) && (
-                          <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--danger)', fontWeight: 600 }}>
+                          <p className="mt-1 text-xs text-red-400 font-semibold">
                             Company name cannot be an email address.
                           </p>
                         )}
-                        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                        <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                           A super admin will review and approve your registration.
                         </p>
                       </div>
                     )}
 
                     {registerRole === 'user' && (
-                      <div className="fade-in">
-                        <div className="input-group">
-                          <Building2 size={18} className="input-icon" style={{ opacity: 0.5 }} />
+                      <div className="animate-in fade-in duration-300 w-full flex flex-col gap-1.5">
+                        <div className="relative w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm transition-colors focus-within:border-white/30 focus-within:bg-white/10 flex items-center">
+                          <Building2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                           <select
-                            className="sys-input login-input"
+                            className="w-full bg-transparent px-4 py-4 pl-11 pr-4 text-white focus:outline-none text-sm appearance-none"
                             value={reqCompanyId}
                             onChange={e => setReqCompanyId(e.target.value)}
                             required
-                            style={{ paddingLeft: 40 }}
                           >
-                            <option value="">{loadingCompanies ? 'Loading…' : 'Select your company'}</option>
-                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            <option value="" disabled className="bg-black text-white/50">{loadingCompanies ? 'Loading…' : 'Select your company'}</option>
+                            {companies.map(c => <option key={c.id} value={c.id} className="bg-background text-foreground">{c.name}</option>)}
                           </select>
                         </div>
-                        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-sec)', lineHeight: 1.5 }}>
+                        <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                           Once your admin approves you, you'll receive an email with an invite code.
                         </p>
                       </div>
                     )}
 
-                    <div className="input-group fade-in">
-                      <User size={18} className="input-icon" style={{ opacity: 0.5 }} />
-                      <input className="sys-input login-input" placeholder="Your display name" value={username}
-                        onChange={e => setUsername(e.target.value)} required />
+                    <div className="flex flex-col gap-1.5 animate-in fade-in duration-300 w-full">
+                      <div className="relative w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm transition-colors focus-within:border-white/30 focus-within:bg-white/10 flex items-center">
+                        <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        <input className="w-full bg-transparent px-4 py-4 pl-11 text-foreground placeholder:text-muted-foreground focus:outline-none text-sm" placeholder="Your display name" value={username}
+                          onChange={e => setUsername(e.target.value)} required />
+                      </div>
                     </div>
                   </>
                 )}
 
-                <button className="sys-btn full login-btn-ent" type="submit"
+                <button className="w-full mt-4 bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" type="submit"
                   disabled={submitDisabled}
-                  style={{ opacity: submitDisabled ? 0.5 : 1 }}>
+                >
                   {isLoading ? 'Please wait…' : (
                     mode === 'register' && registerRole === 'user'
                       ? 'Request Access'
@@ -440,22 +449,24 @@ export default function Login({ onLogin, theme, toggleTheme, forceResetRecovery 
               </form>
 
               {msg && (
-                <div className={`msg-banner ${msg.includes('sent') || msg.includes('success') || msg.includes('updated') || msg.includes('inbox') ? 'success' : 'error'}`}>
+                <div className={`mt-6 p-4 text-sm rounded-2xl border text-center ${
+                   msg.includes('sent') || msg.includes('success') || msg.includes('updated') || msg.includes('inbox') 
+                   ? 'bg-primary/10 border-primary/20 text-primary' 
+                   : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
                   {msg}
                 </div>
               )}
 
-              <div className="login-links-ent" style={{ marginTop: 24 }}>
-                {mode === 'login' ? (
-                  <>
-                    <span onClick={() => switchTo('reset')} style={{ cursor: 'pointer' }}>Forgot password?</span>
-                    <span style={{ opacity: 0.25 }}>·</span>
-                    <span onClick={() => switchTo('register')} style={{ cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Create account</span>
-                  </>
-                ) : (
-                  <span onClick={() => switchTo('login')} style={{ cursor: 'pointer' }}>← Back to sign in</span>
-                )}
-              </div>
+              {mode === 'login' ? (
+                <div className="mt-8 text-center text-sm text-white/50 flex flex-col gap-3">
+                  <p>New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); switchTo('register'); }} className="text-white hover:underline transition-colors font-medium">Create Account</a></p>
+                  <p><a href="#" onClick={(e) => { e.preventDefault(); switchTo('reset'); }} className="hover:underline transition-colors">Forgot password?</a></p>
+                </div>
+              ) : (
+                <p className="mt-8 text-center text-sm text-white/50">
+                  <a href="#" onClick={(e) => { e.preventDefault(); switchTo('login'); }} className="hover:underline transition-colors">← Back to sign in</a>
+                </p>
+              )}
             </div>
           )}
         </div>

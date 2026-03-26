@@ -1,10 +1,15 @@
-import os
+import os, re
 from jose import jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from database import supabase
+
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+
+def _is_uuid(val: str) -> bool:
+    return bool(_UUID_RE.match(val)) if val else False
 
 SECRET_KEY = '+wdvqIdxOWrs4WqDF5X2IxJyKC30JMVddqQpTJy59HqHLyZrRu7O3uIBk5uZt5WVTDQEs3/f8Q/Sc2oEfKgOsA=='
 ALGORITHM  = "HS256"
@@ -39,9 +44,16 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         if not user_uuid:
             raise HTTPException(status_code=401, detail="Invalid token: missing sub")
 
-        res = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
-        if res.data:
-            return res.data[0]
+        # sub is a proper UUID — query by uuid column
+        if _is_uuid(user_uuid):
+            res = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
+            if res.data:
+                return res.data[0]
+        else:
+            # sub is a plain username (legacy local-auth token e.g. sub="admin")
+            res = supabase.table("users").select("*").eq("username", user_uuid).execute()
+            if res.data:
+                return res.data[0]
 
         if user_email:
             email_res = supabase.table("users").select("*").eq("email", user_email).execute()

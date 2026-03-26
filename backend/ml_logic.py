@@ -1,8 +1,27 @@
 import os, json, joblib, numpy as np, pandas as pd, time as _time_global
-import random, re
+import random, re, shutil
 from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
+
+
+def _metrics_dir(artifact_paths):
+    return os.path.dirname(artifact_paths["met"])
+
+def _promote_active_to_previous(artifact_paths):
+    """Copy current rf_metrics.json → previous_metrics.json before overwriting."""
+    src = artifact_paths["met"]
+    if os.path.exists(src):
+        shutil.copy2(src, os.path.join(_metrics_dir(artifact_paths), "previous_metrics.json"))
+
+def _save_main_brain(artifact_paths, metrics_out):
+    """Persist main_brain_metrics.json only if it doesn't already exist.
+    Once set it is frozen — never overwritten by subsequent training runs."""
+    path = os.path.join(_metrics_dir(artifact_paths), "main_brain_metrics.json")
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            json.dump({**metrics_out, "build": "main_brain"}, f)
 from scipy.sparse import hstack, csr_matrix
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics.pairwise import cosine_similarity
 
 _model_cache: dict = {}
 
@@ -147,7 +166,128 @@ def predict_severity(summary: str, component: str = "General", platform: str = "
         "fallback":     fallback,
     }
 
-def full_train_from_dataset(records: list, company_id=None, progress_cb=None) -> dict:
+# Seed corpus — always available so similar bugs show even on a fresh install.
+# These mirror the sample bugs shown in the Analytics UI plus common Firefox bug patterns.
+_SEED_CORPUS = [
+    {"id": "sample-1", "summary": "Firefox crashes when opening more than 50 tabs on macOS",               "severity": "S1"},
+    {"id": "sample-2", "summary": "Dark mode colours inconsistent across the Settings panel",              "severity": "S3"},
+    {"id": "sample-3", "summary": "4K video playback stutters on YouTube",                                 "severity": "S2"},
+    {"id": "sample-4", "summary": "Login button unresponsive on password-protected sites",                 "severity": "S2"},
+    {"id": "seed-5",   "summary": "Browser crashes on startup after recent update",                        "severity": "S1"},
+    {"id": "seed-6",   "summary": "Memory leak detected when multiple tabs stay open overnight",           "severity": "S2"},
+    {"id": "seed-7",   "summary": "CSS layout broken on several popular websites after update",            "severity": "S2"},
+    {"id": "seed-8",   "summary": "Extension toolbar icons not rendering correctly",                       "severity": "S3"},
+    {"id": "seed-9",   "summary": "Address bar autocomplete stops working intermittently",                 "severity": "S3"},
+    {"id": "seed-10",  "summary": "Password manager fails to autofill credentials on login pages",         "severity": "S2"},
+    {"id": "seed-11",  "summary": "JavaScript errors in console on page load for some sites",              "severity": "S3"},
+    {"id": "seed-12",  "summary": "PDF viewer crashes when opening large documents",                       "severity": "S1"},
+    {"id": "seed-13",  "summary": "Audio drops intermittently during video conference calls",              "severity": "S2"},
+    {"id": "seed-14",  "summary": "Bookmarks fail to sync across devices",                                 "severity": "S3"},
+    {"id": "seed-15",  "summary": "Security certificate warning incorrectly shown on trusted sites",       "severity": "S1"},
+    {"id": "seed-16",  "summary": "High CPU usage when watching fullscreen video",                         "severity": "S2"},
+    {"id": "seed-17",  "summary": "Colour theme not applied consistently across all panels",               "severity": "S4"},
+    {"id": "seed-18",  "summary": "Form input fields lose focus unexpectedly on some pages",               "severity": "S3"},
+    {"id": "seed-19",  "summary": "Crash when switching between multiple windows rapidly",                 "severity": "S1"},
+    {"id": "seed-20",  "summary": "Network requests timeout after idle period with no error message",      "severity": "S2"},
+]
+
+_SEV_NORM = {
+    "blocker": "S1", "critical": "S1",
+    "major":   "S2",
+    "normal":  "S3", "minor": "S3", "trivial": "S3",
+    "enhancement": "S4",
+}
+
+
+def find_similar_bugs(query_text: str, company_id=None, top_k: int = 5) -> list:
+    """
+    Return top_k bugs most similar to query_text using TF-IDF cosine similarity.
+    Always includes the seed corpus so results appear even on a fresh install.
+    """
+    _, vec, _, _ = load_pack(company_id if company_id is not None else None)
+    if vec is None:
+        _, vec, _, _ = load_pack(None)
+    if vec is None:
+        return []
+
+    try:
+        from database import supabase as _db
+
+        # Collect DB rows
+        db_rows = []
+        try:
+            if company_id is not None:
+                res = _db.table("feedback") \
+                    .select("id, summary, actual_severity, predicted_severity") \
+                    .eq("company_id", company_id) \
+                    .not_.is_("summary", "null") \
+                    .limit(400) \
+                    .execute()
+                db_rows = res.data or []
+
+            if len(db_rows) < 20:
+                res = _db.table("feedback") \
+                    .select("id, summary, actual_severity, predicted_severity") \
+                    .not_.is_("summary", "null") \
+                    .limit(400) \
+                    .execute()
+                db_rows = res.data or []
+        except Exception as db_err:
+            print(f"[find_similar_bugs] DB fetch error: {db_err}")
+
+        # Build unified corpus: seed first (always present), then DB rows
+        summaries, severities, ids = [], [], []
+
+        for s in _SEED_CORPUS:
+            summaries.append(s["summary"])
+            severities.append(s["severity"])
+            ids.append(s["id"])
+
+        seen = {s.lower() for s in summaries}
+        for r in db_rows:
+            text = r.get("summary", "").strip()
+            if not text or text.lower() in seen:
+                continue
+            seen.add(text.lower())
+            sev_raw = r.get("actual_severity") or r.get("predicted_severity") or "S3"
+            sev = sev_raw if sev_raw in ("S1", "S2", "S3", "S4") else _SEV_NORM.get(str(sev_raw).lower(), "S3")
+            summaries.append(text)
+            severities.append(sev)
+            ids.append(r.get("id"))
+
+        # Vectorise and score
+        all_texts = [query_text] + summaries
+        matrix = vec.transform(all_texts)
+        scores = cosine_similarity(matrix[0], matrix[1:])[0]
+
+        top_indices = scores.argsort()[::-1][:top_k * 2]   # fetch extra, filter below
+
+        query_lower = query_text.strip().lower()
+        results = []
+        for idx in top_indices:
+            if len(results) >= top_k:
+                break
+            # Skip if it is effectively the same text as the query
+            if summaries[idx].strip().lower() == query_lower:
+                continue
+            score = float(scores[idx])
+            if score < 0.01:
+                continue
+            results.append({
+                "id":       ids[idx],
+                "summary":  summaries[idx],
+                "severity": severities[idx],
+                "score":    round(score, 3),
+            })
+
+        return results
+
+    except Exception as e:
+        print(f"[find_similar_bugs] error: {e}")
+        return []
+
+
+def full_train_from_dataset(records: list, company_id=None, progress_cb=None, dataset_label=None) -> dict:
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.preprocessing import LabelEncoder
@@ -179,11 +319,46 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None) ->
     if df.empty:
         return {"success": False, "error": "No valid records after cleaning."}
 
-    _progress("Building TF-IDF vocabulary", 30)
+    _progress("Building TF-IDF vocabulary", 25)
     vectorizer = TfidfVectorizer(
         max_features=10000, stop_words="english", ngram_range=(1, 2), min_df=2, sublinear_tf=True,
     )
-    X = vectorizer.fit_transform(df["summary"])
+    X_text = vectorizer.fit_transform(df["summary"])
+
+    _progress("Encoding metadata and flags", 40)
+    # Fill missing META columns with defaults (matches predict_internal)
+    meta_defaults = {
+        "component": "General", "product": "Firefox", "priority": "--",
+        "platform": "All", "op_sys": "Windows", "type": "defect",
+        "resolution": "---", "status": "NEW",
+    }
+    for c in META:
+        if c not in df.columns:
+            df[c] = meta_defaults.get(c, "UNKNOWN")
+        df[c] = df[c].fillna(meta_defaults.get(c, "UNKNOWN")).astype(str)
+
+    # Build FLAGS from text content (matches predict_internal)
+    text_lower = df["summary"].str.lower()
+    df["has_crash"]        = text_lower.str.contains("crash|segfault", regex=True).astype(int)
+    df["is_accessibility"] = text_lower.str.contains("accessibility").astype(int)
+    df["is_regression"]    = text_lower.str.contains("regression").astype(int)
+    df["is_intermittent"]  = text_lower.str.contains("intermittent").astype(int)
+    df["has_patch"]        = text_lower.str.contains("patch").astype(int)
+
+    # Encode META columns
+    encoders = {}
+    X_meta_list = []
+    for c in META:
+        le_c = LabelEncoder()
+        le_c.fit(df[c])
+        X_meta_list.append(le_c.transform(df[c]).reshape(-1, 1))
+        encoders[c] = le_c
+
+    X_meta = np.hstack(X_meta_list)
+    X_flags = df[FLAGS].values
+
+    # Final feature matrix: meta(8) + flags(5) + text(vocab) — must match predict_internal
+    X = hstack([csr_matrix(X_meta), csr_matrix(X_flags), X_text])
     y = df["severity"]
 
     _progress("Training Random Forest (100 trees)", 55)
@@ -199,9 +374,9 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None) ->
     if company_id is not None:
         os.makedirs(os.path.dirname(artifact_paths["model"]), exist_ok=True)
 
-    le = LabelEncoder()
-    le.fit(["S1", "S2", "S3", "S4"])
-    encoders = {"severity": le}
+    le_sev = LabelEncoder()
+    le_sev.fit(["S1", "S2", "S3", "S4"])
+    encoders["severity"] = le_sev
 
     joblib.dump(rf,         artifact_paths["model"])
     joblib.dump(vectorizer, artifact_paths["vec"])
@@ -211,9 +386,14 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None) ->
         "accuracy":     accuracy, "f1_score": accuracy, "precision": accuracy, "recall": accuracy,
         "last_trained": _time_mod.ctime(), "sample_size": len(df), "total_trees": 100,
         "mode":         "company" if company_id is not None else "global", "company_id": company_id,
+        "dataset_label": dataset_label or ("Company bug database" if company_id else "Global training data"),
+        "build": "active",
     }
+    _promote_active_to_previous(artifact_paths)
     with open(artifact_paths["met"], "w") as f:
         json.dump(metrics_out, f)
+    # Full train also sets/updates the static main brain
+    _save_main_brain(artifact_paths, metrics_out)
 
     cache_key = company_id if company_id is not None else "global"
     _model_cache.pop(cache_key, None)
@@ -242,7 +422,7 @@ def safe_transform(encoder, values):
     return encoder.transform(safe_vals)
 
 
-def fast_retrain(feedback_data: list, company_id=None, progress_cb=None) -> dict:
+def fast_retrain(feedback_data: list, company_id=None, progress_cb=None, dataset_label=None) -> dict:
     def _progress(step, pct):
         if progress_cb:
             try: progress_cb(step, pct)
@@ -252,7 +432,10 @@ def fast_retrain(feedback_data: list, company_id=None, progress_cb=None) -> dict
     print(f"Starting fast retrain (company_id={company_id})...")
 
     _progress("Loading base model", 10)
-    rf_model, tfidf, encoders, metrics = load_pack(None)
+    # Prefer company model as base; fall back to global
+    rf_model, tfidf, encoders, metrics = load_pack(company_id) if company_id else load_pack(None)
+    if not rf_model and company_id:
+        rf_model, tfidf, encoders, metrics = load_pack(None)
 
     if not rf_model:
         return {"success": False, "error": "Base model not found. Run full training first."}
@@ -271,28 +454,30 @@ def fast_retrain(feedback_data: list, company_id=None, progress_cb=None) -> dict
         df["severity"] = df["actual_severity"].str.lower().map(sev_map).fillna("S3")
         df["summary"]  = df["summary"].fillna("").astype(str)
 
-        cat_cols = ["component", "priority", "status", "product", "platform", "op_sys", "type", "resolution"]
-        defaults = {
-            "component":  df.get("component", pd.Series(["General"] * len(df))),
-            "priority": "--", "status": "NEW", "product": "Firefox",
-            "platform": "All", "op_sys": "Windows", "type": "defect", "resolution": "---",
+        meta_defaults = {
+            "component": "General", "product": "Firefox", "priority": "--",
+            "platform": "All", "op_sys": "Windows", "type": "defect",
+            "resolution": "---", "status": "NEW",
         }
-        for c in cat_cols:
+        for c in META:
             if c not in df.columns:
-                df[c] = defaults.get(c, "UNKNOWN")
-            df[c] = df[c].fillna("UNKNOWN").astype(str)
+                df[c] = meta_defaults.get(c, "UNKNOWN")
+            df[c] = df[c].fillna(meta_defaults.get(c, "UNKNOWN")).astype(str)
 
-        extra_cols = ["has_crash", "is_accessibility", "is_regression", "is_intermittent", "has_patch"]
-        for c in extra_cols:
-            df[c] = 0
+        # Build FLAGS from text (matches predict_internal and full_train)
+        text_lower_s = df["summary"].str.lower()
+        df["has_crash"]        = text_lower_s.str.contains("crash|segfault", regex=True).astype(int)
+        df["is_accessibility"] = text_lower_s.str.contains("accessibility").astype(int)
+        df["is_regression"]    = text_lower_s.str.contains("regression").astype(int)
+        df["is_intermittent"]  = text_lower_s.str.contains("intermittent").astype(int)
+        df["has_patch"]        = text_lower_s.str.contains("patch").astype(int)
 
         _progress("Vectorizing text features", 50)
         X_text = tfidf.transform(df["summary"])
 
         _progress("Encoding metadata", 60)
-        all_meta = cat_cols + extra_cols
         X_meta_list = []
-        for c in all_meta:
+        for c in META:
             enc = encoders.get(c)
             if enc:
                 X_meta_list.append(safe_transform(enc, df[c]))
@@ -300,8 +485,9 @@ def fast_retrain(feedback_data: list, company_id=None, progress_cb=None) -> dict
                 X_meta_list.append(np.zeros(len(df)))
 
         X_meta = np.vstack(X_meta_list).T
-        X_meta_sparse = csr_matrix(X_meta)
-        X_new = hstack([X_meta_sparse, X_text])
+        X_flags = df[FLAGS].values
+
+        X_new = hstack([csr_matrix(X_meta), csr_matrix(X_flags), X_text])
         y_new = safe_transform(encoders["severity"], df["severity"])
 
         _progress("Training random forest", 70)
@@ -319,6 +505,27 @@ def fast_retrain(feedback_data: list, company_id=None, progress_cb=None) -> dict
         joblib.dump(rf_model, artifact_paths["model"])
         joblib.dump(tfidf,    artifact_paths["vec"])
         joblib.dump(encoders, artifact_paths["enc"])
+
+        existing_met = {}
+        if os.path.exists(artifact_paths["met"]):
+            try:
+                with open(artifact_paths["met"]) as _f:
+                    existing_met = json.load(_f)
+            except Exception:
+                pass
+        metrics_to_save = {
+            **existing_met,
+            "last_trained":  _time_global.ctime(),
+            "total_trees":   rf_model.n_estimators,
+            "dataset_label": dataset_label or "Feedback corrections",
+            "mode":          "company" if company_id is not None else "global",
+            "company_id":    company_id,
+            "build":         "active",
+        }
+        _promote_active_to_previous(artifact_paths)
+        with open(artifact_paths["met"], "w") as _f:
+            json.dump(metrics_to_save, _f)
+        # Note: fast_retrain does NOT overwrite main_brain_metrics.json
 
         cache_key = company_id if company_id is not None else "global"
         _model_cache.pop(cache_key, None)

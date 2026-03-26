@@ -9,7 +9,7 @@ DB = {
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "Random Forest ML"))
+ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "ml_training"))
 COMPANY_MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 ART_RF = {

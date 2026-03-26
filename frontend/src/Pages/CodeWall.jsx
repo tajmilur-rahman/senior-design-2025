@@ -23,51 +23,36 @@ export default function CodeWall({ user, onLogout, onVerified }) {
   };
 
   return (
-    <div style={{
-      height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg)', padding: 24,
-    }}>
-      <div style={{
-        maxWidth: 440, width: '100%', background: 'var(--card-bg)',
-        border: '1px solid var(--border)', borderRadius: 16,
-        padding: '48px 40px', textAlign: 'center',
-      }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: '50%',
-          background: 'rgba(99,102,241,0.1)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px',
-        }}>
-          <KeyRound size={32} color="#6366f1" />
+    <div className="min-h-[100dvh] w-full flex items-center justify-center font-sans bg-black p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-black to-black pointer-events-none" />
+      
+      <div className="relative z-10 w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
+        <div className="w-16 h-16 rounded-3xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-6">
+          <KeyRound size={28} className="text-blue-400" />
         </div>
 
-        <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, color: 'var(--text-main)' }}>
+        <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
           Enter Your Invite Code
         </h2>
-        <p style={{ margin: '0 0 6px', fontSize: 14, color: 'var(--text-sec)', lineHeight: 1.7 }}>
+        <p className="text-sm text-white/60 leading-relaxed mb-2">
           Your access request was approved. Check your email for the invite code sent by your company admin.
         </p>
-        <p style={{ margin: '0 0 28px', fontSize: 13, color: 'var(--text-sec)' }}>
-          Signed in as <strong style={{ color: 'var(--text-main)' }}>{user?.email}</strong>
+        <p className="text-xs text-white/40 mb-8 font-medium">
+          Signed in as <strong className="text-white font-semibold">{user?.email}</strong>
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
             type="text"
             placeholder="Invite code (e.g. ABC123)"
             value={code}
             onChange={e => setCode(e.target.value)}
             autoFocus
-            style={{
-              padding: '11px 14px', borderRadius: 9, fontSize: 15, fontWeight: 700,
-              letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center',
-              border: `1px solid ${error ? 'var(--danger)' : 'var(--border)'}`,
-              background: 'var(--input-bg)', color: 'var(--text-main)',
-              outline: 'none', width: '100%', boxSizing: 'border-box',
-            }}
+            className={`w-full bg-black/50 border rounded-2xl px-4 py-4 text-white text-center text-xl font-bold tracking-[0.3em] uppercase outline-none transition-all ${error ? 'border-red-500/50 focus:border-red-500 focus:bg-red-500/10' : 'border-white/10 focus:border-blue-500/50 focus:bg-white/5'}`}
           />
 
           {error && (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--danger)', fontWeight: 600 }}>
+            <p className="m-0 text-sm text-red-400 font-bold">
               {error}
             </p>
           )}
@@ -75,28 +60,17 @@ export default function CodeWall({ user, onLogout, onVerified }) {
           <button
             type="submit"
             disabled={loading || !code.trim()}
-            style={{
-              padding: '11px 0', borderRadius: 9, fontSize: 14, fontWeight: 700,
-              background: 'var(--accent)', color: 'white', border: 'none',
-              cursor: loading || !code.trim() ? 'not-allowed' : 'pointer',
-              opacity: loading || !code.trim() ? 0.6 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
+            className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
           >
-            <ShieldCheck size={15} />
+            <ShieldCheck size={18} />
             {loading ? 'Verifying…' : 'Verify Code'}
           </button>
         </form>
 
-        <div style={{ margin: '24px 0 0', borderTop: '1px solid var(--border)', paddingTop: 20 }}>
+        <div className="mt-8 border-t border-white/10 pt-6">
           <button
             onClick={onLogout}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7,
-              padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)',
-              background: 'transparent', color: 'var(--text-sec)',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            }}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-transparent hover:bg-white/10 border border-transparent hover:border-white/10 text-white/50 hover:text-white text-sm font-bold transition-all w-full"
           >
             <LogOut size={14} /> Sign out
           </button>

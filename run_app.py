@@ -3,6 +3,7 @@ import sys
 import os
 import time
 import urllib.request
+import webbrowser
 
 def kill_port(port):
     """Finds and kills any process using the specified port on Windows."""
@@ -28,7 +29,7 @@ def main():
     # ⚡ NEW STEP 1: Execute the ETL Taxonomy Sync Script Automatically
     print("-> Triggering ETL Data Sync...")
     try:
-        subprocess.run([sys.executable, "backend/sync_taxonomy.py"], check=True)
+        subprocess.run([sys.executable, "backend/scripts/sync_taxonomy.py"], check=True)
     except Exception as e:
         print(f"⚠️ Warning: ETL Sync Failed: {e}. Starting with cached javascript.")
 
@@ -57,6 +58,19 @@ def main():
         cwd="frontend",
         shell=True
     )
+
+    # Wait for frontend dev server, then open browser automatically
+    print("-> Waiting for frontend to be ready...", end="", flush=True)
+    for _ in range(30):
+        try:
+            urllib.request.urlopen("http://localhost:5173", timeout=1)
+            break
+        except Exception:
+            time.sleep(1)
+            print(".", end="", flush=True)
+    print(" ready!")
+    print("-> Opening browser...")
+    webbrowser.open("http://localhost:5173")
 
     try:
         backend.wait()

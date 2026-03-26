@@ -74,48 +74,49 @@ function LaunchChoiceStep({ onChoice, isAdmin }) {
           onClick={() => onChoice(c.id)}
           style={{
             display: "flex", alignItems: "center", gap: 16,
-            padding: "16px 18px", borderRadius: 12, cursor: "pointer",
-            border: "1.5px solid var(--border)",
-            background: "var(--hover-bg)",
+            padding: "16px 18px", borderRadius: 14, cursor: "pointer",
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.04)",
             transition: "all 0.15s", textAlign: "left",
             fontFamily: "var(--font-head)", width: "100%",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "var(--accent)";
-            e.currentTarget.style.background = "var(--pill-bg)";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "var(--border)";
-            e.currentTarget.style.background = "var(--hover-bg)";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
           }}
         >
           <div style={{
-            width: 48, height: 48, borderRadius: 10,
-            background: "var(--card-bg)", border: "1px solid var(--border)",
+            width: 48, height: 48, borderRadius: 12,
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
             {c.icon}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
                 {c.title}
               </span>
               {c.badge && (
                 <span style={{
-                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 4,
-                  background: "rgba(16,185,129,0.1)", color: "#10b981",
+                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 6,
+                  background: "rgba(16,185,129,0.12)", color: "#10b981",
+                  border: "1px solid rgba(16,185,129,0.25)",
                   textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0,
                 }}>
                   {c.badge}
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-sec)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
               {c.desc}
             </div>
           </div>
-          <ArrowRight size={15} color="var(--text-sec)" style={{ flexShrink: 0 }} />
+          <ArrowRight size={15} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0 }} />
         </button>
       ))}
     </div>
@@ -312,11 +313,8 @@ export default function Onboarding({ onComplete, user }) {
   const isLast = step === TOUR_STEPS.length - 1;
 
   const backdropStyle = (align = "center") => ({
-    minHeight: "100dvh", height: "100dvh", display: "flex",
-    alignItems: align, justifyContent: "center",
-    padding: "2rem", boxSizing: "border-box",
+    alignItems: align,
     overflowY: align === "flex-start" ? "auto" : undefined,
-    background: "var(--bg-primary)",
   });
   const iconCircle = (rgba) => ({
     width: 60, height: 60, borderRadius: "50%", background: rgba,
@@ -327,10 +325,10 @@ export default function Onboarding({ onComplete, user }) {
   if (choice === "populate") {
     return (
       <div className="onboarding-backdrop" style={backdropStyle()}>
-        <div className="onboarding-card" style={{ width: "100%", maxWidth: "520px", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem", boxShadow: "var(--glow)", gap: 24, textAlign: "center" }}>
+        <div className="onboarding-card" style={{ maxWidth: "520px", display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem", gap: 24, textAlign: "center" }}>
           {seeding ? (
             <>
-              <div style={iconCircle("rgba(16,185,129,0.1)")}>
+              <div style={iconCircle("rgba(16,185,129,0.1)")} className="border border-emerald-500/20">
                 <Loader size={32} color="#10b981" style={{ animation: "spin 1s linear infinite" }} />
               </div>
               <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding your database…</h2>
@@ -340,11 +338,11 @@ export default function Onboarding({ onComplete, user }) {
             </>
           ) : seedResult?.error ? (
             <>
-              <div style={iconCircle("rgba(239,68,68,0.1)")}>
+              <div style={iconCircle("rgba(239,68,68,0.1)")} className="border border-red-500/20">
                 <X size={32} color="#ef4444" />
               </div>
               <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding failed</h2>
-              <p style={{ color: "var(--text-sec)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="onboarding-btn-back" onClick={() => { setChoice(null); setSeedResult(null); }}>
                   <ArrowLeft size={15} /> Try again
@@ -356,7 +354,7 @@ export default function Onboarding({ onComplete, user }) {
             </>
           ) : (
             <>
-              <div style={iconCircle("rgba(16,185,129,0.1)")}>
+              <div style={iconCircle("rgba(16,185,129,0.1)")} className="border border-emerald-500/20">
                 <CheckCircle size={32} color="#10b981" />
               </div>
               <h2 className="onboarding-title" style={{ margin: 0 }}>Database ready!</h2>
@@ -378,7 +376,7 @@ export default function Onboarding({ onComplete, user }) {
   if (!choice) {
     return (
       <div className="onboarding-backdrop" style={backdropStyle("flex-start")}>
-        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+        <div className="onboarding-card" style={{ maxWidth: "900px", minHeight: "70vh", display: "flex", flexDirection: "column", padding: "3rem" }}>
           <div className="onboarding-header">
             <div className="onboarding-icon"><Zap size={40} color="var(--accent)" /></div>
             <div className="onboarding-step-label">You're all set</div>
@@ -401,7 +399,7 @@ export default function Onboarding({ onComplete, user }) {
   // ── Product tour ──────────────────────────────────────────────────────────
   return (
     <div className="onboarding-backdrop" style={backdropStyle("flex-start")}>
-      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+      <div className="onboarding-card" style={{ maxWidth: "900px", minHeight: "70vh", display: "flex", flexDirection: "column", padding: "3rem" }}>
         <button className="onboarding-skip" onClick={handleSkip} title="Skip tour">
           <X size={18} />
         </button>
