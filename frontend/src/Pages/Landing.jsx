@@ -673,17 +673,16 @@ export default function Landing({ onEnterWorkspace }) {
             </div>
 
             {/* Main Heading */}
-            <h1 className="mb-6 text-4xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
-              Automate triage with{" "}
-              <br className="hidden md:block" />
+            <h1 className="mb-6 text-5xl font-bold tracking-tight text-white sm:text-7xl lg:text-8xl">
+              Predict. Classify.{" "}
               <span className="bg-gradient-to-r from-white via-zinc-300 to-zinc-600 bg-clip-text text-transparent">
-                predictive intelligence
+                Resolve.
               </span>
             </h1>
 
             {/* Subtitle */}
-            <p className="mb-10 text-lg leading-8 text-white/80 sm:text-xl lg:text-2xl max-w-3xl mx-auto">
-              ML-powered severity prediction that gets smarter with every correction.
+            <p className="mb-10 text-xl leading-relaxed text-white/70 sm:text-2xl max-w-2xl mx-auto">
+              ML-powered severity prediction that sharpens with every correction your team makes.
             </p>
 
             {/* CTA Buttons */}
@@ -724,22 +723,22 @@ export default function Landing({ onEnterWorkspace }) {
                 Platform
               </div>
               <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">One platform.<br/>Every stage of the bug lifecycle.</h2>
-              <p className="text-lg md:text-xl text-white/60 leading-relaxed max-w-2xl mx-auto">
-                Submit. Classify. Resolve. One workspace for the full bug lifecycle.
+              <p className="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto">
+                Submit, classify, and resolve — in a single unified workspace.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { badge: 'Severity Analysis', title: 'Instant ML Classification', desc: 'S1–S4 severity in under a second. Trained on 222k+ real Mozilla Firefox reports.', color: 'text-blue-400', border: 'hover:border-blue-500/30' },
-                { badge: 'Duplicate Detection', title: 'Vector RAG Search', desc: 'Cross-references your entire bug history with vector embeddings. No duplicate work.', color: 'text-purple-400', border: 'hover:border-purple-500/30' },
-                { badge: 'Multi-Tenancy', title: 'Company-Isolated Databases', desc: 'Isolated PostgreSQL tables per company. Your data never touches another tenant.', color: 'text-emerald-400', border: 'hover:border-emerald-500/30' },
-                { badge: 'Role-Based Access', title: 'User · Admin · Super Admin', desc: 'Three permission tiers. Invite flows and approval queues built in.', color: 'text-amber-400', border: 'hover:border-amber-500/30' },
-                { badge: 'Bulk Upload', title: 'CSV & JSON Import', desc: 'Import thousands of bugs at once. Auto-classified by the model on ingestion.', color: 'text-pink-400', border: 'hover:border-pink-500/30' },
-                { badge: 'Resolution Support', title: 'AI-Powered Fix Suggestions', desc: 'Surface resolved duplicates and their applied fixes. Stop reinventing solutions.', color: 'text-cyan-400', border: 'hover:border-cyan-500/30' },
+                { badge: 'Severity Analysis', title: 'Instant ML Classification', desc: 'S1–S4 prediction in under a second. Trained on 222k+ real Mozilla Firefox reports.', color: 'text-blue-400', border: 'hover:border-blue-500/30' },
+                { badge: 'Duplicate Detection', title: 'Semantic Vector Search', desc: 'Cross-references your full bug history using vector embeddings. No redundant submissions.', color: 'text-purple-400', border: 'hover:border-purple-500/30' },
+                { badge: 'Multi-Tenancy', title: 'Isolated Tenant Architecture', desc: 'Dedicated PostgreSQL tables per company, enforced with Row-Level Security.', color: 'text-emerald-400', border: 'hover:border-emerald-500/30' },
+                { badge: 'Role-Based Access', title: 'Granular Permission Tiers', desc: 'User, Admin, and Super Admin roles with invite flows and approval queues.', color: 'text-amber-400', border: 'hover:border-amber-500/30' },
+                { badge: 'Bulk Ingestion', title: 'CSV & JSON Import Pipeline', desc: 'Ingest thousands of records at once. Each entry auto-classified on arrival.', color: 'text-pink-400', border: 'hover:border-pink-500/30' },
+                { badge: 'Resolution Intelligence', title: 'AI-Assisted Fix Surfacing', desc: 'Retrieve resolved duplicates and their applied solutions to accelerate triage.', color: 'text-cyan-400', border: 'hover:border-cyan-500/30' },
               ].map((f, i) => (
                 <div key={i} className={`bg-white/[0.02] border border-white/8 rounded-2xl p-6 transition-all duration-200 hover:bg-white/[0.04] ${f.border}`}>
-                  <div className={`text-[10px] font-bold uppercase tracking-widest mb-3 ${f.color}`}>{f.badge}</div>
-                  <h3 className="text-white font-bold text-base mb-2 tracking-tight">{f.title}</h3>
+                  <div className={`text-xs font-bold uppercase tracking-widest mb-3 ${f.color}`}>{f.badge}</div>
+                  <h3 className="text-white font-bold text-lg mb-2 tracking-tight leading-snug">{f.title}</h3>
                   <p className="text-white/45 text-sm leading-relaxed">{f.desc}</p>
                 </div>
               ))}
@@ -755,14 +754,14 @@ export default function Landing({ onEnterWorkspace }) {
                  <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-purple-400 font-bold uppercase tracking-widest">
                    Capabilities
                  </div>
-                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">A model that learns from your team.</h2>
-                 <p className="text-lg text-white/60 leading-relaxed mb-8">
-                   Every correction retrains the model. Accuracy compounds with your team's feedback.
+                 <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Intelligence that compounds over time.</h2>
+                 <p className="text-xl text-white/60 leading-relaxed mb-8">
+                   Every human correction becomes a training signal. Your model grows more precise with every review cycle.
                  </p>
                  <ul className="space-y-4">
-                   <li className="flex items-center gap-3 text-white/80"><CheckCircle size={18} className="text-purple-400" /> TF-IDF n-gram feature extraction</li>
-                   <li className="flex items-center gap-3 text-white/80"><CheckCircle size={18} className="text-purple-400" /> Vector RAG duplicate detection</li>
-                   <li className="flex items-center gap-3 text-white/80"><CheckCircle size={18} className="text-purple-400" /> Feedback-driven model retraining</li>
+                   <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> TF-IDF n-gram feature extraction</li>
+                   <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> Vector RAG duplicate detection</li>
+                   <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> Feedback-driven model retraining</li>
                  </ul>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-3xl aspect-square flex items-center justify-center p-8 relative overflow-hidden backdrop-blur-md shadow-2xl">
@@ -780,8 +779,8 @@ export default function Landing({ onEnterWorkspace }) {
                Architecture
              </div>
              <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Secure by design.<br/>Multi-tenant by default.</h2>
-             <p className="text-lg md:text-xl text-white/60 leading-relaxed max-w-2xl mx-auto mb-10">
-               FastAPI + Supabase PostgreSQL. Per-company Row-Level Security. Zero configuration.
+             <p className="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto mb-10">
+               Built on FastAPI and Supabase PostgreSQL. Row-Level Security enforced per tenant. Production-ready from day one.
              </p>
              <Button size="lg" className="shadow-2xl shadow-white/10 font-semibold" onClick={() => scrollTo('documentation')}>
                View on GitHub <ArrowRight className="ml-2 h-5 w-5" />
@@ -797,9 +796,9 @@ export default function Landing({ onEnterWorkspace }) {
                <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/50 font-bold uppercase tracking-widest">
                  Open Source
                </div>
-               <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">Explore the full codebase.</h2>
-               <p className="text-lg text-white/60 leading-relaxed max-w-xl mx-auto">
-                 Browse the ML pipeline, FastAPI backend, and React frontend. All in one repo.
+               <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Explore the full codebase.</h2>
+               <p className="text-xl text-white/60 leading-relaxed max-w-xl mx-auto">
+                 ML pipeline, FastAPI backend, and React frontend — all in one open-source repository.
                </p>
              </div>
 
@@ -870,6 +869,60 @@ export default function Landing({ onEnterWorkspace }) {
                  </div>
                </div>
              </div>
+
+          </div>
+        </section>
+
+        {/* SECTION 6: TEAM CREDITS */}
+        <section className="w-full flex flex-col items-center justify-center px-6 lg:px-8 border-t border-white/5 relative py-24">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-900/5 to-transparent pointer-events-none" />
+          <div className="max-w-4xl w-full relative z-10">
+
+            {/* Header — Gannon emblem + title */}
+            <div className="text-center mb-16">
+<div className="mb-3 text-xs font-bold uppercase tracking-widest text-indigo-400">Senior Design Project · 2025</div>
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">Gannon University</h2>
+              <p className="text-white/40 text-base">Erie, Pennsylvania</p>
+            </div>
+
+            {/* Team Members */}
+            <div className="mb-10">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/30 text-center mb-6">Built by</p>
+              <div className="flex flex-wrap justify-center gap-4">
+                {['Amartuvshin Ganzorig', 'Anunjin Batdelger', 'Koshi Yuasa'].map((name) => (
+                  <div key={name} className="bg-white/[0.04] border border-white/10 rounded-2xl px-7 py-4 text-center backdrop-blur-sm">
+                    <div className="text-white font-bold text-lg tracking-tight">{name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Faculty + Advisors — 3-column grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Mentor */}
+              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-4">Faculty Mentor</p>
+                <div className="text-white font-bold text-lg">Dr. Tajmilur Rahman</div>
+              </div>
+
+              {/* Senior Design Professors */}
+              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-4">Senior Design Professors</p>
+                <div className="space-y-2">
+                  <div className="text-white font-bold text-lg">Dr. Mei-Huei Tang</div>
+                  <div className="text-white font-bold text-lg">Dr. Richard Matovu</div>
+                </div>
+              </div>
+
+              {/* Mozilla guidance */}
+              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-4">Mozilla Firefox · Guidance</p>
+                <div className="space-y-2">
+                  <div className="text-white font-bold text-lg">Marco Castelluccio</div>
+                  <div className="text-white font-bold text-lg">Suhaib Mujahid</div>
+                </div>
+              </div>
+            </div>
 
           </div>
         </section>
