@@ -1,7 +1,9 @@
 import { useState } from "react";
+import axios from "axios";
+import { supabase } from "../supabaseClient";
 import {
   ShieldCheck, Brain, Upload, ArrowRight, ArrowLeft, X,
-  Zap, Database, PenTool
+  Zap, Database, PenTool, Download, CheckCircle, Loader
 } from "lucide-react";
 
 const DEMO_PREDICTIONS = {
@@ -24,8 +26,17 @@ const EXAMPLES   = [
 ];
 
 // ── First-launch choice screen ────────────────────────────────────────────────
-function LaunchChoiceStep({ onChoice }) {
+function LaunchChoiceStep({ onChoice, isAdmin }) {
   const choices = [
+    {
+      id: "populate",
+      icon: <Download size={26} color="#10b981" />,
+      title: "Populate with sample data",
+      desc: "Seed your company database with 5,000 real Mozilla bugs — ready to explore instantly.",
+      cta: "Seed my database",
+      badge: "Recommended",
+      adminOnly: true,
+    },
     {
       id: "submit",
       icon: <PenTool size={26} color="var(--accent)" />,
@@ -33,14 +44,16 @@ function LaunchChoiceStep({ onChoice }) {
       desc: "Jump straight in and start logging real bugs from the Severity Analysis tab.",
       cta: "Start fresh",
       badge: null,
+      adminOnly: false,
     },
     {
       id: "demo",
-      icon: <Database size={26} color="#10b981" />,
-      title: "Explore demo data",
+      icon: <Database size={26} color="#3b82f6" />,
+      title: "Explore Firefox demo data",
       desc: "Browse 220,000+ pre-loaded Mozilla Firefox bugs to see the full dashboard in action.",
       cta: "Show me around",
-      badge: "220k+ bugs loaded",
+      badge: "220k+ bugs",
+      adminOnly: false,
     },
     {
       id: "tour",
@@ -49,8 +62,9 @@ function LaunchChoiceStep({ onChoice }) {
       desc: "See how the AI severity predictor works with a short interactive walkthrough.",
       cta: "Take the tour",
       badge: null,
+      adminOnly: false,
     },
-  ];
+  ].filter(c => !c.adminOnly || isAdmin);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -60,48 +74,49 @@ function LaunchChoiceStep({ onChoice }) {
           onClick={() => onChoice(c.id)}
           style={{
             display: "flex", alignItems: "center", gap: 16,
-            padding: "16px 18px", borderRadius: 12, cursor: "pointer",
-            border: "1.5px solid var(--border)",
-            background: "var(--hover-bg)",
+            padding: "16px 18px", borderRadius: 14, cursor: "pointer",
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.04)",
             transition: "all 0.15s", textAlign: "left",
             fontFamily: "var(--font-head)", width: "100%",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "var(--accent)";
-            e.currentTarget.style.background = "var(--pill-bg)";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "var(--border)";
-            e.currentTarget.style.background = "var(--hover-bg)";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
           }}
         >
           <div style={{
-            width: 48, height: 48, borderRadius: 10,
-            background: "var(--card-bg)", border: "1px solid var(--border)",
+            width: 48, height: 48, borderRadius: 12,
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
             {c.icon}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
                 {c.title}
               </span>
               {c.badge && (
                 <span style={{
-                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 4,
-                  background: "rgba(16,185,129,0.1)", color: "#10b981",
+                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 6,
+                  background: "rgba(16,185,129,0.12)", color: "#10b981",
+                  border: "1px solid rgba(16,185,129,0.25)",
                   textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0,
                 }}>
                   {c.badge}
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-sec)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
               {c.desc}
             </div>
           </div>
-          <ArrowRight size={15} color="var(--text-sec)" style={{ flexShrink: 0 }} />
+          <ArrowRight size={15} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0 }} />
         </button>
       ))}
     </div>
@@ -253,17 +268,37 @@ const TOUR_STEPS = [
 // ── Main Onboarding component ─────────────────────────────────────────────────
 // onComplete(companyName, displayName, navigateTo)
 // navigateTo: optional tab ID to land on after onboarding ('submit', 'database', null)
-export default function Onboarding({ onComplete }) {
-  const [choice, setChoice] = useState(null);
-  const [step,   setStep]   = useState(0);
+export default function Onboarding({ onComplete, user }) {
+  const [choice,       setChoice]       = useState(null);
+  const [step,         setStep]         = useState(0);
+  const [seeding,      setSeeding]      = useState(false);   // loading state for populate
+  const [seedResult,   setSeedResult]   = useState(null);    // { count, error }
 
-  const handleChoice = (id) => {
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+
+  const handleChoice = async (id) => {
     if (id === "submit") {
-      // Go straight to Severity Analysis tab
-      onComplete(null, null, "submit");
+      onComplete(null, null, "submit", false);   // verified — completed
     } else if (id === "demo") {
-      // Go to Database tab — the Firefox data is already there
-      onComplete(null, null, "database");
+      onComplete(null, null, "database", false); // verified — completed
+    } else if (id === "populate") {
+      setChoice("populate");
+      setSeeding(true);
+      setSeedResult(null);
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
+        const res = await axios.post("/api/admin/seed_company_data", null, {
+          params: { sample_size: 5000 },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        setSeedResult({ count: res.data.count, message: res.data.message });
+      } catch (err) {
+        const msg = err.response?.data?.detail || "Seeding failed. You can try again from the Database tab.";
+        setSeedResult({ error: msg });
+      } finally {
+        setSeeding(false);
+      }
     } else {
       // Show the product tour carousel
       setChoice("tour");
@@ -271,33 +306,88 @@ export default function Onboarding({ onComplete }) {
     }
   };
 
-  const handleTourDone = () => onComplete(null, null, null);
+  const handleTourDone    = () => onComplete(null, null, null, false); // tour completed = verified
+  const handleSkip        = () => onComplete(null, null, null, true);  // skipped = incomplete
 
   const cur    = TOUR_STEPS[step];
   const isLast = step === TOUR_STEPS.length - 1;
 
+  const backdropStyle = (align = "center") => ({
+    alignItems: align,
+    overflowY: align === "flex-start" ? "auto" : undefined,
+  });
+  const iconCircle = (rgba) => ({
+    width: 60, height: 60, borderRadius: "50%", background: rgba,
+    display: "flex", alignItems: "center", justifyContent: "center",
+  });
+
+  // ── Populate / seed screen ────────────────────────────────────────────────
+  if (choice === "populate") {
+    return (
+      <div className="onboarding-backdrop" style={backdropStyle()}>
+        <div className="onboarding-card" style={{ maxWidth: "520px", display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem", gap: 24, textAlign: "center" }}>
+          {seeding ? (
+            <>
+              <div style={iconCircle("rgba(16,185,129,0.1)")} className="border border-emerald-500/20">
+                <Loader size={32} color="#10b981" style={{ animation: "spin 1s linear infinite" }} />
+              </div>
+              <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding your database…</h2>
+              <p className="onboarding-subtitle" style={{ margin: 0 }}>
+                Loading 5,000 sample bugs from Mozilla Firefox data. This takes a few seconds.
+              </p>
+            </>
+          ) : seedResult?.error ? (
+            <>
+              <div style={iconCircle("rgba(239,68,68,0.1)")} className="border border-red-500/20">
+                <X size={32} color="#ef4444" />
+              </div>
+              <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding failed</h2>
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="onboarding-btn-back" onClick={() => { setChoice(null); setSeedResult(null); }}>
+                  <ArrowLeft size={15} /> Try again
+                </button>
+                <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database", false)}>
+                  Go to Dashboard <ArrowRight size={15} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={iconCircle("rgba(16,185,129,0.1)")} className="border border-emerald-500/20">
+                <CheckCircle size={32} color="#10b981" />
+              </div>
+              <h2 className="onboarding-title" style={{ margin: 0 }}>Database ready!</h2>
+              <p className="onboarding-subtitle" style={{ margin: 0 }}>
+                {seedResult?.count ? `${seedResult.count.toLocaleString()} sample bugs` : "Sample bugs"} have been loaded into your company's database.
+              </p>
+              <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database", false)}>
+                Explore my database <ArrowRight size={15} />
+              </button>
+            </>
+          )}
+        </div>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   // ── Choice screen ────────────────────────────────────────────────────────
   if (!choice) {
     return (
-      <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
-        <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
+      <div className="onboarding-backdrop" style={backdropStyle("flex-start")}>
+        <div className="onboarding-card" style={{ maxWidth: "900px", minHeight: "70vh", display: "flex", flexDirection: "column", padding: "3rem" }}>
           <div className="onboarding-header">
-            <div className="onboarding-icon">
-              <Zap size={40} color="var(--accent)" />
-            </div>
+            <div className="onboarding-icon"><Zap size={40} color="var(--accent)" /></div>
             <div className="onboarding-step-label">You're all set</div>
             <h2 className="onboarding-title">How would you like to start?</h2>
             <p className="onboarding-subtitle">You can change this any time from the dashboard.</p>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-            <LaunchChoiceStep onChoice={handleChoice} />
+            <LaunchChoiceStep onChoice={handleChoice} isAdmin={isAdmin} />
           </div>
           <div style={{ marginTop: 18, textAlign: "center" }}>
-            <button
-              className="onboarding-skip-text"
-              onClick={() => onComplete(null, null, null)}
-              style={{ fontSize: 12 }}
-            >
+            <button className="onboarding-skip-text" onClick={handleSkip} style={{ fontSize: 12 }}>
               Skip and go to dashboard →
             </button>
           </div>
@@ -308,9 +398,9 @@ export default function Onboarding({ onComplete }) {
 
   // ── Product tour ──────────────────────────────────────────────────────────
   return (
-    <div className="onboarding-backdrop" style={{ minHeight: "100dvh", height: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "2rem", boxSizing: "border-box", overflowY: "auto", background: "var(--bg-primary)" }}>
-      <div className="onboarding-card" style={{ width: "100%", maxWidth: "900px", minHeight: "70vh", maxHeight: "calc(100dvh - 4rem)", minWidth: 0, minHeight: 0, overflow: "hidden", background: "var(--card-bg)", borderRadius: "24px", display: "flex", flexDirection: "column", padding: "3rem", boxShadow: "var(--glow)" }}>
-        <button className="onboarding-skip" onClick={handleTourDone} title="Skip tour">
+    <div className="onboarding-backdrop" style={backdropStyle("flex-start")}>
+      <div className="onboarding-card" style={{ maxWidth: "900px", minHeight: "70vh", display: "flex", flexDirection: "column", padding: "3rem" }}>
+        <button className="onboarding-skip" onClick={handleSkip} title="Skip tour">
           <X size={18} />
         </button>
         <div className="onboarding-progress">
@@ -326,7 +416,7 @@ export default function Onboarding({ onComplete }) {
         </div>
         <cur.Component />
         <div className="onboarding-nav">
-          <button className="onboarding-skip-text" onClick={handleTourDone}>Skip tour</button>
+          <button className="onboarding-skip-text" onClick={handleSkip}>Skip tour</button>
           <div className="onboarding-nav-right">
             {step > 0 && (
               <button className="onboarding-btn-back" onClick={() => setStep(s => s - 1)}>

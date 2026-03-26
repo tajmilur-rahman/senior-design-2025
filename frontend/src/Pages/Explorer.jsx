@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
     Search, Download, ChevronLeft, ChevronRight, Loader,
@@ -7,16 +8,15 @@ import {
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS, STATUS_DEFS } from '../Components/Glossary';
 
-// Status color helper
 function statusColor(status) {
     const s = (status || '').toUpperCase();
-    if (s === 'VERIFIED') return '#6366f1';
-    if (['RESOLVED', 'CONFIRMED', 'FIXED'].some(x => s.includes(x))) return 'var(--success)';
-    if (s === 'UNCONFIRMED') return '#f59e0b';
-    return 'var(--text-sec)';
+    if (s === 'VERIFIED') return 'text-indigo-400';
+    if (['RESOLVED', 'CONFIRMED', 'FIXED'].some(x => s.includes(x))) return 'text-emerald-400';
+    if (s === 'UNCONFIRMED') return 'text-amber-500';
+    return 'text-white/40';
 }
 
-function CustomSelect({ value, onChange, options, placeholder }) {
+function CustomSelect({ value, onChange, options, placeholder, dropUp = false }) {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
     useEffect(() => {
@@ -26,31 +26,15 @@ function CustomSelect({ value, onChange, options, placeholder }) {
     }, []);
     const selected = options.find(o => o.value === value);
     return (
-        <div ref={ref} style={{ position: 'relative', userSelect: 'none' }}>
-            <div onClick={() => setOpen(o => !o)} style={{
-                height: 42, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '0 14px', background: 'var(--input-bg)', border: '1px solid var(--border)',
-                borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                color: selected ? 'var(--text-main)' : 'var(--text-sec)',
-                ...(open ? { borderColor: 'var(--accent)', boxShadow: '0 0 0 3px rgba(37,99,235,0.1)' } : {})
-            }}>
+        <div ref={ref} className="relative select-none w-full">
+            <div onClick={() => setOpen(o => !o)} className={`h-14 flex items-center justify-between px-5 bg-white/5 border rounded-2xl cursor-pointer text-sm font-bold transition-all ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}>
                 <span>{selected ? selected.label : placeholder}</span>
-                <ChevronDown size={14} color="var(--text-sec)" style={{ transition: '0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0)' }} />
+                <ChevronDown size={14} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
             </div>
             {open && (
-                <div style={{
-                    position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 1000,
-                    background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10,
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.2)', overflow: 'hidden',
-                }}>
+                <div className={`absolute z-[9999] w-full bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.8)] overflow-hidden py-2 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
                     {options.map(opt => (
-                        <div key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }} style={{
-                            padding: '10px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                            color: opt.value === value ? 'var(--accent)' : 'var(--text-main)',
-                            background: opt.value === value ? 'var(--pill-bg)' : 'transparent',
-                        }}
-                            onMouseEnter={e => { if (opt.value !== value) e.currentTarget.style.background = 'var(--hover-bg)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = opt.value === value ? 'var(--pill-bg)' : 'transparent'; }}>
+                        <div key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }} className={`px-5 py-3 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-2 rounded-xl ${opt.value === value ? 'bg-blue-500/20 text-blue-400' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
                             {opt.label}
                         </div>
                     ))}
@@ -61,58 +45,82 @@ function CustomSelect({ value, onChange, options, placeholder }) {
 }
 
 function SevBadge({ sev }) {
-    const map = {
-        S1: { bg: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'rgba(239,68,68,0.25)' },
-        S2: { bg: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: 'rgba(245,158,11,0.25)' },
-        S3: { bg: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: 'rgba(59,130,246,0.25)' },
-        S4: { bg: 'var(--hover-bg)', color: 'var(--text-sec)', border: 'var(--border)' },
-    };
-    const s = map[sev] || map.S4;
+    const badgeStyle = {
+        S1: 'text-red-500 bg-red-500/10 border-red-500/20',
+        S2: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+        S3: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+        S4: 'text-white/40 bg-white/5 border-white/10'
+    }[sev] || 'text-white/40 bg-white/5 border-white/10';
     return (
-        <span style={{ padding: '2px 8px', borderRadius: 5, fontSize: 11, fontWeight: 800, background: s.bg, color: s.color, border: `1px solid ${s.border}`, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+        <span className={`px-2.5 py-1 rounded text-[10px] font-bold border font-mono whitespace-nowrap ${badgeStyle}`}>
             {sev || '—'}
         </span>
     );
 }
 
-// Infer the likely origin of a bug from its fields
 function inferOrigin(bug) {
     const status = (bug.status || '').toUpperCase();
     const id = bug.id;
-    // Bugzilla bugs have numeric IDs in the millions (Mozilla's real IDs)
-    if (id > 100000) return { label: 'Bugzilla', icon: <Globe size={11} />, color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', desc: 'Synced from Mozilla Bugzilla. Status values (UNCONFIRMED, RESOLVED, etc.) are preserved directly from Bugzilla\'s own workflow.' };
-    if (status === 'PROCESSED') return { label: 'Dataset', icon: <Database size={11} />, color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.25)', desc: 'From the pre-loaded Firefox historical dataset (220k+ bugs used for ML training).' };
-    if (bug.batch_id || status === 'BULK') return { label: 'Bulk upload', icon: <UploadCloud size={11} />, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)', desc: 'Uploaded via admin bulk import (JSON/CSV file).' };
-    return { label: 'Manual', icon: <PenTool size={11} />, color: '#6366f1', bg: 'rgba(99,102,241,0.1)', border: 'rgba(99,102,241,0.25)', desc: 'Submitted directly by a team member via the Submit tab.' };
+    if (id > 100000) return { label: 'Bugzilla', icon: <Globe size={11} />, desc: 'Synced from Mozilla Bugzilla. Status values (UNCONFIRMED, RESOLVED, etc.) are preserved directly from Bugzilla\'s own workflow.' };
+    if (status === 'PROCESSED') return { label: 'Dataset', icon: <Database size={11} />, desc: 'From the pre-loaded Firefox historical dataset (220k+ bugs used for ML training).' };
+    if (bug.batch_id || status === 'BULK') return { label: 'Bulk upload', icon: <UploadCloud size={11} />, desc: 'Uploaded via admin bulk import (JSON/CSV file).' };
+    return { label: 'Manual', icon: <PenTool size={11} />, desc: 'Submitted directly by a team member via the Submit tab.' };
 }
 
 function OriginBadge({ origin }) {
+    const tailwindStyle = origin.label === 'Bugzilla' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' :
+                          origin.label === 'Dataset' ? 'text-slate-400 bg-slate-500/10 border-slate-500/20' :
+                          origin.label === 'Bulk upload' ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' :
+                          'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
     return (
-        <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 5,
-            fontSize: 10, fontWeight: 700, color: origin.color, background: origin.bg, border: `1px solid ${origin.border}`,
-            fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
-        }}>
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border whitespace-nowrap ${tailwindStyle}`}>
             {origin.icon} {origin.label}
         </span>
     );
 }
 
-export default function Explorer({ user, initialQuery = "", onNavigate }) {
-    const [bugs, setBugs] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [exporting, setExporting] = useState(false);
-    const [showGlossary, setShowGlossary] = useState(false);
-    const [search, setSearch] = useState(initialQuery);
+const SEV_OPTIONS = [
+    { value: '', label: 'All severities' }, { value: 'S1', label: 'S1 — Critical' },
+    { value: 'S2', label: 'S2 — High' },    { value: 'S3', label: 'S3 — Medium' },
+    { value: 'S4', label: 'S4 — Low' },
+];
+const STATUS_OPTIONS = [
+    { value: '', label: 'All statuses' },        { value: 'NEW', label: 'New' },
+    { value: 'UNCONFIRMED', label: 'Unconfirmed' }, { value: 'CONFIRMED', label: 'Confirmed' },
+    { value: 'RESOLVED', label: 'Resolved' },    { value: 'VERIFIED', label: 'Verified' },
+];
+const COMP_OPTIONS = [
+    { value: '', label: 'All components' }, { value: 'Core', label: 'Core' },
+    { value: 'DevTools', label: 'DevTools' }, { value: 'Frontend', label: 'Frontend' },
+    { value: 'Security', label: 'Security' }, { value: 'Layout', label: 'Layout' },
+    { value: 'Networking', label: 'Networking' },
+];
+const PER_PAGE_OPTIONS = [
+    { value: 10, label: '10 rows' }, { value: 25, label: '25 rows' },
+    { value: 50, label: '50 rows' }, { value: 100, label: '100 rows' },
+];
+const QUICK_FILTERS = [
+    { key: 'critical', label: 'Critical',  icon: <Zap size={11} /> },
+    { key: 'triage',   label: 'Triage',    icon: <Clock size={11} /> },
+    { key: 'resolved', label: 'Resolved',  icon: <CheckCircle size={11} /> },
+    { key: 'security', label: 'Security',  icon: <ShieldAlert size={11} /> },
+];
+
+export default function Explorer({ user, initialQuery = "", initialFilters = null, onNavigate }) {
+    const [bugs,            setBugs]            = useState([]);
+    const [total,           setTotal]           = useState(0);
+    const [loading,         setLoading]         = useState(true);
+    const [exporting,       setExporting]       = useState(false);
+    const [showGlossary,    setShowGlossary]    = useState(false);
+    const [search,          setSearch]          = useState(initialQuery);
     const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
-    const [sevFilter, setSevFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [compFilter, setCompFilter] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
-    const [page, setPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [selectedBug, setSelectedBug] = useState(null);
+    const [sevFilter,       setSevFilter]       = useState(initialFilters?.sev || '');
+    const [statusFilter,    setStatusFilter]    = useState(initialFilters?.status || '');
+    const [compFilter,      setCompFilter]      = useState(initialFilters?.comp || '');
+    const [sortConfig,      setSortConfig]      = useState({ key: 'id', direction: 'desc' });
+    const [page,            setPage]            = useState(1);
+    const [itemsPerPage,    setItemsPerPage]    = useState(10);
+    const [selectedBug,     setSelectedBug]     = useState(null);
 
     useEffect(() => { setSearch(initialQuery); setPage(1); }, [initialQuery]);
     useEffect(() => {
@@ -125,14 +133,9 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
         try {
             const response = await axios.get('/api/hub/explorer', {
                 params: {
-                    page,
-                    limit: itemsPerPage,
-                    search: debouncedSearch,
-                    sort_key: sortConfig.key,
-                    sort_dir: sortConfig.direction,
-                    sev: sevFilter,
-                    status: statusFilter,
-                    comp: compFilter,
+                    page, limit: itemsPerPage, search: debouncedSearch,
+                    sort_key: sortConfig.key, sort_dir: sortConfig.direction,
+                    sev: sevFilter, status: statusFilter, comp: compFilter,
                     requested_role: user?.context_role || user?.role || 'user',
                 }
             });
@@ -152,7 +155,7 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
     const applyQuickFilter = (type) => {
         clearFilters();
         if (type === 'critical') { setSevFilter('S1'); setStatusFilter('NEW'); }
-        if (type === 'triage') setStatusFilter('UNCONFIRMED');
+        if (type === 'triage')   setStatusFilter('UNCONFIRMED');
         if (type === 'resolved') setStatusFilter('RESOLVED');
         if (type === 'security') setCompFilter('Security');
     };
@@ -173,96 +176,74 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
 
     const hasFilters = !!(sevFilter || statusFilter || compFilter || search);
 
-    const sevOptions = [
-        { value: '', label: 'All severities' }, { value: 'S1', label: 'S1 — Critical' },
-        { value: 'S2', label: 'S2 — High' }, { value: 'S3', label: 'S3 — Medium' }, { value: 'S4', label: 'S4 — Low' },
-    ];
-    const statusOptions = [
-        { value: '', label: 'All statuses' }, { value: 'NEW', label: 'New' },
-        { value: 'UNCONFIRMED', label: 'Unconfirmed' }, { value: 'CONFIRMED', label: 'Confirmed' },
-        { value: 'RESOLVED', label: 'Resolved' }, { value: 'VERIFIED', label: 'Verified' },
-    ];
-    const compOptions = [
-        { value: '', label: 'All components' }, { value: 'Core', label: 'Core' },
-        { value: 'DevTools', label: 'DevTools' }, { value: 'Frontend', label: 'Frontend' },
-        { value: 'Security', label: 'Security' }, { value: 'Layout', label: 'Layout' },
-        { value: 'Networking', label: 'Networking' },
-    ];
-    const perPageOptions = [
-        { value: 10, label: '10 rows' }, { value: 25, label: '25 rows' },
-        { value: 50, label: '50 rows' }, { value: 100, label: '100 rows' },
-    ];
-
     return (
-        <div className="page-content fade-in" style={{ position: 'relative' }}>
+        <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
             {showGlossary && <GlossaryDrawer onClose={() => setShowGlossary(false)} />}
 
             {/* Header */}
-            <div className="explorer-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: 'var(--text-main)', letterSpacing: -0.5 }}>Database</h1>
-                        <span style={{ fontSize: 13, color: 'var(--text-sec)' }}>
-                            {loading ? 'Loading…' : `${total.toLocaleString()} record${total !== 1 ? 's' : ''} found`}
-                        </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Labels & statuses" />
-                        {[
-                            { key: 'critical', label: 'Critical',  icon: <Zap size={11} /> },
-                            { key: 'triage',   label: 'Triage',    icon: <Clock size={11} /> },
-                            { key: 'resolved', label: 'Resolved',  icon: <CheckCircle size={11} /> },
-                            { key: 'security', label: 'Security',  icon: <ShieldAlert size={11} /> },
-                        ].map(f => (
-                            <button key={f.key} className="quick-chip" onClick={() => applyQuickFilter(f.key)} style={{ fontSize: 12 }}>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 w-max mb-4">
+                  <Database size={12} className="text-emerald-500" />
+                  <span className="text-[10px] font-bold tracking-widest uppercase">System Database</span>
+                </div>
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
+                  Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Explorer</span>
+                </h1>
+                <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
+                  Search, filter, and export the comprehensive history of all logged anomalies across your organization.
+                </p>
+                <p className="text-xs font-mono text-white/30 mt-4">
+                  {loading ? 'Aggregating index…' : `${total.toLocaleString()} record${total !== 1 ? 's' : ''} available`}
+                </p>
+              </div>
+              <div className="relative z-10 flex flex-col items-start md:items-end gap-4">
+                 <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Labels & statuses" />
+                 <div className="flex flex-wrap items-center gap-2">
+                        {QUICK_FILTERS.map(f => (
+                            <button key={f.key} onClick={() => applyQuickFilter(f.key)} className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-bold text-white/50 hover:text-white uppercase tracking-widest transition-all flex items-center gap-1.5 shadow-sm">
                                 {f.icon} {f.label}
                             </button>
                         ))}
-                        {hasFilters && <button className="quick-chip clear" onClick={clearFilters} style={{ fontSize: 12 }}><X size={11} /> Clear</button>}
-                    </div>
-                </div>
-
-                {/* Filter bar */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
-                        <Search size={14} color="var(--text-sec)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-                        <input className="sys-input" placeholder="Search bugs…" value={search} onChange={e => setSearch(e.target.value)}
-                            style={{ paddingLeft: 36, paddingRight: search ? 32 : 10, height: 42, background: 'var(--input-bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text-main)', outline: 'none', fontFamily: 'var(--font-head)' }}
-                            onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.1)'; }}
-                            onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }} />
-                        {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sec)', padding: 4, display: 'flex' }}><X size={12} /></button>}
-                    </div>
-                    <div style={{ width: 152 }}><CustomSelect value={sevFilter} onChange={v => { setSevFilter(v); setPage(1); }} options={sevOptions} placeholder="All severities" /></div>
-                    <div style={{ width: 152 }}><CustomSelect value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }} options={statusOptions} placeholder="All statuses" /></div>
-                    <div style={{ width: 158 }}><CustomSelect value={compFilter} onChange={v => { setCompFilter(v); setPage(1); }} options={compOptions} placeholder="All components" /></div>
-                    <button className="sys-btn outline" onClick={handleExport} disabled={exporting}
-                        style={{ height: 40, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: 'var(--card-bg)', whiteSpace: 'nowrap' }}>
-                        {exporting ? <Loader size={13} className="spin" /> : <Download size={13} />} Export
-                    </button>
-                </div>
+                        {hasFilters && <button onClick={clearFilters} className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-[10px] font-bold text-red-400 uppercase tracking-widest transition-all flex items-center gap-1.5"><X size={12} /> Clear</button>}
+                 </div>
+              </div>
+              <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-emerald-500/20 via-white/5 to-transparent" />
             </div>
 
-            {/* Table */}
-            <div className="sys-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            {/* Search and Filters */}
+            <div className="flex flex-col md:flex-row gap-4 items-center flex-wrap mb-8">
+                    <div className="flex-1 w-full min-w-0 relative">
+                        <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                        <input placeholder="Search summaries or #ID…" value={search} onChange={e => setSearch(e.target.value)}
+                            className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl pl-12 pr-12 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:bg-white/10 outline-none transition-all text-sm" />
+                        {search && <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-2"><X size={16} /></button>}
+                    </div>
+                    <div className="w-full md:w-40"><CustomSelect value={sevFilter} onChange={v => { setSevFilter(v); setPage(1); }} options={SEV_OPTIONS} placeholder="All severities" /></div>
+                    <div className="w-full md:w-40"><CustomSelect value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }} options={STATUS_OPTIONS} placeholder="All statuses" /></div>
+                    <div className="w-full md:w-44"><CustomSelect value={compFilter} onChange={v => { setCompFilter(v); setPage(1); }} options={COMP_OPTIONS} placeholder="All components" /></div>
+                    <button onClick={handleExport} disabled={exporting}
+                        className="h-14 w-full md:w-auto px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                        {exporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export
+                    </button>
+            </div>
+
+            <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-left min-w-[700px]">
                         <thead>
-                            <tr style={{ background: 'var(--hover-bg)', borderBottom: '1px solid var(--border)' }}>
+                            <tr className="bg-black/20 border-b border-white/10">
                                 {[
-                                    { key: 'id',        label: '#',         w: 70  },
+                                    { key: 'id',        label: 'ID',        w: 90  },
                                     { key: 'severity',  label: 'Severity',  w: 90  },
                                     { key: 'component', label: 'Component', w: 150 },
                                     { key: 'summary',   label: 'Summary',   w: null },
                                     { key: 'status',    label: 'Status',    w: 130 },
                                 ].map(col => (
-                                    <th key={col.key} onClick={() => requestSort(col.key)} style={{
-                                        padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 800,
-                                        color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.8,
-                                        cursor: 'pointer', whiteSpace: 'nowrap', width: col.w || undefined, userSelect: 'none',
-                                    }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <th key={col.key} onClick={() => requestSort(col.key)} className="px-6 py-5 text-[10px] font-bold text-white/40 uppercase tracking-widest cursor-pointer select-none transition-colors hover:text-white" style={{ width: col.w || undefined }}>
+                                        <span className="flex items-center gap-2">
                                             {col.label}
-                                            {sortConfig.key === col.key && <span style={{ color: 'var(--accent)' }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                                            {sortConfig.key === col.key && <span className="text-emerald-400">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
                                         </span>
                                     </th>
                                 ))}
@@ -270,32 +251,30 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                         </thead>
                         <tbody>
                             {loading && (
-                                <tr><td colSpan={5} style={{ padding: '40px 0', textAlign: 'center' }}>
-                                    <Loader size={20} color="var(--text-sec)" className="spin" style={{ margin: '0 auto' }} />
+                                <tr><td colSpan={5} className="py-24 text-center">
+                                    <Loader size={28} className="animate-spin text-white/20 mx-auto mb-4" />
+                                    <div className="text-sm text-white/40 font-medium">Querying database…</div>
                                 </td></tr>
                             )}
                             {!loading && bugs.length === 0 && (
-                                <tr><td colSpan={5} style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-sec)', fontSize: 13 }}>No bugs match your filters.</td></tr>
+                                <tr><td colSpan={5} className="py-24 text-center text-white/30 text-sm">No telemetry records match your exact filters.</td></tr>
                             )}
                             {!loading && bugs.map(b => {
-                                const sColor = statusColor(b.status);
+                                const sColorClass = statusColor(b.status);
                                 return (
-                                    <tr key={b.id} onClick={() => setSelectedBug(b)} style={{ cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                        <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>#{b.id}</td>
-                                        <td style={{ padding: '12px 16px' }}><SevBadge sev={b.severity} /></td>
-                                        <td style={{ padding: '12px 16px' }}>
-                                            <span style={{ background: 'var(--hover-bg)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, color: 'var(--text-main)', display: 'inline-block', maxWidth: 136, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                                    <tr key={b.id} onClick={() => setSelectedBug(b)} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors cursor-pointer group">
+                                        <td className="px-6 py-4 font-mono text-white/40 text-xs font-bold transition-colors group-hover:text-white/60">#{b.id}</td>
+                                        <td className="px-6 py-4"><SevBadge sev={b.severity} /></td>
+                                        <td className="px-6 py-4">
+                                            <span className="bg-white/5 text-white/60 px-3 py-1.5 rounded-lg text-xs font-bold truncate max-w-[130px] inline-block">
                                                 {b.component || 'General'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '12px 16px' }}>
-                                            <div style={{ maxWidth: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 13 }} title={b.summary}>{b.summary}</div>
+                                        <td className="px-6 py-4 text-sm text-white font-medium truncate max-w-[300px]" title={b.summary}>
+                                            {b.summary}
                                         </td>
-                                        <td style={{ padding: '12px 16px' }}>
-                                            <span style={{ color: sColor, fontWeight: 700, fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: sColor, flexShrink: 0 }} />
+                                        <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest whitespace-nowrap ${sColorClass}`}>
                                                 {b.status || 'NEW'}
                                             </span>
                                         </td>
@@ -306,135 +285,111 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
                     </table>
                 </div>
 
-                {/* Pagination */}
-                <div className="table-footer">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>Rows per page</span>
-                        <div style={{ width: 108 }}><CustomSelect value={itemsPerPage} onChange={v => { setItemsPerPage(Number(v)); setPage(1); }} options={perPageOptions} placeholder="10 rows" /></div>
+                <div className="flex flex-col sm:flex-row justify-between items-center px-6 py-5 border-t border-white/10 bg-black/20 gap-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Display</span>
+                        <div className="w-32"><CustomSelect value={itemsPerPage} onChange={v => { setItemsPerPage(Number(v)); setPage(1); }} options={PER_PAGE_OPTIONS} placeholder="10 rows" dropUp={true} /></div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>
+                    <div className="flex items-center gap-6">
+                        <span className="text-xs font-mono text-white/40">
                             {total === 0 ? '0' : Math.min((page - 1) * itemsPerPage + 1, total)}–{Math.min(page * itemsPerPage, total)} of {total.toLocaleString()}
                         </span>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="sys-btn outline" disabled={page === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '6px 10px', height: 34 }}><ChevronLeft size={14} /></button>
-                            <button className="sys-btn outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} style={{ padding: '6px 10px', height: 34 }}><ChevronRight size={14} /></button>
+                        <div className="flex gap-2">
+                            <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white disabled:opacity-30 transition-all"><ChevronLeft size={16} /></button>
+                            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white disabled:opacity-30 transition-all"><ChevronRight size={16} /></button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Bug inspector */}
             {selectedBug && (() => {
                 const origin = inferOrigin(selectedBug);
                 const sevDef = SEVERITY_DEFS.find(d => d.code === selectedBug.severity);
                 const statusDef = STATUS_DEFS.find(d => d.code === (selectedBug.status || '').toUpperCase());
-                return (
+                return createPortal(
                     <>
-                        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(4px)', zIndex: 2000 }} onClick={() => setSelectedBug(null)} />
-                        <div className="bug-inspector-pane fade-in-right">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Target size={16} color="var(--accent)" />
-                                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-main)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Bug detail</span>
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300" onClick={() => setSelectedBug(null)} />
+                        <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[500px] bg-black/80 backdrop-blur-3xl border-l border-white/10 shadow-[-20px_0_60px_rgba(0,0,0,0.7)] z-[9999] p-6 lg:p-10 overflow-y-auto animate-in slide-in-from-right duration-300 custom-scrollbar">
+                            <div className="flex justify-between items-center mb-8">
+                                <div className="flex items-center gap-3">
+                                    <Target size={18} className="text-emerald-400" />
+                                    <span className="text-sm font-bold text-white uppercase tracking-widest">Telemetry Detail</span>
                                 </div>
-                                <button className="inspector-close" onClick={() => setSelectedBug(null)}><X size={16} /></button>
+                                <button onClick={() => setSelectedBug(null)} className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/50 hover:text-white transition-colors"><X size={16} /></button>
                             </div>
 
-                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)', fontWeight: 700, marginBottom: 6 }}>#{selectedBug.id}</div>
-                            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.45, margin: '0 0 20px' }}>{selectedBug.summary}</h2>
+                            <div className="font-mono text-xs text-white/40 mb-2">#{selectedBug.id}</div>
+                            <h2 className="text-xl font-bold text-white leading-snug mb-8 break-words">{selectedBug.summary}</h2>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }}>
-                                <div className="inspector-detail-box">
-                                    <span className="detail-label">Severity</span>
-                                    <div style={{ marginTop: 4 }}>
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="bg-white/5 border border-white/10 p-5 rounded-2xl">
+                                    <span className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Severity</span>
+                                    <div>
                                         <SevBadge sev={selectedBug.severity} />
-                                        <p style={{ fontSize: 11, color: 'var(--text-sec)', margin: '6px 0 0', lineHeight: 1.5 }}>{sevDef?.desc || '—'}</p>
+                                        <p className="text-xs text-white/50 mt-3 leading-relaxed">{sevDef?.desc || '—'}</p>
                                     </div>
                                 </div>
-                                <div className="inspector-detail-box">
-                                    <span className="detail-label">Status</span>
-                                    <div style={{ marginTop: 4 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 12, color: statusColor(selectedBug.status) }}>{selectedBug.status || 'NEW'}</span>
-                                        <p style={{ fontSize: 11, color: 'var(--text-sec)', margin: '6px 0 0', lineHeight: 1.5 }}>{statusDef?.desc || '—'}</p>
+                                <div className="bg-white/5 border border-white/10 p-5 rounded-2xl">
+                                    <span className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Status</span>
+                                    <div>
+                                        <span className={`font-bold text-sm uppercase tracking-widest ${statusColor(selectedBug.status)}`}>{selectedBug.status || 'NEW'}</span>
+                                        <p className="text-xs text-white/50 mt-3 leading-relaxed">{statusDef?.desc || '—'}</p>
                                     </div>
                                 </div>
-                                <div className="inspector-detail-box" style={{ gridColumn: 'span 2' }}>
-                                    <span className="detail-label">Component</span>
-                                    <span style={{ background: 'var(--hover-bg)', padding: '4px 10px', borderRadius: 7, display: 'inline-block', fontSize: 12, fontWeight: 600, color: 'var(--text-main)', marginTop: 4 }}>
+                                <div className="bg-white/5 border border-white/10 p-5 rounded-2xl col-span-2 flex justify-between items-center">
+                                    <span className="block text-[10px] font-bold text-white/40 uppercase tracking-widest">Component</span>
+                                    <span className="bg-white/10 px-3 py-1.5 rounded-lg text-sm font-bold text-white truncate max-w-[200px]">
                                         {selectedBug.component || 'General'}
                                     </span>
                                 </div>
                             </div>
 
-                            {/* Lifecycle / origin panel */}
-                            <div style={{ padding: 16, background: 'var(--bg)', borderRadius: 10, border: '1px dashed var(--border)', marginBottom: 16 }}>
-                                <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            <div className="p-6 bg-white/[0.03] rounded-3xl border border-white/10 mb-6">
+                                <div className="text-[10px] font-bold text-white/40 mb-5 flex items-center gap-2 uppercase tracking-widest">
                                     <Clock size={11} /> How this bug entered the system
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                                <div className="flex items-center gap-4 mb-4">
                                     <OriginBadge origin={origin} />
-                                    <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>{origin.desc}</span>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-sec)', paddingLeft: 10, borderLeft: '2px solid var(--border)', marginLeft: 4, lineHeight: 1.9, marginTop: 8 }}>
+                                <p className="text-xs text-white/50 mb-4">{origin.desc}</p>
+                                <div className="text-xs text-white/50 pl-4 border-l-2 border-white/10 space-y-3">
                                     {origin.label === 'Bugzilla' ? (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Pulled from Mozilla Bugzilla API via 24-hour background sync
-                                            </div>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Status</strong> — <span style={{ color: statusColor(selectedBug.status), fontWeight: 700 }}>{selectedBug.status}</span> reflects Bugzilla's own workflow state, not our AI triage
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Severity re-classified to <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> using our Random Forest model
-                                            </div>
+                                            <div><strong className="text-white">Origin</strong> — Pulled from Mozilla Bugzilla API via background sync</div>
+                                            <div><strong className="text-white">Status</strong> — <span className={`${statusColor(selectedBug.status)} font-bold`}>{selectedBug.status}</span> reflects Bugzilla's own workflow</div>
+                                            <div><strong className="text-white">AI triage</strong> — Re-classified to <strong className="text-blue-400">{selectedBug.severity}</strong> using Random Forest</div>
                                         </>
                                     ) : origin.label === 'Manual' ? (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Submitted by a team member via the Severity Analysis tab
-                                            </div>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Status</strong> — Set to <strong>NEW</strong> on creation; updated as it moves through triage
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Classified as <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> by the ML model at submission time
-                                            </div>
+                                            <div><strong className="text-white">Origin</strong> — Submitted manually via Triage Entry</div>
+                                            <div><strong className="text-white">Status</strong> — Logged as NEW; updates through pipeline</div>
+                                            <div><strong className="text-white">AI triage</strong> — Classified as <strong className="text-blue-400">{selectedBug.severity}</strong> dynamically</div>
                                         </>
                                     ) : origin.label === 'Bulk upload' ? (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Ingested from an admin-uploaded JSON or CSV batch file
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>AI triage</strong> — Batch-classified as <strong style={{ color: 'var(--accent)' }}>{selectedBug.severity}</strong> during upload processing
-                                            </div>
+                                            <div><strong className="text-white">Origin</strong> — Ingested from JSON/CSV batch file</div>
+                                            <div><strong className="text-white">AI triage</strong> — Batch-classified as <strong className="text-blue-400">{selectedBug.severity}</strong></div>
                                         </>
                                     ) : (
                                         <>
-                                            <div style={{ marginBottom: 6 }}>
-                                                <strong style={{ color: 'var(--text-main)' }}>Origin</strong> — Pre-loaded from the Firefox historical bug dataset
-                                            </div>
-                                            <div>
-                                                <strong style={{ color: 'var(--text-main)' }}>Purpose</strong> — Used as baseline training data for the Random Forest classifier
-                                            </div>
+                                            <div><strong className="text-white">Origin</strong> — Pre-loaded Firefox historical DB</div>
+                                            <div><strong className="text-white">Purpose</strong> — Baseline ML training data</div>
                                         </>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Status explanation note */}
                             {(selectedBug.status === 'UNCONFIRMED' || selectedBug.status === 'CONFIRMED') && (
-                                <div style={{ display: 'flex', gap: 8, padding: '10px 13px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8 }}>
-                                    <Info size={13} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} />
-                                    <p style={{ fontSize: 11, color: 'var(--text-sec)', margin: 0, lineHeight: 1.6 }}>
-                                        <strong style={{ color: '#f59e0b' }}>{selectedBug.status}</strong> — This status comes from Bugzilla's bug lifecycle. "Unconfirmed" means the bug was reported but not yet reproduced by a second engineer. "Confirmed" means it has been verified.
-                                    </p>
+                                <div className="flex gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mt-4">
+                                    <Info size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div className="text-xs text-white/60 leading-relaxed">
+                                        <strong className="text-amber-500">{selectedBug.status}</strong> — Originates from Bugzilla lifecycle. {selectedBug.status === 'UNCONFIRMED' ? 'Reported but not yet reproduced.' : 'Verified by a second engineer.'}
+                                    </div>
                                 </div>
                             )}
                         </div>
                     </>
-                );
+                , document.body);
             })()}
         </div>
     );

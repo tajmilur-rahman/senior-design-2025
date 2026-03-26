@@ -19,7 +19,7 @@ python-dotenv
 scikit-learn
 pandas
 joblib
-numpy<2.0.0
+numpy>=2.0.0
 
 # Utilities
 pydantic

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BookOpen, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ── Severity definitions ─────────────────────────────────────────────────────
@@ -68,88 +69,98 @@ export function GlossaryDrawer({ onClose }) {
   const Section = ({ id, title, children }) => {
     const isOpen = openSection === id;
     return (
-      <div style={{ borderBottom: '1px solid var(--border)' }}>
-        <button onClick={() => setOpenSection(isOpen ? null : id)} style={{
-          width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '16px 0', color: 'var(--text-main)', fontFamily: 'var(--font-head)',
-        }}>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>{title}</span>
-          {isOpen ? <ChevronUp size={16} color="var(--text-sec)" /> : <ChevronDown size={16} color="var(--text-sec)" />}
+      <div className="border-b border-white/10">
+        <button onClick={() => setOpenSection(isOpen ? null : id)} className="w-full flex justify-between items-center py-5 text-white hover:text-white/80 transition-colors">
+          <span className="text-sm font-bold tracking-wide">{title}</span>
+          {isOpen ? <ChevronUp size={16} className="text-white/40" /> : <ChevronDown size={16} className="text-white/40" />}
         </button>
-        {isOpen && <div style={{ paddingBottom: 20 }}>{children}</div>}
+        {isOpen && <div className="pb-6 animate-in fade-in duration-300">{children}</div>}
       </div>
     );
   };
 
-  return (
+  return createPortal(
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 2000 }} />
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
-        background: 'var(--card-bg)', borderLeft: '1px solid var(--border)',
-        boxShadow: '-12px 0 40px rgba(0,0,0,0.18)', zIndex: 2001,
-        display: 'flex', flexDirection: 'column',
-        animation: 'fadeInRight 0.25s cubic-bezier(0.16,1,0.3,1)',
-      }}>
+      <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300" />
+      <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[460px] bg-black/80 backdrop-blur-2xl border-l border-white/10 shadow-[-10px_0_50px_rgba(0,0,0,0.5)] z-[9999] flex flex-col animate-in slide-in-from-right duration-300 font-sans">
+        
         {/* Header */}
-        <div style={{ padding: '22px 26px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <BookOpen size={17} color="var(--accent)" />
-            <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-main)' }}>Reference guide</span>
+        <div className="p-6 lg:p-8 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <BookOpen size={18} />
+            </div>
+            <span className="font-bold text-lg text-white tracking-tight">Reference Guide</span>
           </div>
-          <button className="inspector-close" onClick={onClose} style={{ position: 'static', transform: 'none' }}><X size={16} /></button>
+          <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/50 hover:text-white transition-colors"><X size={16} /></button>
         </div>
 
         {/* Content */}
-        <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '6px 26px 28px' }}>
+        <div className="flex-1 overflow-y-auto p-6 lg:p-8 custom-scrollbar">
 
           {/* Severity */}
           <Section id="severity" title="Severity Levels (S1 – S4)">
-            <p style={{ fontSize: 13, color: 'var(--text-sec)', marginBottom: 14, lineHeight: 1.7 }}>
+            <p className="text-xs text-white/50 mb-6 leading-relaxed">
               Severity shows how serious a bug is. The AI predicts this — engineers can correct it to improve future predictions.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {SEVERITY_DEFS.map(s => (
-                <div key={s.code} style={{ padding: '14px 16px', background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                    <span style={{ fontWeight: 800, fontSize: 15, color: s.color, fontFamily: 'var(--font-mono)', minWidth: 28 }}>{s.code}</span>
-                    <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-main)' }}>{s.label}</span>
+            <div className="flex flex-col gap-3">
+              {SEVERITY_DEFS.map(s => {
+                const activeColors = {
+                  S1: 'border-red-500/20 bg-red-500/5 text-red-500',
+                  S2: 'border-amber-500/20 bg-amber-500/5 text-amber-500',
+                  S3: 'border-blue-500/20 bg-blue-500/5 text-blue-500',
+                  S4: 'border-white/10 bg-white/5 text-white/40'
+                }[s.code];
+                return (
+                  <div key={s.code} className={`p-4 rounded-2xl border ${activeColors}`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="font-bold text-lg font-mono">{s.code}</span>
+                      <span className="font-bold text-white text-sm">{s.label}</span>
+                    </div>
+                    <p className="text-xs text-white/60 mb-4 leading-relaxed">{s.desc}</p>
+                    <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-50" /> {s.action}
+                    </div>
                   </div>
-                  <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: '0 0 8px', lineHeight: 1.6 }}>{s.desc}</p>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: s.color }}>→ {s.action}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Section>
 
           {/* Statuses */}
           <Section id="statuses" title="Bug Statuses">
-            <p style={{ fontSize: 13, color: 'var(--text-sec)', marginBottom: 14, lineHeight: 1.7 }}>
+            <p className="text-xs text-white/50 mb-6 leading-relaxed">
               Status tracks where a bug is in the fix process — from first report to final close.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {STATUS_DEFS.map(s => (
-                <div key={s.code} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: s.bg, border: '1px solid var(--border)', borderRadius: 9 }}>
-                  <span style={{ fontWeight: 800, fontSize: 12, color: s.color, fontFamily: 'var(--font-mono)', minWidth: 90, paddingTop: 1 }}>{s.code}</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-sec)', lineHeight: 1.55 }}>{s.desc}</span>
-                </div>
-              ))}
+            <div className="flex flex-col gap-3">
+              {STATUS_DEFS.map(s => {
+                const activeColors = {
+                  'NEW': 'text-blue-400', 'UNCONFIRMED': 'text-amber-500',
+                  'CONFIRMED': 'text-emerald-400', 'RESOLVED': 'text-emerald-400',
+                  'VERIFIED': 'text-indigo-400', 'PROCESSED': 'text-white/40'
+                }[s.code] || 'text-white/40';
+                return (
+                  <div key={s.code} className="flex items-start gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
+                    <span className={`font-bold text-xs font-mono w-24 pt-0.5 ${activeColors}`}>{s.code}</span>
+                    <span className="text-xs text-white/60 leading-relaxed flex-1">{s.desc}</span>
+                  </div>
+                );
+              })}
             </div>
           </Section>
 
           {/* Sources */}
           <Section id="sources" title="Data Sources">
-            <p style={{ fontSize: 13, color: 'var(--text-sec)', marginBottom: 14, lineHeight: 1.7 }}>
+            <p className="text-xs text-white/50 mb-6 leading-relaxed">
               Each bug in the database comes from one of these four sources.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="flex flex-col gap-3">
               {SOURCE_DEFS.map(s => (
-                <div key={s.code} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 9 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0 }}>{s.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-main)', marginBottom: 3 }}>{s.code}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-sec)', lineHeight: 1.55 }}>{s.desc}</div>
+                <div key={s.code} className="flex items-start gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
+                  <span className="text-2xl flex-shrink-0 opacity-80">{s.icon}</span>
+                  <div className="flex-1">
+                    <div className="font-bold text-sm text-white mb-1.5">{s.code}</div>
+                    <div className="text-xs text-white/60 leading-relaxed">{s.desc}</div>
                   </div>
                 </div>
               ))}
@@ -159,22 +170,14 @@ export function GlossaryDrawer({ onClose }) {
         </div>
       </div>
     </>
-  );
+  , document.body);
 }
 
 // ── Trigger button ────────────────────────────────────────────────────────────
 export function GlossaryTrigger({ onClick, label = 'Reference guide' }) {
   return (
-    <button onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      background: 'var(--hover-bg)', border: '1px solid var(--border)',
-      borderRadius: 6, padding: '5px 11px', cursor: 'pointer',
-      fontSize: 12, fontWeight: 600, color: 'var(--text-sec)',
-      fontFamily: 'var(--font-head)', transition: 'all 0.15s',
-    }}
-      onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-main)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
-      onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-sec)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
-      <BookOpen size={12} /> {label}
+    <button onClick={onClick} className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/30 text-white/60 hover:text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg backdrop-blur-md">
+      <BookOpen size={14} /> {label}
     </button>
   );
 }
