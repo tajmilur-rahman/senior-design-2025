@@ -158,7 +158,7 @@ export default function BugAnalysis() {
       )}
 
       {error && (
-        <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl color-red-400 text-sm font-semibold flex items-center gap-3">
+        <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-semibold flex items-center gap-3">
           <AlertTriangle size={16} className="text-red-500" />
           {error}
         </div>

@@ -125,6 +125,8 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   useEffect(() => {
     if (prefill) {
       setSummary(prefill.summary || ''); setSeverity(prefill.severity || 'S3');
+      if (prefill.team)      setTeam(prefill.team);
+      if (prefill.category)  setCategory(prefill.category);
       if (prefill.component) setComponent(prefill.component);
       onClearPrefill?.();
     }

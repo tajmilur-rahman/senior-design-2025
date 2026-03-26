@@ -6,7 +6,6 @@ import { mozillaTaxonomy, teamDescriptions } from '../javascript/taxonomy';
 export default function Directory({ onNavigate, user }) {
   const [expandedTeam, setExpandedTeam] = useState(null);
   const [counts, setCounts] = useState({});
-  const [loadingCounts, setLoadingCounts] = useState(true);
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [resettingId, setResettingId] = useState(null);   // company id currently being reset
@@ -41,14 +40,12 @@ export default function Directory({ onNavigate, user }) {
         .finally(() => setLoadingCompanies(false));
     } else {
       const fetchCounts = async () => {
-        setLoadingCounts(true);
         try {
           const res = await axios.get('/api/hub/component_counts');
           const normalised = {};
           Object.keys(res.data).forEach(k => { normalised[k.toLowerCase()] = res.data[k]; });
           setCounts(normalised);
         } catch (e) { console.error('Could not load counts', e); }
-        finally { setLoadingCounts(false); }
       };
       fetchCounts();
     }
@@ -94,9 +91,18 @@ export default function Directory({ onNavigate, user }) {
         </div>
 
         {loadingCompanies ? (
-          <div className="flex items-center justify-center min-h-[40vh] text-white/30 text-sm mt-12">Loading companies…</div>
+          <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 mt-12 animate-in fade-in duration-500">
+            <div className="w-14 h-14 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/20 to-transparent animate-pulse" />
+              <RefreshCw size={20} className="animate-spin text-white/40 relative z-10" />
+            </div>
+            <div className="text-white/40 text-sm font-medium">Loading companies…</div>
+          </div>
         ) : companies.length === 0 ? (
-          <div className="flex items-center justify-center min-h-[40vh] text-white/20 text-sm mt-12">No companies registered yet.</div>
+          <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 mt-12">
+            <Building2 size={32} className="text-white/15" />
+            <div className="text-white/30 text-sm font-medium">No companies registered yet.</div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
             {companies.map(co => (
@@ -198,53 +204,28 @@ export default function Directory({ onNavigate, user }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
         {showDynamic ? (
-          dynamicComponents.map((item) => {
-            const isExpanded = expandedTeam === item.name;
-            return (
-              <div
-                key={item.name}
-                className={`group bg-white/[0.02] border rounded-[2rem] p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden ${isExpanded ? 'border-white/30 bg-white/[0.04] shadow-[0_0_30px_rgba(255,255,255,0.05)]' : 'border-white/10 hover:border-white/20 hover:bg-white/[0.04]'}`}
-                onClick={() => setExpandedTeam(isExpanded ? null : item.name)}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                
-                <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
-                  <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{item.name}</div>
-                  <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">{item.count.toLocaleString()} records</div>
-                </div>
+          dynamicComponents.map((item) => (
+            <div
+              key={item.name}
+              className="group bg-white/[0.02] border border-white/10 hover:border-indigo-500/40 hover:bg-white/[0.04] rounded-[2rem] p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden"
+              onClick={() => onNavigate('submit', '', { component: item.name })}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
-                <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10">
-                  Live component observed in your company's bug dataset.
-                </div>
-
-                <div className="text-indigo-400 group-hover:text-indigo-300 font-bold text-xs uppercase tracking-widest flex items-center gap-2 relative z-10 transition-colors">
-                  Use in Submit <ArrowRight size={12} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-                </div>
-
-                {isExpanded && (
-                  <div className="animate-in fade-in slide-in-from-top-4 mt-6 pt-6 border-t border-white/10 relative z-10">
-                    <div className="mb-2">
-                      <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Layers size={12} /> Live component
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          className="bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-2 max-w-[200px]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate('submit', '', { component: item.name });
-                          }}
-                        >
-                          <span className="truncate">{item.name}</span>
-                          <ArrowRight size={12} className="opacity-40 ml-1 flex-shrink-0" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
+                <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{item.name}</div>
+                <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">{item.count.toLocaleString()} records</div>
               </div>
-            );
-          })
+
+              <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10">
+                Live component observed in your company's bug dataset.
+              </div>
+
+              <div className="text-indigo-400 group-hover:text-indigo-300 font-bold text-xs uppercase tracking-widest flex items-center gap-2 relative z-10 transition-colors">
+                Pre-fill &amp; Submit <ArrowRight size={12} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </div>
+            </div>
+          ))
         ) : (
           Object.keys(mozillaTaxonomy).map((team) => {
             const tCount = getTeamCount(team);

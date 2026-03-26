@@ -106,7 +106,7 @@ const QUICK_FILTERS = [
     { key: 'security', label: 'Security',  icon: <ShieldAlert size={11} /> },
 ];
 
-export default function Explorer({ user, initialQuery = "", onNavigate }) {
+export default function Explorer({ user, initialQuery = "", initialFilters = null, onNavigate }) {
     const [bugs,            setBugs]            = useState([]);
     const [total,           setTotal]           = useState(0);
     const [loading,         setLoading]         = useState(true);
@@ -114,9 +114,9 @@ export default function Explorer({ user, initialQuery = "", onNavigate }) {
     const [showGlossary,    setShowGlossary]    = useState(false);
     const [search,          setSearch]          = useState(initialQuery);
     const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
-    const [sevFilter,       setSevFilter]       = useState('');
-    const [statusFilter,    setStatusFilter]    = useState('');
-    const [compFilter,      setCompFilter]      = useState('');
+    const [sevFilter,       setSevFilter]       = useState(initialFilters?.sev || '');
+    const [statusFilter,    setStatusFilter]    = useState(initialFilters?.status || '');
+    const [compFilter,      setCompFilter]      = useState(initialFilters?.comp || '');
     const [sortConfig,      setSortConfig]      = useState({ key: 'id', direction: 'desc' });
     const [page,            setPage]            = useState(1);
     const [itemsPerPage,    setItemsPerPage]    = useState(10);

@@ -114,7 +114,7 @@ export default function Overview({ user, onNavigate }) {
 
       {/* Top Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div onClick={() => onNavigate('database', '')} className="relative group bg-white/[0.02] border border-white/10 rounded-[2rem] p-7 overflow-hidden cursor-pointer transition-all hover:bg-white/[0.04] hover:border-white/20 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+        <div onClick={() => onNavigate('database', '', null, null)} className="relative group bg-white/[0.02] border border-white/10 rounded-[2rem] p-7 overflow-hidden cursor-pointer transition-all hover:bg-white/[0.04] hover:border-white/20 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
           <div className="flex justify-between items-start mb-8 relative z-10">
             <div className="flex items-center gap-2 text-white/40">
@@ -129,7 +129,7 @@ export default function Overview({ user, onNavigate }) {
           </div>
         </div>
 
-        <div onClick={() => onNavigate('database', 'Fixed')} className="relative group bg-white/[0.02] border border-white/10 rounded-[2rem] p-7 overflow-hidden cursor-pointer transition-all hover:bg-white/[0.04] hover:border-white/20 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+        <div onClick={() => onNavigate('database', '', null, { status: 'RESOLVED' })} className="relative group bg-white/[0.02] border border-white/10 rounded-[2rem] p-7 overflow-hidden cursor-pointer transition-all hover:bg-white/[0.04] hover:border-white/20 hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
           <div className="flex justify-between items-start mb-8 relative z-10">
             <div className="flex items-center gap-2 text-white/40">
@@ -144,7 +144,7 @@ export default function Overview({ user, onNavigate }) {
           </div>
         </div>
 
-        <div onClick={() => onNavigate('database', 'S1')} className="relative group bg-red-500/[0.03] border border-red-500/20 rounded-[2rem] p-7 overflow-hidden cursor-pointer transition-all hover:bg-red-500/[0.08] hover:border-red-500/30 hover:shadow-[0_8px_30px_rgba(239,68,68,0.15)]">
+        <div onClick={() => onNavigate('database', '', null, { sev: 'S1' })} className="relative group bg-red-500/[0.03] border border-red-500/20 rounded-[2rem] p-7 overflow-hidden cursor-pointer transition-all hover:bg-red-500/[0.08] hover:border-red-500/30 hover:shadow-[0_8px_30px_rgba(239,68,68,0.15)]">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
           <div className="flex justify-between items-start mb-8 relative z-10">
             <div className="flex items-center gap-2 text-red-400">
@@ -154,7 +154,7 @@ export default function Overview({ user, onNavigate }) {
             <ExternalLink size={14} className="text-red-400/40 group-hover:text-red-400 transition-colors" />
           </div>
           <div className="relative z-10">
-            <div className="text-3xl md:text-5xl font-bold text-red-500 tracking-tight mb-2 font-mono">{data.stats.critical}</div>
+            <div className="text-3xl md:text-5xl font-bold text-red-500 tracking-tight mb-2 font-mono">{(data.stats.critical ?? 0).toLocaleString()}</div>
             <div className="text-sm text-red-400/60 font-medium">Unresolved S1 priority</div>
           </div>
         </div>
@@ -195,26 +195,28 @@ export default function Overview({ user, onNavigate }) {
             <span className="text-[10px] font-bold uppercase tracking-widest text-white/30 border border-white/10 px-2 py-1 rounded-md">By Volume</span>
           </div>
           {data.charts?.components?.length > 0 ? (
-            <div className="flex-1 min-h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.charts.components} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.6)', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                    contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(16px)', color: '#fff', fontSize: '13px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', padding: '12px 16px' }}
-                    itemStyle={{ color: '#fff', fontWeight: 700 }}
-                    formatter={(v) => [v, 'Issues Open']}
-                  />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
-                    {data.charts.components.map((_, i) => (
-                      <Cell key={i} fill={i === 0 ? '#3b82f6' : 'rgba(255,255,255,0.15)'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="flex-1 flex flex-col">
+              <div className="flex-1" style={{ minHeight: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.charts.components} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.6)', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                      contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(16px)', color: '#fff', fontSize: '13px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', padding: '12px 16px' }}
+                      itemStyle={{ color: '#fff', fontWeight: 700 }}
+                      formatter={(v) => [v, 'Issues Open']}
+                    />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
+                      {data.charts.components.map((_, i) => (
+                        <Cell key={i} fill={i === 0 ? '#3b82f6' : 'rgba(255,255,255,0.15)'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
               {topComponent !== 'General' && (
-                <p className="text-xs text-white/40 mt-6 leading-relaxed text-center">
+                <p className="text-xs text-white/40 pt-4 pb-1 leading-relaxed text-center border-t border-white/5 mt-4 flex-shrink-0">
                   <strong className="text-white">{topComponent}</strong> currently holds the highest density of unresolved anomalies.
                 </p>
               )}

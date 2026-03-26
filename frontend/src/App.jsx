@@ -57,10 +57,12 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [tab, setTab]               = useState(initialTab || 'overview');
   const [externalQuery, setExtQ]    = useState('');
   const [submitPrefill, setPrefill] = useState(null);
+  const [extFilters,    setExtFilters] = useState(null);
 
-  const navigate = (targetTab, query = '', prefill = null) => {
+  const navigate = (targetTab, query = '', prefill = null, filters = null) => {
     setTab(targetTab); setExtQ(query);
     if (prefill) setPrefill(prefill);
+    setExtFilters(filters || null);
   };
 
   const isSuperAdmin = user?.role === 'super_admin';
@@ -152,7 +154,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         {tab === 'performance' && isAdmin       && <Performance   user={user} />}
         {tab === 'analysis'    && <BugAnalysis />}
         {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
-        {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} onNavigate={navigate} />}
+        {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
         {tab === 'resolution'  && <ResolutionSupport />}
         {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
         {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin     user={user} />}

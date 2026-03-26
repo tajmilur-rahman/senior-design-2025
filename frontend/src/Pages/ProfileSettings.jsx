@@ -125,10 +125,17 @@ export default function ProfileSettings({ user, onUpdate }) {
                   {profileMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={savingProfile || !username.trim() || username.trim() === user?.username} 
-                className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              <button type="submit" disabled={savingProfile || !username.trim() || username.trim() === user?.username}
+                className={`w-full font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  savingProfile || !username.trim() || username.trim() === user?.username
+                    ? 'bg-white/5 text-white/25 border border-white/[0.08] cursor-not-allowed'
+                    : 'bg-white text-black hover:bg-zinc-200 cursor-pointer shadow-sm'
+                }`}>
                 <Save size={16} /> {savingProfile ? 'Saving…' : 'Save Name'}
               </button>
+              {!savingProfile && username.trim() === user?.username && (
+                <p className="text-[10px] text-white/25 text-center mt-2 font-medium">Change your name above to enable</p>
+              )}
             </div>
           </form>
         </div>
@@ -157,10 +164,17 @@ export default function ProfileSettings({ user, onUpdate }) {
                   {passwordMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword} 
-                className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              <button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+                className={`w-full font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  savingPassword || !currentPassword || !newPassword || !confirmPassword
+                    ? 'bg-white/5 text-white/25 border border-white/[0.08] cursor-not-allowed'
+                    : 'bg-white text-black hover:bg-zinc-200 cursor-pointer shadow-sm'
+                }`}>
                 <Lock size={16} /> {savingPassword ? 'Updating…' : 'Update Password'}
               </button>
+              {!savingPassword && (!currentPassword || !newPassword || !confirmPassword) && (
+                <p className="text-[10px] text-white/25 text-center mt-2 font-medium">Fill all three fields above to enable</p>
+              )}
             </div>
           </form>
         </div>
