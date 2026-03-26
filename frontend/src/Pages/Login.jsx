@@ -50,10 +50,16 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
 
   useEffect(() => {
     supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setMode('reset'); setViewState('form'); setIsRecovery(true);
-        if (session?.user?.email) setEmail(session.user.email);
-        setMsg('Recovery session active. Please enter your new password.');
+      if (event === "PASSWORD_RECOVERY") {
+        setMode('reset');
+        setViewState('form');
+        setIsRecovery(true);
+
+        if (session?.user?.email) {
+        setEmail(session.user.email);
+      }
+      
+        setMsg("Recovery session active. Please enter your new password.");
       }
     });
   }, []);
@@ -81,7 +87,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
 
   const handleAuth = async (e) => {
     e.preventDefault();
-    setMsg(''); setIsLoading(true);
+    setMsg("");
 
     if ((mode === 'register' || isRecovery) && password !== confirmPassword) {
       setMsg("Passwords don't match."); setIsLoading(false); return;
@@ -98,7 +104,10 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
         const normalizedEmail = email.trim().toLowerCase();
         const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
-        const { data: factors } = await supabase.auth.mfa.listFactors();
+
+        const { data: factors, error: factorError } = await supabase.auth.mfa.listFactors();
+        if (factorError) throw factorError;
+
         if (factors?.totp?.length > 0) {
           setViewState('mfa_challenge');
         } else {
@@ -148,18 +157,20 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
 
       } else if (mode === 'reset') {
         if (isRecovery) {
-          const { error } = await supabase.auth.updateUser({ password });
+          const { error } = await supabase.auth.updateUser({ password: password });
           if (error) throw error;
-          setMsg('Password updated successfully.');
+          setMsg("Password updated successfully!");
           setIsRecovery(false);
           setTimeout(() => {
             if (onResetDone) onResetDone();
             switchTo('login');
           }, 3000);
         } else {
-          const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin,
+          });
           if (error) throw error;
-          setMsg('Check your inbox — a reset link is on its way.');
+          setMsg("Reset link sent to your email.");
           setTimeout(() => switchTo('login'), 4000);
         }
       }
@@ -176,12 +187,17 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
   };
 
   const verifyMfa = async () => {
-    setIsLoading(true);
     try {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const factorId = factors.totp[0].id;
-      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: mfaCode });
+
+      const { data, error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId,
+        code: mfaCode,
+      });
+
       if (error) throw error;
+      
       const { data: { user } } = await supabase.auth.getUser();
       onLogin(user);
     } catch {
@@ -375,10 +391,31 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
                 </div>
 
                 {(mode !== 'reset' || isRecovery) && (
-                  <PasswordInput value={password} onChange={e => setPassword(e.target.value)} placeholder={isRecovery ? 'New password' : 'Password'} />
+                  <div className="input-group">
+                    <Lock size={20} className="input-icon" />
+                    <input
+                      className="sys-input login-input"
+                      type="password"
+                      placeholder={isRecovery ? "New Password" : "Password"}
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
                 )}
+
                 {(mode === 'register' || isRecovery) && (
-                  <PasswordInput value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm password" />
+                  <div className="input-group fade-in">
+                    <Lock size={20} className="input-icon" />
+                    <input
+                      className="sys-input login-input"
+                      type="password"
+                      placeholder="Confirm Password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
                 )}
 
                 {mode === 'register' && (

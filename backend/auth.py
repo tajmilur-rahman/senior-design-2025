@@ -1,8 +1,11 @@
 import os, re
 from jose import jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from database import get_db
+import models
 from pydantic import BaseModel
 from database import supabase
 
@@ -19,14 +22,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 
 class UserCreate(BaseModel):
-    username:   str
-    password:   str
+    username: str
+    password: str
     company_id: int
-
 class LoginRequest(BaseModel):
     username: str
     password: str
 
+# Configuration
+SECRET_KEY = '+wdvqIdxOWrs4WqDF5X2IxJyKC30JMVddqQpTJy59HqHLyZrRu7O3uIBk5uZt5WVTDQEs3/f8Q/Sc2oEfKgOsA=='
+ALGORITHM = "HS256"
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
@@ -34,9 +39,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
+        # 1. Bypass the alg error
         payload = jwt.get_unverified_claims(token)
         user_uuid  = payload.get("sub")
         user_email = payload.get("email")
@@ -82,15 +90,10 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             "onboarding_completed": False,
             "status":               "pending",
         }
-
+        
         insert_res = supabase.table("users").insert(new_user).execute()
-        if insert_res.data:
-            return insert_res.data[0]
+        return insert_res.data[0]
 
-        raise HTTPException(status_code=500, detail="Failed to provision user record")
-
-    except HTTPException:
-        raise
     except Exception as e:
         print(f"[auth] get_current_user error: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed")
