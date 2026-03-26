@@ -1,7 +1,7 @@
 FROM node:22-alpine as build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 COPY . .
 
 RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build

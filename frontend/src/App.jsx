@@ -1,196 +1,398 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import BugAnalysis from './Pages/BugAnalysis';
-import Overview from './Pages/Overview';
-import Explorer from "./Pages/Explorer";
-import SubmitTab from "./Pages/Submit";
-import Login from "./Pages/Login";
-import Directory from "./Pages/Directory";
-import Onboarding from "./Pages/Onboarding";
-import Performance from "./Pages/Performance";
-import { ShieldCheck, LogOut, Moon, Sun } from 'lucide-react';
-import './App.css';
 import axios from 'axios';
+import BugAnalysis     from './Pages/BugAnalysis';
+import Overview        from './Pages/Overview';
+import Explorer        from './Pages/Explorer';
+import SubmitTab       from './Pages/Submit';
+import Login           from './Pages/Login';
+import Directory       from './Pages/Directory';
+import Landing         from './Pages/Landing';
+import Onboarding      from './Pages/Onboarding';
+import Performance     from './Pages/Performance';
+import SuperAdmin        from './Pages/SuperAdmin';
+import UserManagement    from './Pages/UserManagement';
+import ResolutionSupport from './Pages/ResolutionSupport';
+import PendingApproval   from './Pages/PendingApproval';
+import CodeWall          from './Pages/CodeWall';
+import ProfileSettings   from './Pages/ProfileSettings';
+import CompanyProfile    from './Pages/CompanyProfile';
+import { LogOut, Crown, Users, ChevronDown, UserCog } from 'lucide-react';
+import './App.css';
 
-// Axios Interceptor for Backend Auth
 axios.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
-  }
+  if (session?.access_token) config.headers.Authorization = `Bearer ${session.access_token}`;
   return config;
 });
 
-function Dashboard({ user, onLogout, theme, toggleTheme }) {
-  const [tab, setTab] = useState('overview');
-  const [externalQuery, setExternalQuery] = useState("");
-  const [submitPrefill, setSubmitPrefill] = useState(null);
+const NAV_TABS = [
+  { id: 'overview',    label: 'Overview' },
+  { id: 'submit',      label: 'Severity Analysis' },
+  { id: 'performance', label: 'Performance', adminOnly: true },
+  { id: 'analysis',    label: 'Analytics' },
+  { id: 'directory',   label: 'Directory' },
+  { id: 'database',    label: 'Database' },
+  { id: 'resolution',  label: 'Resolution' },
+  { id: 'company',     label: 'Company',     adminOnly: true },
+];
 
-  console.log("Current User Role:", user?.role);
 
-  const handleNavigation = (targetTab, query = "", prefill = null) => {
-    setTab(targetTab);
-    setExternalQuery(query);
-    if (prefill) setSubmitPrefill(prefill);
+async function fetchUserRowWithRetry(uuid, maxAttempts = 6, delayMs = 600) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const { data: rows } = await supabase.from('users').select('*').eq('uuid', uuid);
+    if (rows && rows.length > 0 && rows[0].role) return rows[0];
+    if (i < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  try {
+    await axios.get('/api/users/me/profile');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const { data: rows } = await supabase.from('users').select('*').eq('uuid', uuid);
+    if (rows && rows.length > 0 && rows[0].role) return rows[0];
+  } catch { /* ignore */ }
+  return null;
+}
+
+function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
+  const [tab, setTab]               = useState(initialTab || 'overview');
+  const [externalQuery, setExtQ]    = useState('');
+  const [submitPrefill, setPrefill] = useState(null);
+  const [extFilters,    setExtFilters] = useState(null);
+
+  const navigate = (targetTab, query = '', prefill = null, filters = null) => {
+    setTab(targetTab); setExtQ(query);
+    if (prefill) setPrefill(prefill);
+    setExtFilters(filters || null);
   };
 
-  // NEW: Updated Navigation Array based on Professor's feedback
-  // Maps UI Labels to their internal component IDs in the exact requested order
-  const navTabs = [
-    { id: 'overview',    label: 'Overview' },
-    { id: 'submit',      label: 'Severity Analysis' }, // Renamed from "Submit"
-    { id: 'performance', label: 'Performance', adminOnly: true },
-    { id: 'analysis',    label: 'Analytics' },         // Renamed from "Analysis"
-    { id: 'directory',   label: 'Directory' },
-    { id: 'database',    label: 'Database' }
-  ];
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdmin      = isSuperAdmin || user?.role === 'admin';
 
   return (
-    <div className="app-container">
-      <nav className="sys-nav">
-        <div className="nav-content">
-          <div className="nav-logo">
-            <div style={{width:32, height:32, background:'var(--accent)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center'}}>
-              <ShieldCheck size={20} color="white"/>
-            </div>
-            APEX<span style={{color:'var(--accent)'}}>SYSTEM</span>
-          </div>
-          <div className="nav-center">
-            {navTabs.map(t => {
-              // Hide the Performance tab if the user is not an admin
-              if (t.adminOnly && user?.role !== 'admin') return null;
+    <div className="app-container bg-black text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden">
+      {/* Ambient Dashboard Background Glow */}
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/10 via-black to-black pointer-events-none" />
+      
+      <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-black/10 backdrop-blur-xl border-b border-white/10 transition-all">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="flex h-16 items-center gap-4">
 
-              return (
-                <button
-                  key={t.id}
-                  className={`nav-link ${tab === t.id ? 'active' : ''}`}
-                  onClick={() => { setTab(t.id); setExternalQuery(""); }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
+          {/* Brand — left */}
+          <div className="flex items-center cursor-pointer flex-shrink-0" onClick={() => navigate('overview')}>
+            <span className="text-xl font-bold tracking-tight text-white">
+              Apex<span className="text-zinc-500">OS</span>
+            </span>
           </div>
-          <div className="nav-right">
-            <button className="icon-btn" onClick={toggleTheme} style={{marginRight: 10}}>
-              {theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}
-            </button>
-            <div className="user-pill">
-              <div className="user-avatar-sm">
-                {user?.username?.[0]?.toUpperCase() || 'U'}
-              </div>
-              <span className="user-name">{user?.username || 'User'}</span>
+
+          {/* Nav pills — flex-1 center column, pills themselves centered inside */}
+          <div className="flex-1 flex justify-center">
+            <div className="hidden md:flex items-center gap-0.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 p-1">
+              {NAV_TABS.map(t => {
+                if (t.superAdminOnly && !isSuperAdmin) return null;
+                if (t.adminOnly      && !isAdmin)      return null;
+                const label = (t.id === 'company' && isSuperAdmin) ? 'System' : t.label;
+                return (
+                  <button
+                    key={t.id}
+                    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200 flex items-center whitespace-nowrap ${
+                      tab === t.id
+                        ? 'bg-white/15 text-white shadow-sm'
+                        : 'text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                    onClick={() => { setTab(t.id); setExtQ(''); }}
+                  >
+                    {t.superAdminOnly && <Crown size={11} className="mr-1.5 opacity-80" />}
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-            <button
-              className="sys-btn outline"
-              onClick={onLogout}
-              style={{padding:'6px 12px', fontSize:12, fontWeight:700, gap:6, borderRadius:99}}
-            >
-              <LogOut size={14} color="var(--text-sec)"/> EXIT
-            </button>
+          </div>
+
+          {/* User pill — right */}
+          <div className="flex-shrink-0">
+            <div className="group relative">
+              <div className="flex items-center gap-2 px-1 pr-3 py-1 bg-white/5 border border-white/10 rounded-full cursor-pointer hover:bg-white/10 transition-all">
+                <div className="w-7 h-7 bg-white text-black text-xs font-bold flex items-center justify-center rounded-full">
+                  {(user?.username || 'U')[0].toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-white hidden sm:block truncate max-w-[8rem]">
+                  {user?.username || 'User'}
+                </span>
+                <ChevronDown size={14} className="text-white/50" />
+              </div>
+              
+              <div className="absolute right-0 top-full pt-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                <div className="w-56 max-w-[calc(100vw-1rem)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('profile')}>
+                    <UserCog size={14} /> Profile Settings
+                  </button>
+                  {isAdmin && (
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('users')}>
+                      <Users size={14} /> Admin Panel
+                    </button>
+                  )}
+                  {isSuperAdmin && (
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-amber-500 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
+                      <Crown size={14} /> Super Admin Panel
+                    </button>
+                  )}
+                  <div className="h-px bg-white/10 my-1 mx-2" />
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
+                    <LogOut size={14} /> Sign out
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
           </div>
         </div>
       </nav>
-      <main className="main-scroll">
-        {tab === 'overview'     && <Overview user={user} onNavigate={handleNavigation}/>}
-        {tab === 'submit'       && <SubmitTab user={user} prefill={submitPrefill} onClearPrefill={() => setSubmitPrefill(null)}/>}
-        {tab === 'performance'  && user?.role === 'admin' && <Performance user={user}/>}
-        {tab === 'analysis'     && <BugAnalysis />}
-        {tab === 'directory'    && <Directory onNavigate={handleNavigation}/>}
-        {tab === 'database'     && <Explorer user={user} initialQuery={externalQuery} onNavigate={handleNavigation}/>}
+      <main className="main-scroll pt-24 relative z-10">
+        {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} />}
+        {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
+        {tab === 'performance' && isAdmin       && <Performance   user={user} />}
+        {tab === 'analysis'    && <BugAnalysis />}
+        {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
+        {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
+        {tab === 'resolution'  && <ResolutionSupport />}
+        {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
+        {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin     user={user} />}
+        {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
+        {tab === 'company'     && isAdmin       && <CompanyProfile  user={user} />}
       </main>
     </div>
   );
 }
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user,           setUser]           = useState(null);
+  const [loading,        setLoading]        = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [forceRecoveryReset, setForceRecoveryReset] = useState(
+    () => window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')
+  );
+  const [showLogin,      setShowLogin]      = useState(false);
+  const [initialTab,     setInitialTab]     = useState(null);
+  const onboardingShownRef = useRef(false);
+
+  const resolveContextRole = (dbRole) => {
+    const saved = localStorage.getItem('user_context_role');
+    if (dbRole === 'super_admin') {
+      return ['user', 'admin', 'super_admin'].includes(saved) ? saved : 'super_admin';
+    }
+    return dbRole || 'user';
+  };
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  useEffect(() => {
-    const initializeAuth = async (session) => {
+    const initAuth = async (session, opts = {}) => {
+      const { event = null, fromInitialSession = false } = opts;
       try {
-        if (session) {
-          const { data: dbUserList, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('uuid', session.user.id);
+        if (!session) {
+          setUser(null);
+          setShowOnboarding(false);
+          onboardingShownRef.current = false;
+          return;
+        }
 
-          if (error) console.error("DB Error:", error.message);
+        // On the initial page load, only auto-login if the user explicitly
+        // logged in during this browser session (tab hasn't been closed/reopened).
+        // This prevents the app from jumping straight to Dashboard after a
+        // server restart or when a user first opens the app.
+        if (fromInitialSession && !sessionStorage.getItem('apex_session_active')) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
 
-          if (dbUserList && dbUserList.length > 0) {
-            const dbUser = dbUserList[0];
-            setUser({
-              id: session.user.id,
-              email: session.user.email,
-              username: dbUser.username || session.user.email.split('@')[0],
-              role: dbUser.role
-            });
+        const uuid = session.user.id;
+        const db = await fetchUserRowWithRetry(uuid);
+
+        if (db) {
+          setUser({
+            id:                   uuid,
+            uuid:                 uuid,
+            email:                session.user.email || db.email,
+            username:             db.username || session.user.email?.split('@')[0],
+            role:                 db.role || 'user',
+            context_role:         resolveContextRole(db.role || 'user'),
+            company_id:           db.company_id,
+            is_admin:             db.is_admin || false,
+            onboarding_completed: db.onboarding_completed || false,
+            status:               db.status || 'active',
+          });
+          const isCompanyAdmin = db.role === 'admin';
+          if (event === 'SIGNED_IN') {
+          sessionStorage.setItem('apex_session_active', 'true');
+        }
+
+        if (!fromInitialSession && event === 'SIGNED_IN') {
+            if (isCompanyAdmin && !db.onboarding_completed && !onboardingShownRef.current) {
+              onboardingShownRef.current = true;
+              setShowOnboarding(true);
+            } else {
+              setShowOnboarding(false);
+            }
           } else {
-            setUser({
-              id: session.user.id,
-              email: session.user.email,
-              username: session.user.email.split('@')[0],
-              role: 'user'
-            });
+            setShowOnboarding(false);
           }
         } else {
-          setUser(null);
+          setUser({
+            id: uuid, uuid,
+            email:    session.user.email,
+            username: session.user.email?.split('@')[0],
+            role: 'user', context_role: 'user',
+            company_id: null, onboarding_completed: false,
+          });
+          setShowOnboarding(false);
         }
       } catch (err) {
-        console.error("Critical Auth/DB Error:", err);
+        console.error('[App] initAuth:', err);
         setUser(null);
+        setShowOnboarding(false);
       } finally {
         setLoading(false);
       }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      initializeAuth(session);
-    });
-
+    supabase.auth.getSession().then(({ data: { session } }) =>
+      initAuth(session, { fromInitialSession: true })
+    );
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setForceRecoveryReset(true);
+      }
       if (event !== 'INITIAL_SESSION') {
-        initializeAuth(session);
+        initAuth(session, { event, fromInitialSession: false });
       }
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleOnboardingComplete = async () => {
-    await supabase.from('users').update({ onboarding_completed: true }).eq('uuid', user.id);
-    await supabase.auth.updateUser({
-      data: { onboarding_completed: true }
-    });
+  const handleOnboardingComplete = async (companyName, displayName, navigateTo = null, skipped = false) => {
+    if (navigateTo) setInitialTab(navigateTo);
+    if (companyName) {
+      try {
+        const res = await axios.post('/api/onboarding/complete', {
+          company_name: companyName,
+          username:     displayName || user?.username,
+        });
+        if (res.data?.user) {
+          const u = res.data.user;
+          setUser(prev => ({
+            ...prev,
+            username:             u.username,
+            role:                 u.role,
+            company_id:           u.company_id,
+            onboarding_completed: true,
+          }));
+        }
+      } catch (err) {
+        console.error('[App] onboarding complete:', err);
+      }
+    }
+
+    if (!skipped) {
+      try {
+        await supabase
+          .from('users')
+          .update({ onboarding_completed: true })
+          .eq('uuid', user?.uuid || user?.id);
+      } catch (err) {
+        console.error('[App] marking onboarding complete:', err);
+      }
+      setUser(prev => prev ? { ...prev, onboarding_completed: true } : prev);
+    }
     setShowOnboarding(false);
   };
 
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('user_context_role');
+    sessionStorage.removeItem('apex_session_active');
+    setUser(null); setShowOnboarding(false);
+  };
 
-  if (loading) return <div className="loading-screen">INITIALIZING APEX OS...</div>;
+  const handleLogin = async (loginUser) => {
+    let db = null;
+    try {
+      // Increased retry delay to gracefully handle the DB role assignment lag during first-time registration
+      db = await fetchUserRowWithRetry(loginUser.id, 6, 500);
+    } catch (err) {
+      console.error('[App] handleLogin DB fetch:', err);
+    }
+
+    const dbRole   = db?.role   || 'user';
+    const dbStatus = db?.status || 'active';
+    localStorage.setItem('user_context_role', dbRole);
+    sessionStorage.setItem('apex_session_active', 'true');
+    setUser({
+      ...loginUser,
+      id:                   loginUser.id,
+      uuid:                 loginUser.id,
+      username:             db?.username || loginUser.email?.split('@')[0],
+      role:                 dbRole,
+      context_role:         resolveContextRole(dbRole),
+      status:               dbStatus,
+      company_id:           db?.company_id   ?? null,
+      is_admin:             db?.is_admin     ?? false,
+      onboarding_completed: db?.onboarding_completed ?? false,
+    });
+  };
+
+  if (loading) return (
+    <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-black">
+      <div className="w-9 h-9 rounded-full border-2 border-white/10 border-t-white animate-spin" />
+      <span className="text-sm text-white/40 font-semibold tracking-wide">Loading ApexOS…</span>
+    </div>
+  );
 
   if (!user) {
-    return <Login onLogin={setUser} theme={theme} toggleTheme={toggleTheme} />;
+    if (showLogin) {
+      return (
+        <Login
+           onLogin={handleLogin}
+           forceResetRecovery={forceRecoveryReset}
+           onResetDone={() => setForceRecoveryReset(false)}
+           onBack={() => setShowLogin(false)}
+        />
+      );
+    }
+    return <Landing onEnterWorkspace={() => setShowLogin(true)} />;
   }
-
-  if (showOnboarding) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
-  }
-
+  if (forceRecoveryReset) return (
+    <Login
+      onLogin={handleLogin}
+      forceResetRecovery={true}
+      onResetDone={() => setForceRecoveryReset(false)}
+    />
+  );
+  if (['pending', 'inactive', 'invite_requested'].includes(user.status)) return (
+    <PendingApproval user={user} onLogout={handleLogout} status={user.status} />
+  );
+  if (user.status === 'pending_code') return (
+    <CodeWall
+      user={user}
+      onLogout={handleLogout}
+      onVerified={async () => {
+        const db = await fetchUserRowWithRetry(user.uuid || user.id, 4, 400);
+        if (db) {
+          setUser(prev => ({ ...prev, ...db, status: db.status || 'active' }));
+        } else {
+          setUser(prev => ({ ...prev, status: 'active' }));
+        }
+      }}
+    />
+  );
+  if (showOnboarding) return (
+    <Onboarding onComplete={handleOnboardingComplete} user={user} />
+  );
   return (
     <Dashboard
       user={user}
-      onLogout={() => supabase.auth.signOut()}
-      theme={theme}
-      toggleTheme={toggleTheme}
+      onLogout={handleLogout}
+      initialTab={initialTab}
+      onUpdateUser={u => setUser(prev => ({ ...prev, ...u }))}
     />
   );
 }

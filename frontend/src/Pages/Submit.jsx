@@ -1,377 +1,540 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { mozillaTaxonomy } from '../javascript/taxonomy';
 import {
   UploadCloud, AlertCircle, FileText, PenTool,
-  Cpu, BarChart3, CheckCircle, Sparkles, Send, Trash2, X, FolderTree, Database, RefreshCw
+  Cpu, CheckCircle, Send, Trash2, X,
+  FolderTree, Database, RefreshCw, ArrowRight, Info,
+  Globe, Building2, Zap, Lock
 } from 'lucide-react';
+import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
 
 function Toast({ msg, onClose }) {
-    if (!msg.text) return null;
-    const isError = msg.type === 'error';
-    return (
-        <div style={{
-            position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)',
-            background: isError ? 'var(--danger)' : '#0f172a',
-            color: 'white',
-            padding: '12px 24px', borderRadius: 50, boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-            display: 'flex', alignItems: 'center', gap: 12, zIndex: 9999, fontWeight: 600,
-            fontSize: 13, border: `1px solid ${isError ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.1)'}`,
-            animation: 'fadeInUp 0.3s cubic-bezier(0.16,1,0.3,1)'
-        }}>
-            {isError ? <AlertCircle size={16}/> : <CheckCircle size={16} color="#10b981"/>}
-            {msg.text}
-            <button onClick={onClose} style={{background:'none', border:'none', color:'rgba(255,255,255,0.6)', cursor:'pointer', padding:0, marginLeft: 6, display:'flex'}}><X size={14}/></button>
-        </div>
-    );
+  if (!msg.text) return null;
+  const isError = msg.type === 'error';
+  return (
+    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full flex items-center gap-3 z-[9999] text-sm font-bold shadow-2xl border animate-in slide-in-from-bottom-5 backdrop-blur-md ${isError ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
+      {isError ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+      {msg.text}
+      <button onClick={onClose} className="ml-2 text-foreground/50 hover:text-foreground transition-colors"><X size={14} /></button>
+    </div>
+  );
 }
 
-export default function Submit({ user, prefill, onClearPrefill }) {
-  const [mode, setMode] = useState('manual');
-  const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [msg, setMsg] = useState({ text: "", type: "" });
+const PIPELINE_STEPS = [
+  { label: 'Submitted',   sub: 'Bug logged',          color: '#6366f1' },
+  { label: 'NEW',         sub: 'Awaiting triage',     color: '#3b82f6' },
+  { label: 'UNCONFIRMED', sub: 'Needs reproduction',  color: '#f59e0b' },
+  { label: 'CONFIRMED',   sub: 'Verified & assigned', color: '#10b981' },
+  { label: 'RESOLVED',    sub: 'Fix implemented',     color: '#10b981' },
+  { label: 'VERIFIED',    sub: 'QA sign-off',         color: '#6366f1' },
+];
 
-  const [summary, setSummary] = useState('');
-  const [team, setTeam] = useState('');
-  const [category, setCategory] = useState('');
-  const [component, setComponent] = useState('');
-  const [severity, setSeverity] = useState('S3');
+function PipelineStrip() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mb-6">
+      <button onClick={() => setExpanded(e => !e)} className="flex items-center gap-2 bg-transparent border-none cursor-pointer p-0 text-xs font-bold text-white/50 uppercase tracking-widest hover:text-white transition-colors">
+        <Info size={14} className="text-blue-400" />
+        Bug Lifecycle Pipeline
+        <span className="text-blue-400 text-[10px] ml-1">{expanded ? '▲' : '▼'}</span>
+      </button>
+      {expanded && (
+        <div className="animate-in fade-in duration-300 mt-4 p-6 lg:p-8 bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md">
+          <p className="text-sm text-white/50 mb-8">Every anomaly moves through these stages — from first report to final QA close.</p>
+          <div className="flex items-start overflow-x-auto pb-2 custom-scrollbar">
+            {PIPELINE_STEPS.map((step, i) => (
+              <div key={step.label} className="flex items-start flex-shrink-0">
+                <div className="flex flex-col items-center w-28">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-4 border-2" style={{ backgroundColor: `${step.color}15`, borderColor: `${step.color}50`, color: step.color }}>
+                    <span className="text-sm font-bold">{i + 1}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-white text-center uppercase tracking-widest leading-tight">{step.label}</span>
+                  <span className="text-[10px] text-white/40 text-center mt-2 leading-snug max-w-[5.5rem]">{step.sub}</span>
+                </div>
+                {i < PIPELINE_STEPS.length - 1 && (
+                  <div className="flex items-center mt-4 mx-2 flex-shrink-0 opacity-40">
+                    <div className="w-6 h-0.5 bg-white/20" />
+                    <ArrowRight size={14} className="text-white/40" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  const [file, setFile] = useState(null);
-  const [bugs, setBugs] = useState([]);
-  const [batches, setBatches] = useState([]);
-  const [refreshingBugs, setRefreshingBugs] = useState(false);
-  const [refreshingBatches, setRefreshingBatches] = useState(false);
+function SevBadge({ sev }) {
+  const badgeStyle = {
+    S1: 'text-red-400 bg-red-500/10 border-red-500/20',
+    S2: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    S3: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    S4: 'text-white/50 bg-white/5 border-white/10'
+  }[sev] || 'text-white/50 bg-white/5 border-white/10';
+  return (
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border font-mono whitespace-nowrap ${badgeStyle}`}>
+      {sev || '—'}
+    </span>
+  );
+}
 
-  // Auto-fill from Directory click
+export default function SubmitTab({ user, prefill, onClearPrefill }) {
+  const [mode,             setMode]             = useState('manual');
+  const [team,             setTeam]             = useState('');
+  const [category,         setCategory]         = useState('');
+  const [component,        setComponent]        = useState('');
+  const [summary,          setSummary]          = useState('');
+  const [severity,         setSeverity]         = useState('S3');
+  const [loading,          setLoading]          = useState(false);
+  const [msg,              setMsg]              = useState({ text: '', type: '' });
+  const [file,             setFile]             = useState(null);
+  const [bugs,             setBugs]             = useState([]);
+  const [batches,          setBatches]          = useState([]);
+  const [showGlossary,     setShowGlossary]     = useState(false);
+  const [refreshingBugs,   setRefreshingBugs]   = useState(false);
+  const [analyzing,        setAnalyzing]        = useState(false);
+  const [analyzeResult,    setAnalyzeResult]    = useState(null);
+  const [consentGlobal,    setConsentGlobal]    = useState(true);
+  const [hasOwnModel,      setHasOwnModel]      = useState(false);
+  const [companies,        setCompanies]        = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const pollIntervalRef = useRef(null);
+  const newBugIdsRef    = useRef(new Set());
+
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  const showMsg = (text, type = 'success') => {
+    setMsg({ text, type });
+    setTimeout(() => setMsg({ text: '', type: '' }), 3000);
+  };
+
+  const switchMode = (newMode) => {
+    setMode(newMode);
+    setMsg({ text: '', type: '' });
+    // Reset manual form fields
+    setTeam(''); setCategory(''); setComponent(''); setSummary(''); setSeverity('S3');
+    // Reset bulk fields
+    setFile(null);
+    // Reset analysis fields
+    setAnalyzeResult(null); setAnalyzing(false);
+  };
+
   useEffect(() => {
-      if (prefill) {
-          setTeam(prefill.team || '');
-          setCategory(prefill.category || '');
-          setComponent(prefill.component || '');
-          setMode('manual');
-          if (onClearPrefill) onClearPrefill();
-      }
+    if (prefill) {
+      setSummary(prefill.summary || ''); setSeverity(prefill.severity || 'S3');
+      if (prefill.team)      setTeam(prefill.team);
+      if (prefill.category)  setCategory(prefill.category);
+      if (prefill.component) setComponent(prefill.component);
+      onClearPrefill?.();
+    }
   }, [prefill, onClearPrefill]);
+
+  useEffect(() => {
+    if (!isSuperAdmin && user?.company_id) {
+      axios.get('/api/admin/company_profile').then(res => {
+        setHasOwnModel(res.data?.has_own_model || false);
+      }).catch(() => {});
+    }
+  }, [isSuperAdmin, user?.company_id]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      axios.get('/api/companies/list').then(res => setCompanies(res.data || [])).catch(() => {});
+    }
+  }, [isSuperAdmin]);
+
+  const teams = Object.keys(mozillaTaxonomy || {});
+  const categories = team ? Object.keys(mozillaTaxonomy[team] || {}) : [];
+  const components = team && category ? (mozillaTaxonomy[team]?.[category] || []) : [];
 
   const handleTeamChange = (e) => { setTeam(e.target.value); setCategory(''); setComponent(''); };
   const handleCategoryChange = (e) => { setCategory(e.target.value); setComponent(''); };
 
-  const showMsg = (text, type = 'success', duration = 3000) => {
-      setMsg({ text, type });
-      if (duration) setTimeout(() => setMsg({ text: "", type: "" }), duration);
-  };
-
   const fetchBatches = useCallback(async () => {
-      setRefreshingBatches(true);
-      try {
-          const res = await axios.get('/api/batches');
-          setBatches(res.data || []);
-      } catch (err) { console.error(err); }
-      finally { setRefreshingBatches(false); }
+    try { const res = await axios.get('/api/batches'); setBatches(res.data || []); }
+    catch (err) { console.error(err); }
   }, []);
 
-  const fetchBugs = useCallback(async () => {
-      setRefreshingBugs(true);
-      try {
-          const res = await axios.get('/api/hub/explorer?limit=50&sort_key=id&sort_dir=desc');
-          setBugs(res.data.bugs || []);
-      } catch (err) { console.error(err); }
-      finally { setRefreshingBugs(false); }
-  }, []);
-
-  useEffect(() => {
-      fetchBatches();
-      fetchBugs();
-  }, [fetchBatches, fetchBugs]);
-
-  const handleQuickAnalyze = async () => {
-    if (!summary) { showMsg("Enter a summary first.", "error"); return; }
-    setAnalyzing(true);
+  const fetchBugs = useCallback(async (silent = false) => {
+    if (!silent) setRefreshingBugs(true);
     try {
-      const res = await axios.post(`/api/analyze_bug?bug_text=${encodeURIComponent(summary)}`);
-      if (res.data.severity) {
-          setSeverity(res.data.severity.label);
-          showMsg(`✦ AI suggests severity: ${res.data.severity.label}`, "success");
-      }
-    } catch (err) { showMsg("AI Analysis Failed", "error"); }
-    finally { setAnalyzing(false); }
+      const res = await axios.get('/api/hub/explorer?limit=50&sort_key=id&sort_dir=desc');
+      const fetched = res.data?.bugs || [];
+      setBugs(prev => {
+        const pending = prev.filter(b => String(b.id).startsWith('pending-'));
+        const merged = fetched.map(b => newBugIdsRef.current.has(String(b.id)) ? { ...b, _isNew: true } : b);
+        return [...pending, ...merged];
+      });
+    } catch (err) { console.error(err); } finally { if (!silent) setRefreshingBugs(false); }
+  }, []);
+
+  useEffect(() => { fetchBatches(); fetchBugs(); }, [fetchBatches, fetchBugs]);
+
+  const startFastRefresh = useCallback(() => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    let count = 0;
+    pollIntervalRef.current = setInterval(() => {
+      fetchBugs(true);
+      if (++count >= 6) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+    }, 2000);
+  }, [fetchBugs]);
+
+  useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }, []);
+
+  const handleAnalyze = async (source) => {
+    if (!summary) { showMsg('Please enter a bug summary first.', 'error'); return; }
+    setAnalyzing(true); setAnalyzeResult(null);
+    try {
+      const res = await axios.get('/api/analyze_bug', { params: { bug_text: summary, model_source: source } });
+      setAnalyzeResult({ ...res.data?.severity, _source: source });
+    } catch (err) {
+      showMsg(err.response?.data?.detail || 'Analysis failed', 'error');
+    } finally { setAnalyzing(false); }
   };
 
   const handleManualSubmit = async () => {
-      if (!summary || !component) { showMsg("Missing summary or component.", "error"); return; }
-      setLoading(true);
-      try {
-          const payload = { summary, component, severity, status: "NEW", company_id: user?.company_id };
-          const response = await axios.post("/api/bug", payload);
-          if (response.status === 200) {
-              // Optimistic prepend for real-time feel
-              const newBug = {
-                  id: response.data?.[0]?.bug_id || response.data?.[0]?.id || `new-${Date.now()}`,
-                  summary,
-                  component,
-                  severity,
-                  status: 'NEW',
-                  _isNew: true
-              };
-              setBugs(prev => [newBug, ...prev].slice(0, 50));
-              showMsg("✦ Bug logged successfully");
-              setSummary(''); setTeam(''); setCategory(''); setComponent(''); setSeverity('S3');
-              // Then re-fetch to get real IDs
-              setTimeout(() => fetchBugs(), 1000);
-          }
-      } catch (err) {
-          showMsg("Failed to save to database.", "error");
-      } finally { setLoading(false); }
+    if (!summary) { showMsg('Please enter a bug summary.', 'error'); return; }
+    if (!component) { showMsg('Please select a component.', 'error'); return; }
+    if (isSuperAdmin && !selectedCompanyId) { showMsg('Super Admin: please select a company.', 'error'); return; }
+    setLoading(true);
+    const tempId = `pending-${Date.now()}`;
+    setBugs(prev => [{ id: tempId, summary, component, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
+    try {
+      const payload = { summary, component, severity, status: 'NEW' };
+      if (isSuperAdmin && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
+      const response = await axios.post('/api/bug', payload);
+      const realId = response.data?.[0]?.bug_id || response.data?.[0]?.id;
+      if (realId) {
+        newBugIdsRef.current.add(String(realId));
+        setBugs(prev => prev.map(b => b.id === tempId ? { id: realId, summary, component, severity, status: 'NEW', _isNew: true } : b));
+        setTimeout(() => { newBugIdsRef.current.delete(String(realId)); setBugs(prev => prev.map(b => String(b.id) === String(realId) ? { ...b, _isNew: false } : b)); }, 8000);
+      } else { setBugs(prev => prev.filter(b => b.id !== tempId)); }
+      showMsg('Bug logged successfully');
+      setSummary(''); setTeam(''); setCategory(''); setComponent(''); setSeverity('S3');
+      startFastRefresh();
+    } catch { setBugs(prev => prev.filter(b => b.id !== tempId)); showMsg('Failed to save. Please try again.', 'error'); }
+    finally { setLoading(false); }
   };
 
   const handleDeleteBug = async (bugId) => {
-      try {
-          await axios.delete(`/api/bug/${bugId}`);
-          setBugs(prev => prev.filter(b => b.id !== bugId));
-          showMsg("Bug deleted");
-      } catch (err) { showMsg("Could not delete bug", "error"); }
+    setBugs(prev => prev.filter(b => b.id !== bugId));
+    newBugIdsRef.current.delete(String(bugId));
+    try {
+      await axios.delete(`/api/bug/${bugId}`);
+      showMsg('Bug removed');
+    } catch (err) {
+      showMsg(err.response?.data?.detail || 'Could not remove bug', 'error');
+      fetchBugs();
+    }
   };
 
-  // FIX: handleDeleteBatch was missing — defined here
   const handleDeleteBatch = async (batchId) => {
-      try {
-          await axios.delete(`/api/batches/${batchId}`);
-          setBatches(prev => prev.filter(b => b.id !== batchId));
-          showMsg("Batch removed");
-      } catch (err) { showMsg("Could not remove batch", "error"); }
+    setBatches(prev => prev.filter(b => b.id !== batchId));
+    try { await axios.delete(`/api/batches/${batchId}`); showMsg('Batch removed'); }
+    catch { showMsg('Could not remove batch', 'error'); fetchBatches(); }
   };
 
   const handleBulkUpload = async () => {
-    if (!file) return;
-    setLoading(true);
-    showMsg("Uploading batch...", "loading", 0);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("batch_name", file.name);
+    if (!file) return; setLoading(true); showMsg('Uploading…');
+    const fd = new FormData(); fd.append('file', file); fd.append('batch_name', file.name);
     try {
-      await axios.post('/api/upload_and_train', fd, { headers: { "Content-Type": "multipart/form-data" }});
-      showMsg("✦ Batch uploaded & training triggered");
-      setFile(null);
-      fetchBatches();
-      fetchBugs();
-    } catch (err) {
-      showMsg("Upload Failed", "error");
-    } finally { setLoading(false); }
+      const res = await axios.post('/api/bulk_submit', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      showMsg(`Imported ${res.data?.records_processed || '?'} bugs into your database`); setFile(null);
+      await fetchBatches(); await fetchBugs();
+    } catch (err) { showMsg(err.response?.data?.detail || 'Upload failed', 'error'); }
+    finally { setLoading(false); }
   };
 
-  const sevColor = { S1: 'var(--danger)', S2: '#f59e0b', S3: 'var(--accent)', S4: 'var(--text-sec)' };
-  const sevBg   = { S1: 'rgba(239,68,68,0.08)', S2: 'rgba(245,158,11,0.08)', S3: 'rgba(37,99,235,0.08)', S4: 'var(--hover-bg)' };
+  const selectedSevDef = SEVERITY_DEFS.find(d => d.code === severity);
 
   return (
-    <div className="page-content fade-in">
-      <Toast msg={msg} onClose={() => setMsg({ text: "", type: "" })} />
+    <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
+      <Toast msg={msg} onClose={() => setMsg({ text: '', type: '' })} />
+      {showGlossary && <GlossaryDrawer onClose={() => setShowGlossary(false)} />}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '24px', width: '100%', alignItems: 'start' }}>
+      {/* Header matching Liquid Glass aesthetic */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400 w-max mb-4">
+            <Cpu size={12} className="text-blue-500" />
+            <span className="text-[10px] font-bold tracking-widest uppercase">Severity Analysis</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
+            Submit <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Issue</span>
+          </h1>
+          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
+            Log a new anomaly manually for AI severity prediction, or bulk import a batch of bugs into your company database.
+          </p>
+        </div>
+        <div className="relative z-10">
+           <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Severity & Status Guide" />
+        </div>
+        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
+      </div>
 
-        {/* ── COLUMN 1: ENTRY ENGINE ── */}
-        <div className="sys-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '650px', minWidth: 0 }}>
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: 'var(--hover-bg)' }}>
-              <h2 style={{ display:'flex', alignItems:'center', gap: 10, fontSize: 16, margin: 0, fontWeight: 800, color: 'var(--text-main)' }}>
-                  <Cpu size={18} color="var(--accent)"/> Entry Engine
-              </h2>
-              <div className="segmented-control" style={{ marginTop: 16 }}>
-                  <button className={`segment-btn ${mode==='manual'?'active':''}`} onClick={()=>setMode('manual')}><PenTool size={13}/> Manual Entry</button>
-                  <button className={`segment-btn ${mode==='bulk'?'active':''}`} onClick={()=>setMode('bulk')}><UploadCloud size={13}/> Bulk Training</button>
-              </div>
+      <PipelineStrip />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-start mt-8">
+
+        {/* Left Column: Bug Report Form */}
+        <div className="lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden flex flex-col relative">
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50" />
+          <div className="p-6 lg:p-8 border-b border-white/5 bg-black/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-widest"><Cpu size={16} className="text-blue-400" /> Triage Entry</h2>
+            <div className="flex items-center bg-white/5 p-1 rounded-xl border border-white/10">
+              <button className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${mode === 'manual' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white hover:bg-white/5'}`} onClick={() => switchMode('manual')}><PenTool size={14} /> Manual</button>
+              <button className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${mode === 'bulk' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white hover:bg-white/5'}`} onClick={() => switchMode('bulk')}><UploadCloud size={14} /> Bulk import</button>
+            </div>
           </div>
 
-          <div style={{ padding: 24, flex: 1, overflowY: 'auto' }}>
+          <div className="p-6 lg:p-8 flex-1 overflow-y-auto">
             {mode === 'manual' ? (
-              <div className="fade-in">
-                {/* Taxonomy */}
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <FolderTree size={12} color="var(--accent)"/> Routing Taxonomy
-                  </label>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                      <select className="sys-input" value={team} onChange={handleTeamChange} style={{ height: 42, fontSize: 13 }}>
-                          <option value="" disabled>1. Select Team</option>
-                          {Object.keys(mozillaTaxonomy).map(t => <option key={t} value={t}>{t}</option>)}
+              <div className="animate-in fade-in duration-300">
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderTree size={14} className="text-blue-400" />
+                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Component</span>
+                    <span className="text-[9px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Team</label>
+                      <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none" value={team} onChange={handleTeamChange}>
+                        <option value="" disabled className="bg-black text-white/50">Select a team…</option>
+                        {teams.map(t => <option key={t} value={t} className="bg-black text-white">{t}</option>)}
                       </select>
-                      <select className="sys-input" value={category} onChange={handleCategoryChange} disabled={!team} style={{ height: 42, fontSize: 13, opacity: team ? 1 : 0.5 }}>
-                          <option value="" disabled>2. Select Category</option>
-                          {team && Object.keys(mozillaTaxonomy[team]).map(c => <option key={c} value={c}>{c}</option>)}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Category</label>
+                      <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none disabled:opacity-50" value={category} onChange={handleCategoryChange} disabled={!team}>
+                        <option value="" disabled className="bg-black text-white/50">{team ? 'Select a category…' : 'Select a team first'}</option>
+                        {categories.map(c => <option key={c} value={c} className="bg-black text-white">{c}</option>)}
                       </select>
-                      <select className="sys-input" value={component} onChange={e => setComponent(e.target.value)} disabled={!category}
-                          style={{ height: 42, fontSize: 13, opacity: category ? 1 : 0.5, borderColor: component ? 'var(--success)' : 'var(--border)', transition: '0.2s' }}>
-                          <option value="" disabled>3. Final Component</option>
-                          {category && mozillaTaxonomy[team][category].map(comp => <option key={comp} value={comp}>{comp}</option>)}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Component</label>
+                      <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none disabled:opacity-50" value={component} onChange={e => setComponent(e.target.value)} disabled={!category}>
+                        <option value="" disabled className="bg-black text-white/50">{category ? 'Select a component…' : 'Select a category first'}</option>
+                        {components.map(c => <option key={c} value={c} className="bg-black text-white">{c}</option>)}
                       </select>
+                    </div>
                   </div>
                 </div>
 
-                {/* Summary */}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, display: 'block' }}>Bug Summary</label>
-                  <div style={{ position: 'relative' }}>
-                      <textarea className="sys-input" placeholder="Describe the issue in detail..." value={summary}
-                          onChange={e => setSummary(e.target.value)}
-                          style={{ height: 90, marginBottom: 0, resize: 'none', paddingBottom: 36, fontSize: 13, lineHeight: 1.6 }}/>
-                      <button onClick={handleQuickAnalyze} disabled={analyzing || !summary}
-                          style={{
-                              position: 'absolute', bottom: 10, right: 10,
-                              background: analyzing ? 'var(--hover-bg)' : 'var(--pill-bg)',
-                              border: '1px solid rgba(37,99,235,0.3)', borderRadius: 6,
-                              color: 'var(--accent)', fontSize: 11, fontWeight: 700,
-                              padding: '5px 10px', cursor: analyzing ? 'not-allowed' : 'pointer',
-                              display: 'flex', alignItems: 'center', gap: 5
-                          }}>
-                          <Sparkles size={11}/> {analyzing ? 'Scanning…' : 'AI Suggest'}
-                      </button>
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Summary</span>
+                    <span className="text-[9px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
                   </div>
+                  <textarea className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm min-h-[120px] resize-y"
+                    placeholder="Describe the bug — what happened, what was expected, and how to reproduce it."
+                    value={summary} onChange={e => setSummary(e.target.value)} />
                 </div>
 
-                {/* Severity */}
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, display: 'block' }}>Severity</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-                      {['S1','S2','S3','S4'].map(s => (
-                          <button key={s} onClick={() => setSeverity(s)}
-                              style={{
-                                  padding: '10px 0', borderRadius: 8, cursor: 'pointer',
-                                  border: `1.5px solid ${severity === s ? sevColor[s] : 'var(--border)'}`,
-                                  background: severity === s ? sevBg[s] : 'var(--bg)',
-                                  color: severity === s ? sevColor[s] : 'var(--text-sec)',
-                                  fontWeight: 800, fontSize: 13, transition: 'all 0.15s'
-                              }}>
-                              {s}
-                          </button>
-                      ))}
+                <div className="mb-8">
+                  <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-4">Severity Selection</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {SEVERITY_DEFS.map(def => {
+                      const isSelected = severity === def.code;
+                      const activeColors = {
+                        S1: 'border-red-500/50 bg-red-500/10 text-red-400',
+                        S2: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
+                        S3: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
+                        S4: 'border-white/30 bg-white/10 text-white'
+                      }[def.code];
+                      
+                      return (
+                        <button key={def.code} onClick={() => setSeverity(def.code)} 
+                          className={`p-4 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 ${isSelected ? activeColors : 'border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}>
+                          <div className={`text-base font-bold font-mono ${isSelected ? '' : 'text-white/60'}`}>{def.code}</div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest">{def.label}</div>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {selectedSevDef && (
+                    <p className="text-xs text-white/60 mt-4 leading-relaxed p-4 bg-white/5 rounded-xl border-l-2 border-white/20">
+                      {selectedSevDef.desc}
+                    </p>
+                  )}
                 </div>
 
-                <button className="sys-btn full" onClick={handleManualSubmit} disabled={loading}
-                    style={{ background: loading ? 'var(--border)' : 'var(--success)', color: 'white', height: 46 }}>
-                    {loading ? <><RefreshCw size={15} className="spin"/> Saving…</> : <><Send size={15}/> Save to Database</>}
+                {isSuperAdmin && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Building2 size={14} className="text-amber-500" />
+                      <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Company</span>
+                      <span className="text-[9px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                    </div>
+                    <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none" value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)}>
+                      <option value="" disabled className="bg-black text-white/50">Select a company…</option>
+                      {companies.map(c => <option key={c.id} value={c.id} className="bg-black text-white">{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div className="mb-8 p-6 bg-white/[0.03] rounded-2xl border border-white/10">
+                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap size={14} /> AI Severity Analysis</div>
+                  <div className={`flex flex-col sm:flex-row gap-3 ${analyzeResult ? 'mb-4' : ''}`}>
+                    <button onClick={() => handleAnalyze('universal')} disabled={analyzing || !summary}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                      <Globe size={14} /> Universal Model
+                    </button>
+                    <button onClick={() => hasOwnModel && handleAnalyze('company')} disabled={analyzing || !summary || !hasOwnModel}
+                      title={!hasOwnModel ? 'Train your company model first via the Retrain button' : undefined}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${hasOwnModel ? 'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-500' : 'bg-transparent border-white/10 text-white/40 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
+                      {hasOwnModel ? <Zap size={14} /> : <Lock size={14} />} Company Model
+                    </button>
+                  </div>
+                  {analyzeResult && (
+                    <div className="animate-in fade-in duration-300 p-5 bg-black/40 rounded-xl border border-white/10 text-sm shadow-inner mt-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <SevBadge sev={analyzeResult.prediction} />
+                        <span className="font-bold text-white">{Math.round((analyzeResult.confidence || 0) * 100)}% confidence</span>
+                        <span className="ml-auto text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                          via {analyzeResult.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}
+                          {analyzeResult.fallback ? ' (fallback)' : ''}
+                        </span>
+                      </div>
+                      {analyzeResult.diagnosis && (
+                        <div className="text-white/60 mb-2">
+                          <span className="font-bold text-white">Diagnosis:</span> {analyzeResult.diagnosis}
+                        </div>
+                      )}
+                      {analyzeResult.team && (
+                        <div className="text-white/60">
+                          <span className="font-bold text-white">Suggested team:</span> {analyzeResult.team}
+                        </div>
+                      )}
+                      {analyzeResult.keywords?.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {analyzeResult.keywords.map(k => (
+                            <span key={k} className="text-[10px] font-bold px-2 py-1 rounded-md bg-white/10 text-white/70 uppercase tracking-widest">{k}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex items-start gap-3 mb-6 cursor-pointer group">
+                  <input type="checkbox" checked={consentGlobal} onChange={e => setConsentGlobal(e.target.checked)} className="mt-1 w-4 h-4 rounded border-white/20 text-blue-500 focus:ring-blue-500/50 bg-black/50 cursor-pointer" />
+                  <span className="text-xs text-white/50 leading-relaxed group-hover:text-white/80 transition-colors">
+                    Allow this report to improve the <strong className="text-white">Universal Model</strong> (shared across all companies)
+                  </span>
+                </label>
+
+                <button onClick={handleManualSubmit} disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}
+                  className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                  {loading ? <><RefreshCw size={16} className="animate-spin" /> Submitting…</> : <><Send size={16} /> Submit bug</>}
                 </button>
               </div>
             ) : (
-              <div className="fade-in" style={{ textAlign: 'center' }}>
-                <div style={{ border: '2px dashed var(--border)', borderRadius: 12, padding: 36, cursor: 'pointer', transition: '0.2s', background: file ? 'rgba(16,185,129,0.04)' : 'var(--bg)', borderColor: file ? 'var(--success)' : 'var(--border)' }}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}>
-                    {file
-                      ? <><CheckCircle size={36} color="var(--success)" style={{ margin: '0 auto 12px' }}/><div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>{file.name}</div><div style={{ fontSize: 12, color: 'var(--text-sec)' }}>{(file.size/1024).toFixed(1)} KB — ready to upload</div></>
-                      : <><FileText size={36} color="var(--text-sec)" style={{ margin: '0 auto 12px' }}/><div style={{ fontSize: 14, color: 'var(--text-sec)', marginBottom: 12 }}>Drag & drop or browse</div><div style={{ fontSize: 12, color: 'var(--text-sec)', opacity: 0.6 }}>CSV or JSON · max 10,000 records</div></>
-                    }
-                    <input type="file" id="bulk" hidden accept=".csv,.json" onChange={e => setFile(e.target.files[0])}/>
-                    {!file && <label htmlFor="bulk" className="sys-btn outline" style={{ marginTop: 16, cursor: 'pointer', display: 'inline-flex', fontSize: 12, padding: '8px 16px' }}>Browse Files</label>}
+              <div className="animate-in fade-in duration-300">
+                <div className={`border-2 border-dashed rounded-[2rem] p-12 text-center mb-8 cursor-pointer transition-all ${file ? 'border-blue-500/50 bg-blue-500/10' : 'border-white/20 hover:border-white/40 hover:bg-white/5'}`}
+                  onClick={() => document.getElementById('file-upload-input').click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}>
+                  <UploadCloud size={40} className="mx-auto mb-4 text-blue-400 opacity-80" />
+                  <p className="text-base font-bold text-white mb-2 truncate max-w-xs mx-auto">{file ? file.name : 'Drop a file or click to browse'}</p>
+                  <p className="text-xs text-white/40 font-medium">JSON or CSV · Max 50 MB</p>
+                  <input id="file-upload-input" type="file" accept=".json,.csv" className="hidden" onChange={e => setFile(e.target.files[0])} />
                 </div>
-                {file && (
-                    <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                        <button className="sys-btn outline" onClick={() => setFile(null)} style={{ flex: 1, height: 42, fontSize: 13 }}>Clear</button>
-                        <button className="sys-btn" onClick={handleBulkUpload} disabled={loading} style={{ flex: 2, height: 42, fontSize: 13, background: 'var(--accent)', color: 'white' }}>
-                            {loading ? 'Processing…' : 'Upload Batch'}
-                        </button>
+                <button onClick={handleBulkUpload} disabled={loading || !file}
+                  className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mb-8">
+                  {loading ? <><RefreshCw size={16} className="animate-spin" /> Importing…</> : <><UploadCloud size={16} /> Import Bugs</>}
+                </button>
+                {batches.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">Previous batches</div>
+                    <div className="flex flex-col gap-3">
+                      {batches.slice(0, 5).map(b => (
+                        <div key={b.id} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+                          <FileText size={18} className="text-blue-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-white truncate">{b.batch_name || `Batch #${b.id}`}</div>
+                            <div className="text-[10px] text-white/50 uppercase tracking-widest mt-1">{b.records_processed?.toLocaleString() || '?'} records</div>
+                          </div>
+                          <button onClick={() => handleDeleteBatch(b.id)} className="p-2.5 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
+                  </div>
                 )}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── COLUMN 2: RECENT ENTRIES (real-time) ── */}
-        <div className="sys-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '650px', minWidth: 0 }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                    <h2 style={{ fontSize: 13, fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', color: 'var(--text-main)' }}>
-                        <Database size={15} color="var(--accent)"/> Recent Entries
-                    </h2>
-                    <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 2 }}>{bugs.length} records shown</div>
-                </div>
-                <button className="icon-btn" onClick={fetchBugs} disabled={refreshingBugs} title="Refresh">
-                    <RefreshCw size={14} className={refreshingBugs ? "spin" : ""} />
+        {/* Right Column: Recent Bugs & Guide */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
+          
+          <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden flex flex-col min-h-[400px] max-h-[500px]">
+            <div className="p-6 border-b border-white/10 bg-black/20 flex justify-between items-center">
+              <h2 className="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-widest">
+                <Database size={14} className="text-blue-400" /> Recent bugs
+              </h2>
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
+                <button onClick={() => fetchBugs()} className="p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+                  <RefreshCw size={14} className={refreshingBugs ? 'animate-spin' : ''} />
                 </button>
+              </div>
             </div>
-            <div className="custom-scrollbar" style={{ overflowY: 'auto', flex: 1, padding: '8px 12px' }}>
-                {bugs.length === 0 && !refreshingBugs && (
-                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-sec)', fontSize: 13 }}>
-                        <Database size={28} style={{ opacity: 0.2, margin: '0 auto 10px', display: 'block' }}/> No entries yet
-                    </div>
-                )}
-                {refreshingBugs && bugs.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 40 }}><RefreshCw size={20} className="spin" color="var(--text-sec)" style={{ margin: '0 auto' }}/></div>
-                )}
-                {bugs.map(b => (
-                    <div key={b.id} style={{
-                        padding: '10px 12px',
-                        borderBottom: '1px solid var(--border)',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        background: b._isNew ? 'rgba(16,185,129,0.06)' : 'transparent',
-                        borderRadius: 8, marginBottom: 4,
-                        transition: 'background 1.5s ease',
-                        animation: b._isNew ? 'fadeIn 0.4s ease-out' : 'none'
-                    }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                <span style={{
-                                    padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
-                                    background: sevBg[b.severity] || 'var(--hover-bg)',
-                                    color: sevColor[b.severity] || 'var(--text-sec)',
-                                    border: `1px solid ${sevColor[b.severity] || 'var(--border)'}40`
-                                }}>{b.severity || 'S3'}</span>
-                                <span style={{ fontSize: 10, color: 'var(--text-sec)', fontFamily: 'var(--font-mono)' }}>#{b.id}</span>
-                                {b._isNew && <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: 0.5 }}>NEW</span>}
-                            </div>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{b.summary}</div>
-                        </div>
-                        <button onClick={() => handleDeleteBug(b.id)} className="icon-btn" style={{ color: 'var(--text-sec)', flexShrink: 0 }}
-                            onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-sec)'}>
-                            <Trash2 size={13}/>
-                        </button>
-                    </div>
-                ))}
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+              {bugs.length === 0 ? (
+                <div className="p-10 text-center text-white/40 text-sm font-medium">No bugs yet — submit your first one.</div>
+              ) : bugs.slice(0, 30).map(b => (
+                <div key={b.id} className={`flex items-center gap-3 p-3 rounded-2xl mx-2 my-1 transition-all border border-transparent ${b._isNew ? 'border-blue-500/30 bg-blue-500/10' : 'hover:border-white/10 hover:bg-white/5'}`}>
+                  <SevBadge sev={b.severity} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-white truncate">{b.summary}</div>
+                    <div className="text-[10px] text-white/50 mt-1 uppercase tracking-widest">{b.component || 'General'} · {b.status || 'NEW'}</div>
+                  </div>
+                  <button onClick={() => handleDeleteBug(b.id)} className="p-1.5 text-white/40 hover:text-red-400 opacity-50 hover:opacity-100 transition-opacity">
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
-        </div>
+          </div>
 
-        {/* ── COLUMN 3: MODEL LEDGER ── */}
-        <div className="sys-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '650px', minWidth: 0 }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                    <h2 style={{ fontSize: 13, fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', color: 'var(--text-main)' }}>
-                        <BarChart3 size={15} color="var(--success)"/> Model Ledger
-                    </h2>
-                    <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 2 }}>{batches.length} training batches</div>
-                </div>
-                <button className="icon-btn" onClick={fetchBatches} disabled={refreshingBatches} title="Refresh">
-                    <RefreshCw size={14} className={refreshingBatches ? "spin" : ""} />
-                </button>
+          <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-white/10 bg-black/20">
+              <h2 className="text-xs font-bold text-white uppercase tracking-widest mb-1.5">Severity reference</h2>
+              <p className="text-xs text-white/50">Quick guide for triage classification.</p>
             </div>
-            <div className="custom-scrollbar" style={{ overflowY: 'auto', flex: 1, padding: '8px 12px' }}>
-                {batches.length === 0 && !refreshingBatches && (
-                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-sec)', fontSize: 13 }}>
-                        <BarChart3 size={28} style={{ opacity: 0.2, margin: '0 auto 10px', display: 'block' }}/> No batches yet
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex flex-col gap-4">
+                {SEVERITY_DEFS.map(def => {
+                   const activeColors = {
+                     S1: 'border-red-500/20 bg-red-500/5 text-red-500',
+                     S2: 'border-amber-500/20 bg-amber-500/5 text-amber-500',
+                     S3: 'border-blue-500/20 bg-blue-500/5 text-blue-500',
+                     S4: 'border-zinc-500/20 bg-zinc-500/5 text-zinc-400'
+                   }[def.code];
+                   return (
+                    <div key={def.code} className={`p-5 rounded-2xl border ${activeColors}`}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="font-bold text-sm font-mono">{def.code}</span>
+                        <span className="font-bold text-sm text-white">{def.label}</span>
+                      </div>
+                      <p className="text-xs text-white/60 mb-4 leading-relaxed">{def.desc}</p>
+                      <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                        <ArrowRight size={12} /> {def.action}
+                      </div>
                     </div>
-                )}
-                {batches.map(b => (
-                    <div key={b.id} style={{
-                        padding: '10px 12px', borderBottom: '1px solid var(--border)',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        borderRadius: 8, marginBottom: 4,
-                    }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.batch_name}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-sec)', display: 'flex', gap: 10 }}>
-                                <span>{b.bug_count} records</span>
-                                {b.upload_time && <span>{new Date(b.upload_time).toLocaleDateString()}</span>}
-                            </div>
-                        </div>
-                        <button onClick={() => handleDeleteBatch(b.id)} className="icon-btn" style={{ color: 'var(--text-sec)', flexShrink: 0 }}
-                            onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-sec)'}>
-                            <Trash2 size={13}/>
-                        </button>
-                    </div>
-                ))}
+                  );
+                })}
+              </div>
             </div>
+          </div>
+
         </div>
 
       </div>
