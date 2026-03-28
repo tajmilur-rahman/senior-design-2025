@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import axios from 'axios';
 import BugAnalysis     from './Pages/BugAnalysis';
@@ -17,7 +17,7 @@ import PendingApproval   from './Pages/PendingApproval';
 import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
-import { LogOut, Crown, Users, ChevronDown, UserCog } from 'lucide-react';
+import { LogOut, Crown, Users, ChevronDown, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle } from 'lucide-react';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -53,17 +53,94 @@ async function fetchUserRowWithRetry(uuid, maxAttempts = 6, delayMs = 600) {
   return null;
 }
 
+// ── Global training status banner ────────────────────────────────────────────
+function TrainingBanner({ job, onDismiss, onViewResults }) {
+  if (!job.key) return null;
+  const isDone  = job.done && !job.error;
+  const isError = job.done && job.error;
+  return (
+    <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-[9998] w-full max-w-md mx-auto px-4`}>
+      <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl text-sm font-semibold transition-all
+        ${isDone  ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300'
+        : isError ? 'bg-red-950/90 border-red-500/30 text-red-300'
+                  : 'bg-[#0d0d1a]/95 border-blue-500/30 text-white'}`}>
+        {/* Icon */}
+        {isDone  ? <CheckCircle size={16} className="text-emerald-400 flex-shrink-0" />
+        : isError ? <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
+                  : <BrainCircuit size={16} className="text-blue-400 flex-shrink-0 animate-pulse" />}
+        {/* Text + bar */}
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-center mb-1">
+            <span className="truncate">
+              {isDone  ? 'Model training complete'
+              : isError ? `Training failed: ${job.error}`
+                        : job.step || 'Training in progress…'}
+            </span>
+            {!job.done && <span className="text-white/50 font-mono text-xs ml-2 flex-shrink-0">{job.pct}%</span>}
+          </div>
+          {!job.done && (
+            <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${job.pct}%` }} />
+            </div>
+          )}
+        </div>
+        {/* Actions */}
+        {isDone && (
+          <button onClick={onViewResults}
+            className="flex-shrink-0 px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-xs font-bold text-emerald-300 transition-all">
+            View Results
+          </button>
+        )}
+        {job.done && (
+          <button onClick={onDismiss} className="flex-shrink-0 text-white/30 hover:text-white transition-colors ml-1">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [tab, setTab]               = useState(initialTab || 'overview');
   const [externalQuery, setExtQ]    = useState('');
   const [submitPrefill, setPrefill] = useState(null);
   const [extFilters,    setExtFilters] = useState(null);
+  const [trainingJob,   setTrainingJob] = useState({ key: null, step: '', pct: 0, done: false, error: null });
+  const pollRef = useRef(null);
 
   const navigate = (targetTab, query = '', prefill = null, filters = null) => {
     setTab(targetTab); setExtQ(query);
     if (prefill) setPrefill(prefill);
     setExtFilters(filters || null);
   };
+
+  // Start global polling when a training key is registered
+  const handleTrainStart = useCallback((key) => {
+    setTrainingJob({ key, step: 'Initializing…', pct: 0, done: false, error: null });
+  }, []);
+
+  useEffect(() => {
+    if (!trainingJob.key || trainingJob.done) return;
+    let elapsed = 0;
+    pollRef.current = setInterval(async () => {
+      elapsed += 1;
+      if (elapsed > 600) {
+        clearInterval(pollRef.current);
+        setTrainingJob(j => ({ ...j, done: true, error: 'Timed out after 10 minutes.' }));
+        return;
+      }
+      try {
+        const s = await axios.get(`/api/admin/model/train/status?stream_key=${trainingJob.key}`);
+        const d = s.data;
+        setTrainingJob(j => ({ ...j, step: d.step || j.step, pct: d.pct || j.pct,
+          done: d.done, error: d.done && d.error ? d.error : null }));
+        if (d.done) clearInterval(pollRef.current);
+      } catch { /* transient — keep polling */ }
+    }, 1000);
+    return () => clearInterval(pollRef.current);
+  }, [trainingJob.key, trainingJob.done]);
 
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin      = isSuperAdmin || user?.role === 'admin';
@@ -151,7 +228,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
       <main className="main-scroll pt-24 relative z-10">
         {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} />}
         {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
-        {tab === 'performance' && isAdmin       && <Performance   user={user} />}
+        {tab === 'performance' && isAdmin       && <Performance   user={user} onTrainStart={handleTrainStart} />}
         {tab === 'analysis'    && <BugAnalysis />}
         {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
         {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
@@ -161,6 +238,12 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
         {tab === 'company'     && isAdmin       && <CompanyProfile  user={user} />}
       </main>
+
+      <TrainingBanner
+        job={trainingJob}
+        onDismiss={() => setTrainingJob({ key: null, step: '', pct: 0, done: false, error: null })}
+        onViewResults={() => { navigate('performance'); setTrainingJob(j => ({ ...j, key: null })); }}
+      />
     </div>
   );
 }

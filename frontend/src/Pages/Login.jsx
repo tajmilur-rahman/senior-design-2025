@@ -116,32 +116,13 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
 
       } else if (mode === 'register') {
         const normalizedEmail = email.trim().toLowerCase();
-        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-          email: normalizedEmail, password,
-          options: {
-            data: {
-              username:     username.trim(),
-              company_name: companyName.trim(),
-              is_admin:     true,
-            },
-          },
-        });
-
-        if (signUpErr) throw signUpErr;
-
-        if (signUpData?.user && signUpData.user.identities?.length === 0) {
-          throw new Error('This email already exists. Please sign in instead.');
-        }
-
-        const authUuid = signUpData?.user?.id;
-        if (!authUuid) throw new Error('Signup succeeded but no UUID returned.');
 
         try {
           await axios.post('/api/register', {
             company_name: companyName.trim(),
             username:     username.trim(),
             email:        normalizedEmail,
-            uuid:         authUuid,
+            uuid:         "",
             role:         'admin',
             invite_code:  '',
             password:     password,
@@ -221,18 +202,11 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
     }
     setIsLoading(true); setMsg('');
     try {
-      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: normalizedEmail, password });
-      if (signUpErr) throw signUpErr;
-      if (signUpData?.user?.identities?.length === 0) {
-        throw new Error('This email already has an account. Try signing in instead.');
-      }
-      const authUuid = signUpData?.user?.id;
-
       await axios.post('/api/invite/request', {
         username:   username.trim(),
         email:      normalizedEmail,
         company_id: parseInt(reqCompanyId, 10),
-        uuid:       authUuid || '',
+        uuid:       "",
       });
       setViewState('request_sent');
     } catch (err) {
@@ -391,31 +365,19 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
                 </div>
 
                 {(mode !== 'reset' || isRecovery) && (
-                  <div className="input-group">
-                    <Lock size={20} className="input-icon" />
-                    <input
-                      className="sys-input login-input"
-                      type="password"
-                      placeholder={isRecovery ? "New Password" : "Password"}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
+                  <PasswordInput
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder={isRecovery ? "New Password" : "Password"}
+                  />
                 )}
 
                 {(mode === 'register' || isRecovery) && (
-                  <div className="input-group fade-in">
-                    <Lock size={20} className="input-icon" />
-                    <input
-                      className="sys-input login-input"
-                      type="password"
-                      placeholder="Confirm Password"
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      required
-                    />
-                  </div>
+                  <PasswordInput
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm Password"
+                  />
                 )}
 
                 {mode === 'register' && (

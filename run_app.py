@@ -5,6 +5,10 @@ import time
 import urllib.request
 import webbrowser
 
+# Use the venv Python if it exists, otherwise fall back to the system Python
+_venv_python = os.path.join(os.path.dirname(__file__), "venv", "Scripts", "python.exe")
+PYTHON = _venv_python if os.path.exists(_venv_python) else sys.executable
+
 def kill_port(port):
     """Finds and kills any process using the specified port on Windows."""
     try:
@@ -29,14 +33,14 @@ def main():
     # ⚡ NEW STEP 1: Execute the ETL Taxonomy Sync Script Automatically
     print("-> Triggering ETL Data Sync...")
     try:
-        subprocess.run([sys.executable, "backend/scripts/sync_taxonomy.py"], check=True)
+        subprocess.run([PYTHON, "backend/scripts/sync_taxonomy.py"], check=True)
     except Exception as e:
         print(f"⚠️ Warning: ETL Sync Failed: {e}. Starting with cached javascript.")
 
     # Step 2: Start FastAPI Backend
     print("-> Starting FastAPI Backend (Port 8000)...")
     backend = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
+        [PYTHON, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
         cwd="backend"
     )
 

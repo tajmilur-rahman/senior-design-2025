@@ -92,14 +92,20 @@ export default function ProfileSettings({ user, onUpdate }) {
           <ShieldCheck size={14} className="text-white/40" /> Account Context
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[
+          {(user?.role === 'super_admin' ? [
+            { label: 'Email',        value: user?.email || '—' },
+            { label: 'Role',         value: ROLE_LABELS[user?.role] || user?.role || '—' },
+            { label: 'Organization', value: 'System', icon: <Building2 size={14} className="mr-2 opacity-50" /> },
+            { label: 'Status',       value: statusCfg.label, color: statusCfg.color },
+            { label: 'Bugs in DB',   value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…', icon: <Bug size={14} className="mr-2 opacity-50" /> },
+          ] : [
             { label: 'Email',    value: user?.email || '—' },
             { label: 'Role',     value: ROLE_LABELS[user?.role] || user?.role || '—' },
             { label: 'Company',  value: profileData?.company_name || (user?.company_id ? `Company ${user.company_id}` : '—'), icon: <Building2 size={14} className="mr-2 opacity-50" /> },
             { label: 'Status',   value: statusCfg.label, color: statusCfg.color },
             { label: 'Bugs in DB', value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…', icon: <Bug size={14} className="mr-2 opacity-50" /> },
             { label: 'Onboarding', value: profileData?.onboarding_completed ? 'Completed ✓' : 'Setup Pending', color: profileData?.onboarding_completed ? 'text-emerald-400' : 'text-amber-500' },
-          ].map(f => (
+          ]).map(f => (
             <div key={f.label} className="p-4 rounded-2xl bg-white/5 border border-white/5">
               <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">{f.label}</div>
               <div className={`text-sm font-bold flex items-center ${f.color || 'text-white'}`}>{f.icon}{f.value}</div>

@@ -125,55 +125,24 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
 
 
 // ── Training modal with SSE progress ───────────────────────────────────────────
-function TrainModal({ onClose, onDone, isSuperAdmin }) {
-    const [phase, setPhase]       = useState('idle'); // idle | training | done | error
-    const [step, setStep]         = useState('');
-    const [pct, setPct]           = useState(0);
-    const [result, setResult]     = useState(null);
+function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
+    const [phase, setPhase]       = useState('idle'); // idle | background | uploading | done | error
     const [errMsg, setErrMsg]     = useState('');
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadName, setUploadName] = useState('');
     const [uploading, setUploading]   = useState(false);
-    const pollRef = useRef(null);
 
     const startTrain = async () => {
-        setPhase('training'); setStep('Initializing…'); setPct(0);
-        const token = localStorage.getItem('token');
+        setPhase('background');
         try {
-            const res = await axios.post('/api/admin/model/train/start', {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await axios.post('/api/admin/model/train/start');
             if (!res.data.success && res.data.message && !res.data.stream_url) {
                 setErrMsg(res.data.message); setPhase('error'); return;
             }
             const key = res.data.stream_key || res.data.key || 'global';
-
-            // Poll the status endpoint every second instead of an SSE connection.
-            // SSE over nginx/Docker is unreliable -- polling is simple and bulletproof.
-            let elapsed = 0;
-            pollRef.current = setInterval(async () => {
-                elapsed += 1;
-                if (elapsed > 600) {
-                    clearInterval(pollRef.current); pollRef.current = null;
-                    setErrMsg('Training timed out after 10 minutes.'); setPhase('error');
-                    return;
-                }
-                try {
-                    const s = await axios.get(
-                        `/api/admin/model/train/status?stream_key=${key}`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
-                    const d = s.data;
-                    setStep(d.step || ''); setPct(d.pct || 0);
-                    if (d.done) {
-                        clearInterval(pollRef.current); pollRef.current = null;
-                        if (d.error) { setErrMsg(d.error); setPhase('error'); }
-                        else { setResult(d); setPhase('done'); }
-                    }
-                } catch (_) {
-                    // transient network hiccup -- keep polling
-                }
-            }, 1000);
+            // Hand off to the global Dashboard banner — close this modal
+            if (onTrainStart) onTrainStart(key);
+            onClose();
         } catch (e) {
             setErrMsg(e.response?.data?.detail || e.message); setPhase('error');
         }
@@ -182,21 +151,19 @@ function TrainModal({ onClose, onDone, isSuperAdmin }) {
     const handleBulkUpload = async () => {
         if (!uploadFile) return;
         setUploading(true);
-        const token = localStorage.getItem('token');
         const form = new FormData();
         form.append('file', uploadFile);
         form.append('batch_name', uploadName || uploadFile.name);
         try {
-            const res = await axios.post('/api/upload_and_train', form, {
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
-            });
-            setResult(res.data.retrain); setPhase('done');
+            const res = await axios.post('/api/upload_and_train', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const key = res.data?.key;
+            if (key && onTrainStart) onTrainStart(key);
+            onDone();
+            onClose();
         } catch (e) {
             setErrMsg(e.response?.data?.detail || 'Upload failed.'); setPhase('error');
         } finally { setUploading(false); }
     };
-
-    useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -266,40 +233,17 @@ function TrainModal({ onClose, onDone, isSuperAdmin }) {
                     </div>
                 )}
 
-                {phase === 'training' && (
-                    <div className="flex flex-col items-center gap-6 py-4">
-                        <div className="w-16 h-16 rounded-3xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center relative">
-                            <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-blue-500/20 to-transparent animate-pulse" />
-                            <RefreshCw size={24} className="animate-spin text-blue-400 relative z-10" />
+                {phase === 'background' && (
+                    <div className="flex flex-col items-center gap-3 py-6 text-center">
+                        <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                            <BrainCircuit size={22} className="text-blue-400 animate-pulse" />
                         </div>
-                        <div className="w-full">
-                            <div className="flex justify-between text-xs text-white/50 mb-2">
-                                <span className="font-medium">{step || 'Working…'}</span>
-                                <span className="font-bold text-white">{pct}%</span>
-                            </div>
-                            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
-                                    style={{ width: `${pct}%` }} />
-                            </div>
+                        <div className="text-white font-bold">Training started</div>
+                        <div className="text-white/40 text-xs max-w-xs leading-relaxed">
+                            Running in the background — watch the status bar at the bottom of the screen. You can freely navigate between tabs.
                         </div>
-                        <div className="text-white/30 text-xs text-center">Training in progress — this may take a minute</div>
-                    </div>
-                )}
-
-                {phase === 'done' && (
-                    <div className="flex flex-col items-center gap-4 py-4 text-center">
-                        <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                            <CheckCircle size={28} className="text-emerald-400" />
-                        </div>
-                        <div className="text-white font-bold text-lg">Model Trained!</div>
-                        {result?.accuracy && (
-                            <div className="text-white/60 text-sm">Accuracy: <strong className="text-emerald-400">{(result.accuracy * 100).toFixed(1)}%</strong></div>
-                        )}
-                        {result?.records_used && (
-                            <div className="text-white/40 text-xs">{result.records_used.toLocaleString()} records used</div>
-                        )}
-                        <button onClick={() => { onDone(); onClose(); }} className="mt-2 px-8 py-2.5 bg-white text-black font-bold rounded-xl text-sm hover:bg-zinc-200 transition-all">
-                            View Results
+                        <button onClick={onClose} className="mt-2 px-6 py-2 bg-white/5 border border-white/10 text-white/60 font-bold rounded-xl text-sm hover:bg-white/10 transition-all">
+                            Got it
                         </button>
                     </div>
                 )}
@@ -326,7 +270,7 @@ function TrainModal({ onClose, onDone, isSuperAdmin }) {
     , document.body);
 }
 
-export default function Performance({ user }) {
+export default function Performance({ user, onTrainStart }) {
   const [modelData, setModelData] = useState({
       baseline: null, current: null, previous: null,
       confusion_matrix: null, feedback_stats: null,
@@ -484,7 +428,7 @@ export default function Performance({ user }) {
   // ── No model trained empty state ─────────────────────────────────────────────
   if (meta.model_status === 'not_trained') return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
-      {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} />}
+      {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} onTrainStart={onTrainStart} />}
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
         <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
@@ -512,7 +456,7 @@ export default function Performance({ user }) {
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
-      {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} />}
+      {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} onTrainStart={onTrainStart} />}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 relative">
@@ -721,7 +665,11 @@ export default function Performance({ user }) {
               <Crosshair size={14} className="text-white/40" /> Confusion Matrix
             </div>
             <span className="text-[10px] font-bold bg-white/5 border border-white/10 text-white/50 px-2.5 py-1 rounded-md tracking-widest uppercase">
-              {feedbackStats.total_corrections > 0 ? `${feedbackStats.total_corrections} real corrections` : 'Submit corrections to populate'}
+              {modelData.confusion_matrix
+                ? `${MAX_MATRIX_VAL.toLocaleString()} peak cell — training data`
+                : feedbackStats.total_corrections > 0
+                  ? `${feedbackStats.total_corrections} real corrections`
+                  : 'Train model to populate'}
             </span>
           </div>
           <div className="flex items-center mt-4">
@@ -777,28 +725,6 @@ export default function Performance({ user }) {
         </div>
       </div>
 
-      {feedbackStats.weak_components.length > 0 && (
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 backdrop-blur-md shadow-2xl relative overflow-hidden mt-6">
-          <div className="flex justify-between items-center mb-8">
-            <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <Target size={14} className="text-white/40" /> Model Weak Spots
-            </div>
-            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{feedbackStats.total_corrections} engineer corrections</span>
-          </div>
-          <div className="h-[240px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={feedbackStats.weak_components} layout="vertical" margin={{ left: 10, right: 40, top: 4, bottom: 4 }}>
-              <XAxis type="number" hide />
-              <YAxis dataKey="component" type="category" width={140} tick={{ fontSize: 12, fontWeight: 600, fill: 'rgba(255,255,255,0.6)' }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', color: '#fff', fontSize: '13px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', padding: '10px 14px' }}
-                itemStyle={{ color: '#fff', fontWeight: 700 }} cursor={{ fill: 'rgba(255,255,255,0.03)' }} formatter={val => [`${val} corrections`, '']} />
-              <Bar dataKey="corrections" fill="#f59e0b" radius={[0,4,4,0]} barSize={18} />
-            </BarChart>
-          </ResponsiveContainer>
-          </div>
-          <div className="text-xs text-white/40 mt-4 text-center">Components with the most engineer corrections — consider these retraining priority areas.</div>
-        </div>
-      )}
     </div>
   );
 }

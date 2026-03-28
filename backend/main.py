@@ -8,11 +8,12 @@ import threading
 import time as _time
 import uuid as uuid_lib
 import requests as http_requests
-from datetime import datetime
+from datetime import datetime, timezone
 from database import supabase, SUPABASE_URL, SUPABASE_KEY
 import ml_logic
 from config import company_model_exists, ART_RF, get_artifact_paths
 import db_provision
+
 
 _training_progress: dict = {}
 
@@ -60,18 +61,45 @@ def validate_company_name(name: str) -> str:
     return name
 
 
+_FIREFOX_NAMES = {"firefox", "mozilla", "mozilla firefox"}
+
 def get_company_table(company_id) -> str:
     if company_id is None:
         return "bugs"
     try:
-        res = supabase.table("companies").select("data_table") \
+        res = supabase.table("companies").select("data_table, name") \
                       .eq("id", company_id).single().execute()
-        return res.data.get("data_table") or "bugs" if res.data else "bugs"
+        if res.data:
+            dt = res.data.get("data_table")
+            if dt:
+                return dt
+            # data_table not set — derive from company name as fallback
+            name = (res.data.get("name") or "").strip().lower()
+            if name in _FIREFOX_NAMES:
+                return "firefox_table"
+        return "bugs"
     except Exception:
         return "bugs"
 
 def is_shared_table(table: str) -> bool:
     return table == "firefox_table" or (table.startswith("company_") and table.endswith("_bugs"))
+
+
+def _all_active_data_tables() -> list:
+    """Return every unique company data table, always including 'bugs', never 'firefox_table'."""
+    try:
+        res = supabase.table("companies").select("data_table").execute()
+        seen = {"firefox_table"}
+        tables = ["bugs"]
+        seen.add("bugs")
+        for co in (res.data or []):
+            dt = co.get("data_table")
+            if dt and dt not in seen:
+                seen.add(dt)
+                tables.append(dt)
+        return tables
+    except Exception:
+        return ["bugs"]
 
 
 def _gen_invite_code() -> str:
@@ -148,7 +176,9 @@ def register(req: RegisterRequest):
         supabase.table("users").delete().eq(field, value).execute()
         return False
 
-    for field, value in [("uuid", req.uuid), ("email", req.email)]:
+    db_uuid = req.uuid if req.uuid else str(uuid_lib.uuid4())
+
+    for field, value in [("uuid", db_uuid), ("email", req.email)]:
         result = _check_existing(field, value)
         if result:
             return result
@@ -185,7 +215,7 @@ def register(req: RegisterRequest):
 
         pw_hash = auth.get_password_hash(req.password) if req.password else ""
         user_res = supabase.table("users").insert({
-            "uuid":                 req.uuid,
+            "uuid":                 db_uuid,
             "email":                req.email,
             "username":             req.username,
             "password_hash":        pw_hash,
@@ -226,7 +256,7 @@ def register(req: RegisterRequest):
 
     pw_hash = auth.get_password_hash(req.password) if req.password else ""
     user_res = supabase.table("users").insert({
-        "uuid":                 req.uuid,
+        "uuid":                 db_uuid,
         "email":                req.email,
         "username":             req.username,
         "password_hash":        pw_hash,
@@ -292,19 +322,32 @@ def seed_company_data(
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    data_table = co_res.data.get("data_table") or "bugs"
     company_name = co_res.data.get("name", "")
+    data_table   = co_res.data.get("data_table") or ""
 
-    if data_table == "bugs":
+    # Firefox/Mozilla companies always use the shared firefox_table baseline.
+    # Ensure the company row points at it so get_company_table is consistent.
+    if db_provision.is_firefox_company(company_name) or data_table == "firefox_table":
+        if data_table != "firefox_table":
+            supabase.table("companies").update({"data_table": "firefox_table"}).eq("id", cid).execute()
+        supabase.table("users").update({"onboarding_completed": True}) \
+            .eq("uuid", current_user.get("uuid")).execute()
         try:
-            data_table = db_provision.create_company_table(cid)
-            supabase.table("companies").update({"data_table": data_table}).eq("id", cid).execute()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Could not create company table: {e}")
+            count_res = supabase.table("firefox_table").select("*", count="exact").limit(1).execute()
+            bug_count = count_res.count or 0
+        except Exception:
+            bug_count = 0
+        return {
+            "message": f"Firefox baseline dataset ready — {bug_count:,} bugs available in your dashboard.",
+            "table":   "firefox_table",
+            "count":   bug_count,
+            "already_seeded": True,
+        }
 
+    # Regular company — seed into the shared bugs table (no new table created)
     try:
-        existing_count_res = supabase.table(data_table).select("*", count="exact").limit(1).execute()
-        existing_count = existing_count_res.count or 0
+        existing_count = supabase.table("bugs").select("*", count="exact") \
+            .eq("company_id", cid).limit(1).execute().count or 0
     except Exception:
         existing_count = 0
 
@@ -312,23 +355,39 @@ def seed_company_data(
         supabase.table("users").update({"onboarding_completed": True}) \
             .eq("uuid", current_user.get("uuid")).execute()
         return {
-            "message": f"Your database already contains {existing_count:,} bugs — seeding skipped to prevent duplicates.",
-            "table":   data_table,
+            "message": f"Your database already contains {existing_count:,} bugs — seeding skipped.",
+            "table":   "bugs",
             "count":   existing_count,
             "already_seeded": True,
         }
 
-    try:
-        inserted = db_provision.seed_company_table(cid, sample_size=sample_size)
-        supabase.table("users").update({"onboarding_completed": True}) \
-            .eq("uuid", current_user.get("uuid")).execute()
-        return {
-            "message": f"Seeded {inserted:,} sample bugs into your database.",
-            "table": data_table,
-            "count": inserted,
+    # Pull a sample from the firefox baseline and tag it with this company's id
+    sample = _fetch_paginated("firefox_table", "summary, component, severity, status",
+                              max_rows=sample_size)
+    rows = [
+        {
+            "summary":   r.get("summary", ""),
+            "component": r.get("component", "General"),
+            "severity":  r.get("severity", "S3"),
+            "status":    r.get("status",   "CONFIRMED"),
+            "company_id": cid,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Seeding failed: {e}")
+        for r in sample if r.get("summary")
+    ]
+
+    inserted = 0
+    batch = 500
+    for i in range(0, len(rows), batch):
+        supabase.table("bugs").insert(rows[i:i + batch]).execute()
+        inserted += len(rows[i:i + batch])
+
+    supabase.table("users").update({"onboarding_completed": True}) \
+        .eq("uuid", current_user.get("uuid")).execute()
+    return {
+        "message": f"Seeded {inserted:,} sample bugs into your database.",
+        "table":   "bugs",
+        "count":   inserted,
+    }
 
 
 class UpdateMeRequest(BaseModel):
@@ -381,7 +440,13 @@ def get_my_profile(current_user: dict = Depends(auth.get_current_user)):
             has_own_model = co_res.data.get("has_own_model", False)
 
     bug_count = 0
-    if cid:
+    if role == "super_admin":
+        for tbl in _all_active_data_tables():
+            try:
+                bug_count += supabase.table(tbl).select("*", count="exact").limit(1).execute().count or 0
+            except Exception:
+                pass
+    elif cid:
         try:
             table = get_company_table(cid)
             q = supabase.table(table).select("*", count="exact").limit(1)
@@ -435,25 +500,40 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
         }
 
     is_super = (role == "super_admin")
-    table = get_company_table(cid) if cid is not None else "bugs"
 
-    q_total = supabase.table(table).select("*", count="exact").limit(1)
-    if not is_super and not is_shared_table(table):
-        q_total = q_total.eq("company_id", cid)
-    total_count = (q_total.execute().count or 0)
+    if is_super:
+        # Aggregate across every company table so numbers match reality after nuclear reset
+        total_count    = 0
+        critical_count = 0
+        all_bugs       = []
+        for tbl in _all_active_data_tables():
+            try:
+                total_count    += supabase.table(tbl).select("*", count="exact").limit(1).execute().count or 0
+                critical_count += supabase.table(tbl).select("*", count="exact").eq("severity", "S1").limit(1).execute().count or 0
+                recent = supabase.table(tbl).select("*").order("bug_id", desc=True).limit(20).execute().data or []
+                all_bugs.extend(recent)
+            except Exception as e:
+                print(f"[overview] {tbl}: {e}")
+        all_bugs.sort(key=lambda b: b.get("bug_id") or 0, reverse=True)
+    else:
+        table = get_company_table(cid)
+        q_total = supabase.table(table).select("*", count="exact").limit(1)
+        if not is_shared_table(table):
+            q_total = q_total.eq("company_id", cid)
+        total_count = q_total.execute().count or 0
 
-    q_crit = supabase.table(table).select("*", count="exact").eq("severity", "S1").limit(1)
-    if not is_super and not is_shared_table(table):
-        q_crit = q_crit.eq("company_id", cid)
-    critical_count = (q_crit.execute().count or 0)
+        q_crit = supabase.table(table).select("*", count="exact").eq("severity", "S1").limit(1)
+        if not is_shared_table(table):
+            q_crit = q_crit.eq("company_id", cid)
+        critical_count = q_crit.execute().count or 0
 
-    q_recent = supabase.table(table).select("*").order("bug_id", desc=True).limit(1000)
-    if not is_super and not is_shared_table(table):
-        q_recent = q_recent.eq("company_id", cid)
-    bugs = q_recent.execute().data or []
+        q_recent = supabase.table(table).select("*").order("bug_id", desc=True).limit(1000)
+        if not is_shared_table(table):
+            q_recent = q_recent.eq("company_id", cid)
+        all_bugs = q_recent.execute().data or []
 
     components: dict = {}
-    for b in bugs:
+    for b in all_bugs:
         comp = b.get("component") or "General"
         components[comp] = components.get(comp, 0) + 1
     top_5 = sorted(
@@ -464,7 +544,7 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
     recent_feed = [
         {"id": b.get("bug_id") or b.get("id"), "summary": b.get("summary"),
          "severity": b.get("severity"), "status": b.get("status")}
-        for b in bugs[:5]
+        for b in all_bugs[:5]
     ]
 
     return {
@@ -472,6 +552,18 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
         "recent": recent_feed,
         "charts": {"components": top_5},
     }
+
+
+def _apply_bug_filters(query, search, sev, status, comp, db_sort, sort_dir):
+    if search.strip():
+        if search.strip().isdigit():
+            query = query.eq("bug_id", int(search.strip()))
+        else:
+            query = query.ilike("summary", f"%{search.strip()}%")
+    if sev:    query = query.ilike("severity",  f"%{sev}%")
+    if status: query = query.ilike("status",    f"%{status}%")
+    if comp:   query = query.ilike("component", f"%{comp}%")
+    return query.order(db_sort, desc=(sort_dir.lower() == "desc"))
 
 
 @app.get("/api/hub/explorer")
@@ -488,27 +580,57 @@ def get_bugs(
     if cid is None and true_role != "super_admin":
         return {"total": 0, "role_context": true_role, "bugs": [], "onboarding_required": True}
 
-    table = get_company_table(cid)
     db_sort = "bug_id" if sort_key == "id" else sort_key
-    query = supabase.table(table).select("*", count="exact")
+    offset  = (page - 1) * limit
 
     if true_role == "super_admin":
-        pass
-    elif not is_shared_table(table):
+        # Aggregate across every company table so the explorer reflects real data
+        total     = 0
+        all_rows  = []
+        fetch_n   = offset + limit  # need at least this many from each table to slice correctly
+
+        for tbl in _all_active_data_tables():
+            try:
+                cnt_q = _apply_bug_filters(
+                    supabase.table(tbl).select("*", count="exact"),
+                    search, sev, status, comp, db_sort, sort_dir
+                )
+                total += cnt_q.limit(1).execute().count or 0
+
+                data_q = _apply_bug_filters(
+                    supabase.table(tbl).select("*"),
+                    search, sev, status, comp, db_sort, sort_dir
+                )
+                all_rows.extend(data_q.limit(fetch_n).execute().data or [])
+            except Exception as e:
+                print(f"[explorer superadmin] {tbl}: {e}")
+
+        rev = sort_dir.lower() == "desc"
+        all_rows.sort(key=lambda r: r.get(db_sort) or 0, reverse=rev)
+        page_rows = all_rows[offset:offset + limit]
+
+        return {
+            "total": total,
+            "role_context": "super_admin",
+            "bugs": [
+                {
+                    "id":        r.get("bug_id") or r.get("id"),
+                    "summary":   r.get("summary"),
+                    "component": r.get("component"),
+                    "severity":  r.get("severity"),
+                    "status":    r.get("status"),
+                    "company":   r.get("company_id"),
+                }
+                for r in page_rows
+            ],
+        }
+
+    table = get_company_table(cid)
+    query = supabase.table(table).select("*", count="exact")
+    if not is_shared_table(table):
         query = query.eq("company_id", cid)
-
-    if search.strip():
-        if search.strip().isdigit():
-            query = query.eq("bug_id", int(search.strip()))
-        else:
-            query = query.ilike("summary", f"%{search.strip()}%")
-
-    if sev:    query = query.ilike("severity", f"%{sev}%")
-    if status: query = query.ilike("status",   f"%{status}%")
-    if comp:   query = query.ilike("component",f"%{comp}%")
-
-    offset = (page - 1) * limit
-    res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).range(offset, offset + limit - 1).execute()
+    query = _apply_bug_filters(query, search, sev, status, comp, db_sort, sort_dir)
+    res   = query.range(offset, offset + limit - 1).execute()
 
     return {
         "total": res.count or 0,
@@ -520,7 +642,7 @@ def get_bugs(
                 "component": r.get("component"),
                 "severity":  r.get("severity"),
                 "status":    r.get("status"),
-                "company":   r.get("company_id") if true_role == "super_admin" else None
+                "company":   None,
             }
             for r in (res.data or [])
         ],
@@ -767,16 +889,17 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
                 with open(company_met_path) as f:
                     saved = json.load(f)
                 current_metrics.update({
-                    "accuracy":      round(saved.get("accuracy",  0.0), 4),
-                    "f1_score":      round(saved.get("f1_score",  saved.get("accuracy", 0.0)), 4),
-                    "precision":     round(saved.get("precision", saved.get("accuracy", 0.0)), 4),
-                    "recall":        round(saved.get("recall",    saved.get("accuracy", 0.0)), 4),
-                    "last_trained":  saved.get("last_trained", last_trained_str),
-                    "total_trees":   saved.get("total_trees", 100),
-                    "status":        "Active Build",
-                    "model_source":  "company",
-                    "model_status":  "ready",
-                    "dataset_label": saved.get("dataset_label", "Company data"),
+                    "accuracy":        round(saved.get("accuracy",  0.0), 4),
+                    "f1_score":        round(saved.get("f1_score",  saved.get("accuracy", 0.0)), 4),
+                    "precision":       round(saved.get("precision", saved.get("accuracy", 0.0)), 4),
+                    "recall":          round(saved.get("recall",    saved.get("accuracy", 0.0)), 4),
+                    "last_trained":    saved.get("last_trained", last_trained_str),
+                    "total_trees":     saved.get("total_trees", 100),
+                    "status":          "Active Build",
+                    "model_source":    "company",
+                    "model_status":    "ready",
+                    "dataset_label":   saved.get("dataset_label", "Company data"),
+                    "confusion_matrix": saved.get("confusion_matrix"),
                 })
             except Exception:
                 pass
@@ -791,16 +914,17 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
                 with open(met_path) as f:
                     saved = json.load(f)
                 current_metrics.update({
-                    "accuracy":      round(saved.get("accuracy",  0.863), 4),
-                    "f1_score":      round(saved.get("f1_score",  0.858), 4),
-                    "precision":     round(saved.get("precision", 0.860), 4),
-                    "recall":        round(saved.get("recall",    0.855), 4),
-                    "last_trained":  saved.get("last_trained", last_trained_str),
-                    "total_trees":   saved.get("total_trees", 200),
-                    "status":        "Active Build",
-                    "model_source":  "global",
-                    "model_status":  "ready",
-                    "dataset_label": saved.get("dataset_label", "Global training data"),
+                    "accuracy":        round(saved.get("accuracy",  0.863), 4),
+                    "f1_score":        round(saved.get("f1_score",  0.858), 4),
+                    "precision":       round(saved.get("precision", 0.860), 4),
+                    "recall":          round(saved.get("recall",    0.855), 4),
+                    "last_trained":    saved.get("last_trained", last_trained_str),
+                    "total_trees":     saved.get("total_trees", 200),
+                    "status":          "Active Build",
+                    "model_source":    "global",
+                    "model_status":    "ready",
+                    "dataset_label":   saved.get("dataset_label", "Global training data"),
+                    "confusion_matrix": saved.get("confusion_matrix"),
                 })
         except Exception:
             pass
@@ -842,15 +966,20 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
     corrections = [f for f in feedback_list if f.get("is_correction")]
     correction_rate = len(corrections) / total_fb if total_fb > 0 else 0.0
 
-    labels = ["S1", "S2", "S3", "S4"]
-    matrix = {a: {p: 0 for p in labels} for a in labels}
-    for f in corrections:
-        actual = f.get("actual_severity", "S3")
-        pred   = f.get("predicted_severity", "S3")
-        if actual in matrix and pred in matrix[actual]:
-            matrix[actual][pred] += 1
-
-    confusion_matrix = [{"actual": a, **matrix[a]} for a in labels]
+    # Prefer the confusion matrix saved at training time (from full dataset).
+    # Fall back to the live feedback-corrections matrix when no trained model exists.
+    saved_cm = current_metrics.get("confusion_matrix")
+    if saved_cm:
+        confusion_matrix = saved_cm
+    else:
+        labels = ["S1", "S2", "S3", "S4"]
+        matrix = {a: {p: 0 for p in labels} for a in labels}
+        for f in corrections:
+            actual = f.get("actual_severity", "S3")
+            pred   = f.get("predicted_severity", "S3")
+            if actual in matrix and pred in matrix[actual]:
+                matrix[actual][pred] += 1
+        confusion_matrix = [{"actual": a, **matrix[a]} for a in labels]
 
     comp_errors: dict = {}
     comp_total:  dict = {}
@@ -911,6 +1040,10 @@ async def bulk_submit(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
 
+    # Capture timestamp BEFORE inserting bugs so upload_time < all bug created_at values.
+    # This makes the gte("created_at", upload_time) delete in _delete_bulk_imported_bugs reliable.
+    pre_insert_ts = datetime.now(timezone.utc).isoformat()
+
     rows = []
     for _, row in df.iterrows():
         bug_row = {
@@ -918,8 +1051,9 @@ async def bulk_submit(
             "component": str(row.get("component", "General")),
             "severity":  str(row.get("severity", "S3")).upper(),
             "status":    str(row.get("status", "PROCESSED")),
-            "company_id": cid,
         }
+        if not is_shared_table(table):
+            bug_row["company_id"] = cid
         rows.append(bug_row)
 
     inserted_ids = []
@@ -930,26 +1064,19 @@ async def bulk_submit(
             if rid is not None:
                 inserted_ids.append(int(rid))
 
-    min_bug_id = min(inserted_ids) if inserted_ids else None
-    max_bug_id = max(inserted_ids) if inserted_ids else None
-
     batch_payload = {
-        "batch_name": batch_name or file.filename,
-        "company_id": cid,
-        "bug_count":  len(rows),
-        "status":     "imported",
+        "batch_name":  batch_name or file.filename,
+        "company_id":  cid,
+        "bug_count":   len(rows),
+        "status":      "imported",
+        "upload_time": pre_insert_ts,
     }
-    if min_bug_id is not None:
-        batch_payload["min_bug_id"] = min_bug_id
-        batch_payload["max_bug_id"] = max_bug_id
 
     try:
         supabase.table("training_batches").insert(batch_payload).execute()
     except Exception:
-        # min_bug_id/max_bug_id columns may not exist in older schemas — fall back
         supabase.table("training_batches").insert({
-            k: v for k, v in batch_payload.items()
-            if k not in ("min_bug_id", "max_bug_id")
+            k: v for k, v in batch_payload.items() if k != "upload_time"
         }).execute()
 
     return {"message": "Bugs imported successfully", "records_processed": len(rows)}
@@ -972,18 +1099,31 @@ def get_batches(current_user: dict = Depends(auth.get_current_user)):
 def _delete_bulk_imported_bugs(cid, since_ts: str) -> int:
     """Delete bulk-imported bugs for a company inserted at or after `since_ts`.
 
-    Bulk imports always land in the `bugs` table with company_id set (see
-    bulk_submit), so this is a simple company_id + created_at filter.
+    Deletes from both the shared `bugs` table (company_id + created_at filter)
+    and the company's dedicated table if it exists (created_at filter only,
+    since company_{id}_bugs is already scoped by table name).
     """
+    total = 0
     try:
         res = supabase.table("bugs").delete() \
                       .eq("company_id", cid) \
                       .gte("created_at", since_ts) \
                       .execute()
-        return len(res.data or [])
+        total += len(res.data or [])
     except Exception as e:
-        print(f"[delete_bulk_imported_bugs] {e}")
-        return 0
+        print(f"[delete_bulk_imported_bugs] bugs table: {e}")
+
+    company_table = get_company_table(cid)
+    if is_shared_table(company_table):
+        try:
+            res = supabase.table(company_table).delete() \
+                          .gte("created_at", since_ts) \
+                          .execute()
+            total += len(res.data or [])
+        except Exception as e:
+            print(f"[delete_bulk_imported_bugs] {company_table}: {e}")
+
+    return total
 
 
 @app.delete("/api/batches")
@@ -1004,9 +1144,8 @@ def delete_all_batches(current_user: dict = Depends(auth.get_current_user)):
                           .eq("company_id", cid).order("upload_time").execute()
     batches = batches_res.data or []
 
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
     bugs_deleted = 0
-    table = get_company_table(cid)
     if batches:
         earliest = batches[0].get("upload_time")
     else:
@@ -1034,7 +1173,6 @@ def delete_batch(batch_id: int, current_user: dict = Depends(auth.get_current_us
     if batch:
         upload_time = batch.get("upload_time")
         if upload_time:
-            table = get_company_table(cid)
             bugs_deleted = _delete_bulk_imported_bugs(cid, upload_time)
 
     supabase.table("training_batches").delete() \
@@ -1094,6 +1232,33 @@ def reset_company_table(current_user: dict = Depends(auth.require_admin)):
     return {"success": True, "message": msg, "bugs_deleted": bugs_deleted, "reseeded": reseeded}
 
 
+def _train_upload_in_background(key: str, cid, table: str):
+    """Background thread: fetch all company bugs (incl. newly inserted) then train."""
+    def cb(step: str, pct: int):
+        _training_progress[key] = {"step": step, "pct": pct, "done": False, "error": None}
+    try:
+        cb("Loading company dataset", 5)
+        raw = _fetch_paginated(
+            table, "summary, severity",
+            eq_filters=None if is_shared_table(table) else [("company_id", cid)],
+        )
+        records = [
+            {"summary": r["summary"], "severity": r.get("severity", "S3")}
+            for r in raw if r.get("summary") and r.get("severity")
+        ]
+        if not records:
+            _training_progress[key] = {"step": "Error", "pct": 0, "done": True,
+                                        "error": "No labeled bugs found.", "result": None}
+            return
+        print(f"[upload_train/bg] Training on {len(records):,} company bugs (key={key})")
+        result = ml_logic.full_train_from_dataset(records, company_id=cid, progress_cb=cb)
+        cb("Saving model", 95)
+        _time.sleep(0.2)
+        _training_progress[key] = {"step": "Done", "pct": 100, "done": True, "error": None, "result": result}
+    except Exception as e:
+        _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": str(e), "result": None}
+
+
 @app.post("/api/upload_and_train")
 async def upload_and_train(
     file: UploadFile = File(...),
@@ -1102,6 +1267,9 @@ async def upload_and_train(
 ):
     cid = current_user.get("company_id")
     table = get_company_table(cid)
+    # firefox_table has a non-serial PK — never write into it directly
+    if table == "firefox_table":
+        table = "bugs"
     content = await file.read()
 
     try:
@@ -1135,27 +1303,16 @@ async def upload_and_train(
         "status":     "complete",
     }).execute()
 
-    retrain_result = None
-    train_records = [
-        {"summary": r["summary"], "severity": r["severity"]}
-        for r in rows if r.get("summary") and r.get("severity")
-    ]
-    if train_records:
-        try:
-            label = batch_name or file.filename
-            retrain_result = ml_logic.full_train_from_dataset(
-                train_records, company_id=cid, dataset_label=label
-            )
-            print(f"[upload_and_train] Trained on {len(train_records)} rows — "
-                  f"accuracy: {retrain_result.get('accuracy')}")
-        except Exception as rt_err:
-            print(f"[upload_and_train] Train warning: {rt_err}")
-            retrain_result = {"success": False, "error": str(rt_err)}
+    # Kick off background training — returns immediately so the UI doesn't hang
+    key = f"upload_{cid}_{int(_time.time())}"
+    _training_progress[key] = {"step": "Initializing", "pct": 0, "done": False, "error": None}
+    threading.Thread(target=_train_upload_in_background, args=(key, cid, table), daemon=True).start()
 
     return {
-        "message":          "Upload successful",
+        "message":           "Upload successful — training started in background.",
         "records_processed": records,
-        "retrain": retrain_result or {"success": False, "message": "No labelled rows to retrain on."},
+        "key":               key,
+        "stream_url":        f"/api/admin/model/train/stream?stream_key={key}",
     }
 
 
@@ -1168,15 +1325,26 @@ def get_component_counts(current_user: dict = Depends(auth.get_current_user)):
         cid = None
 
     is_super = current_user.get("role") == "super_admin"
-    table = get_company_table(cid)
-    query = supabase.table(table).select("component").limit(2000)
-    if not is_super and cid is not None and not is_shared_table(table):
-        query = query.eq("company_id", cid)
-    res = query.execute()
+
     counts: dict = {}
-    for r in (res.data or []):
-        comp = (r.get("component") or "general").strip().lower()
-        counts[comp] = counts.get(comp, 0) + 1
+    if is_super:
+        for tbl in _all_active_data_tables():
+            try:
+                res = supabase.table(tbl).select("component").limit(5000).execute()
+                for r in (res.data or []):
+                    comp = (r.get("component") or "general").strip().lower()
+                    counts[comp] = counts.get(comp, 0) + 1
+            except Exception as e:
+                print(f"[component_counts] {tbl}: {e}")
+    else:
+        table = get_company_table(cid)
+        query = supabase.table(table).select("component").limit(2000)
+        if cid is not None and not is_shared_table(table):
+            query = query.eq("company_id", cid)
+        res = query.execute()
+        for r in (res.data or []):
+            comp = (r.get("component") or "general").strip().lower()
+            counts[comp] = counts.get(comp, 0) + 1
     return counts
 
 
@@ -1251,6 +1419,39 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
         _training_progress[key] = {"step": step, "pct": pct, "done": False, "error": None}
 
     try:
+        if bug_records is None and not feedback_list:
+            # Full-train path: fetch data inside the thread so the API returns immediately
+            cb("Loading bug data", 3)
+            if target_cid is None:
+                raw_rows = _fetch_paginated("firefox_table", "summary, severity")
+                try:
+                    all_companies = supabase.table("companies").select("id").execute().data or []
+                    for co in all_companies:
+                        co_cid = co.get("id")
+                        co_table = get_company_table(co_cid)
+                        if co_table and not is_shared_table(co_table):
+                            raw_rows.extend(_fetch_paginated(
+                                co_table, "summary, severity",
+                                eq_filters=[("company_id", co_cid)],
+                            ))
+                except Exception as agg_err:
+                    print(f"[train/thread] company aggregation warning: {agg_err}")
+                bug_records = raw_rows
+            else:
+                table = get_company_table(target_cid)
+                filters = None if is_shared_table(table) else [("company_id", target_cid)]
+                bug_records = _fetch_paginated(table, "summary, severity", eq_filters=filters)
+
+            bug_records = [
+                {"summary": r["summary"], "severity": r.get("severity", "S3")}
+                for r in bug_records
+                if r.get("summary") and r.get("severity")
+            ]
+            if not bug_records:
+                _training_progress[key] = {"step": "Error", "pct": 0, "done": True,
+                                            "error": "No labeled bugs found.", "result": None}
+                return
+
         if bug_records is not None:
             cb("Sampling company data", 5)
             _time.sleep(0.3)
@@ -1270,7 +1471,27 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
         _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": str(e), "result": None}
 
 
-_FULL_TRAIN_SAMPLE = 30000
+_FULL_TRAIN_SAMPLE = 250000
+_PAGE_SIZE = 1000  # Supabase PostgREST hard caps single responses at 1,000 rows
+
+
+def _fetch_paginated(table: str, columns: str, eq_filters: list = None, max_rows: int = _FULL_TRAIN_SAMPLE) -> list:
+    """Fetch rows from Supabase in 1,000-row pages to bypass the server-side row cap."""
+    all_rows = []
+    offset = 0
+    while len(all_rows) < max_rows:
+        q = supabase.table(table).select(columns)
+        if eq_filters:
+            for col, val in eq_filters:
+                q = q.eq(col, val)
+        batch = q.range(offset, offset + _PAGE_SIZE - 1).execute().data or []
+        if not batch:
+            break
+        all_rows.extend(batch)
+        if len(batch) < _PAGE_SIZE:
+            break
+        offset += _PAGE_SIZE
+    return all_rows[:max_rows]
 
 
 @app.post("/api/admin/model/train/start")
@@ -1293,55 +1514,11 @@ def train_model_start(current_user: dict = Depends(auth.require_admin)):
             mode="fast_retrain",
         )
 
-    try:
-        if target_cid is None:
-            # Super admin: aggregate firefox_table + every company's bug table
-            raw_rows = []
-            ff_data = supabase.table("firefox_table").select("summary, severity") \
-                              .limit(_FULL_TRAIN_SAMPLE).execute().data or []
-            raw_rows.extend(ff_data)
-            try:
-                all_companies = supabase.table("companies").select("id").execute().data or []
-                per_company_limit = max(1000, _FULL_TRAIN_SAMPLE // max(len(all_companies), 1))
-                for co in all_companies:
-                    co_cid = co.get("id")
-                    co_table = get_company_table(co_cid)
-                    if co_table and not is_shared_table(co_table):
-                        co_data = supabase.table(co_table).select("summary, severity") \
-                                          .eq("company_id", co_cid) \
-                                          .limit(per_company_limit).execute().data or []
-                        raw_rows.extend(co_data)
-            except Exception as agg_err:
-                print(f"[train/start] company aggregation warning: {agg_err}")
-            bug_data = raw_rows
-        else:
-            table = get_company_table(target_cid)
-            q = supabase.table(table).select("summary, severity").limit(_FULL_TRAIN_SAMPLE)
-            if not is_shared_table(table):
-                q = q.eq("company_id", target_cid)
-            bug_data = q.execute().data or []
-
-        bug_records = [
-            {"summary": r["summary"], "severity": r.get("severity", "S3")}
-            for r in bug_data
-            if r.get("summary") and r.get("severity")
-        ]
-    except Exception as sample_err:
-        bug_records = []
-        print(f"[train/start] bug sampling failed: {sample_err}")
-
-    if not bug_records:
-        return {
-            "success": False,
-            "message": (
-                "No corrections or labeled bugs found to train on. "
-                "Submit a bug prediction and correct its severity — that creates a training signal."
-            ),
-        }
-
+    # No feedback — full train. Pass neither bug_records nor feedback_list so the
+    # thread fetches data itself, letting this endpoint return immediately.
     return _start_train_thread(
-        key, [], target_cid, bug_records=bug_records,
-        message=f"Full training started on {len(bug_records):,} labeled bugs.",
+        key, [], target_cid, bug_records=None,
+        message="Full training started — loading dataset in background.",
         mode="full_train",
     )
 
@@ -1612,48 +1789,59 @@ def superadmin_get_companies(current_user: dict = Depends(auth.require_super_adm
     companies_res = supabase.table("companies").select("*").execute()
     companies = companies_res.data or []
 
-    users_res = supabase.table("users").select("company_id, role").execute()
+    # Count users per company via exact count (no row-limit issue)
+    users_res = supabase.table("users").select("company_id").execute()
     users_data = users_res.data or []
+    user_counts: dict = {}
+    for u in users_data:
+        uid = u.get("company_id")
+        if uid is not None:
+            user_counts[uid] = user_counts.get(uid, 0) + 1
 
-    bugs_res = supabase.table("bugs").select("company_id, severity, status").execute()
-    bugs_data = bugs_res.data or []
+    RESOLVED_STATUSES = {"RESOLVED", "VERIFIED", "FIXED", "PROCESSED"}
 
     result = []
     for co in companies:
         cid        = co.get("id")
-        data_table = co.get("data_table", "bugs")
+        data_table = co.get("data_table") or "bugs"
 
-        co_users = [u for u in users_data if u.get("company_id") == cid]
-        co_bugs  = [b for b in bugs_data  if b.get("company_id") == cid]
+        total    = 0
+        critical = 0
+        resolved = 0
 
-        if data_table and data_table != "bugs":
-            try:
-                tbl = supabase.table(data_table).select("severity, status").execute()
-                co_bugs += (tbl.data or [])
-            except Exception:
-                pass
-
-        total    = len(co_bugs)
-        critical = sum(1 for b in co_bugs if b.get("severity") == "S1")
-        resolved = sum(1 for b in co_bugs
-                       if (b.get("status") or "").upper() in ("RESOLVED","VERIFIED","FIXED","PROCESSED"))
+        try:
+            if data_table == "bugs":
+                # Company uses the shared bugs table — filter by company_id
+                total    = supabase.table("bugs").select("*", count="exact").eq("company_id", cid).limit(1).execute().count or 0
+                critical = supabase.table("bugs").select("*", count="exact").eq("company_id", cid).eq("severity", "S1").limit(1).execute().count or 0
+                resolved = 0
+                for st in RESOLVED_STATUSES:
+                    resolved += supabase.table("bugs").select("*", count="exact").eq("company_id", cid).ilike("status", st).limit(1).execute().count or 0
+            else:
+                # Company has its own table (firefox_table, company_N_bugs, etc.)
+                total    = supabase.table(data_table).select("*", count="exact").limit(1).execute().count or 0
+                critical = supabase.table(data_table).select("*", count="exact").eq("severity", "S1").limit(1).execute().count or 0
+                resolved = 0
+                for st in RESOLVED_STATUSES:
+                    resolved += supabase.table(data_table).select("*", count="exact").ilike("status", st).limit(1).execute().count or 0
+        except Exception as e:
+            print(f"[superadmin companies] cid={cid} table={data_table}: {e}")
 
         result.append({
-            "id":            cid,
-            "name":          co.get("name", f"Company #{cid}"),
-            "status":        co.get("status", "active"),
-            "has_own_model": co.get("has_own_model", False),
-            # new canonical names (Directory.jsx)
-            "total_bugs":    total,
-            "total_users":   len(co_users),
+            "id":             cid,
+            "name":           co.get("name", f"Company #{cid}"),
+            "status":         co.get("status", "active"),
+            "has_own_model":  co.get("has_own_model", False),
+            "total_bugs":     total,
+            "total_users":    user_counts.get(cid, 0),
             "total_feedback": 0,
-            "critical":      critical,
-            "resolved":      resolved,
-            # legacy aliases (SuperAdmin.jsx)
-            "total":         total,
-            "users":         len(co_users),
-            "model_acc":     86.3,
-            "last_active":   "Live",
+            "critical":       critical,
+            "resolved":       resolved,
+            # legacy aliases used by SystemPanel / SuperAdmin.jsx
+            "total":          total,
+            "users":          user_counts.get(cid, 0),
+            "model_acc":      86.3,
+            "last_active":    "Live",
         })
 
     result.sort(key=lambda x: x["total"], reverse=True)
@@ -1708,39 +1896,50 @@ def superadmin_approve_user(
     name   = target.get("username", email)
     role   = target.get("role", "user")
     cid    = target.get("company_id")
+    old_status = target.get("status")
 
     supabase.table("users").update({"status": "active"}).eq("uuid", user_uuid).execute()
 
     company_name = ""
     if cid:
-        co_res = supabase.table("companies").select("status, name").eq("id", cid).execute()
+        co_res = supabase.table("companies").select("status, name, data_table").eq("id", cid).execute()
         if co_res.data:
             company_name = co_res.data[0].get("name", "")
+            company_update: dict = {}
             if co_res.data[0].get("status") == "pending":
-                supabase.table("companies").update({"status": "active"}).eq("id", cid).execute()
+                company_update["status"] = "active"
+            # Ensure Firefox companies are wired to firefox_table from the start
+            if db_provision.is_firefox_company(company_name) and co_res.data[0].get("data_table") != "firefox_table":
+                company_update["data_table"] = "firefox_table"
+            if company_update:
+                supabase.table("companies").update(company_update).eq("id", cid).execute()
 
+    uuid = target.get("uuid")
     email_sent = False
-    try:
-        if not target.get("uuid"):
-            supabase.auth.admin.invite_user_by_email(
+
+    if old_status == "pending":
+        # No real Supabase auth account yet — invite_user_by_email creates it
+        # and reliably fires the invite email through your configured SMTP
+        try:
+            auth_res = supabase.auth.admin.invite_user_by_email(
                 email,
-                options={"data": {
-                    "username":     name,
-                    "company_name": company_name,
-                    "role":         role,
-                }},
+                options={"data": {"username": name, "company_name": company_name, "role": role}},
             )
             email_sent = True
+            # Replace the 'pending-' marker with the actual Auth UUID so they can log in
+            if auth_res and auth_res.user:
+                supabase.table("users").update({"uuid": auth_res.user.id}).eq("uuid", user_uuid).execute()
             print(f"[superadmin approve] Invite email sent to {email}")
-        else:
-            print(f"[superadmin approve] Existing auth account preserved for {email}")
-    except Exception as e:
-        print(f"[superadmin approve] Email send failed: {e}")
+        except Exception as e:
+            print(f"[superadmin approve] Invite failed: {e}")
+    else:
+        print(f"[superadmin approve] {email} self-registered, status set to active — no invite needed")
 
     return {
         "message": (
             f"'{name}' approved."
-            + (" Approval email sent." if email_sent else " Existing credentials remain valid.")
+            + (" Invite email sent." if email_sent
+               else " User can now sign in with their existing credentials.")
         ),
         "email_sent": email_sent,
     }
@@ -1782,7 +1981,10 @@ def superadmin_create_user(
     if existing.data:
         raise HTTPException(status_code=400, detail="A user with that email already exists")
 
+    db_uuid = str(uuid_lib.uuid4())
+
     supabase.table("users").insert({
+        "uuid":                 db_uuid,
         "email":                req.email,
         "username":             req.username,
         "role":                 role,
@@ -1794,11 +1996,14 @@ def superadmin_create_user(
 
     email_sent = False
     try:
-        supabase.auth.admin.invite_user_by_email(
+        auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"company_id": req.company_id, "company_name": company_name, "role": role}},
+            options={"data": {"username": req.username, "company_name": company_name, "role": role}},
         )
         email_sent = True
+        # Link the newly created auth UUID back to the database
+        if auth_res and auth_res.user:
+            supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
         print(f"[superadmin create_user] Failed to send invite email: {e}")
 
@@ -1877,8 +2082,10 @@ def submit_invite_request(req: InviteRequestCreate):
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found.")
 
+    db_uuid = req.uuid.strip() if req.uuid else str(uuid_lib.uuid4())
+
     supabase.table("users").insert({
-        "uuid":                 req.uuid.strip() if req.uuid else None,
+        "uuid":                 db_uuid,
         "email":                email_clean,
         "username":             req.username.strip(),
         "role":                 "user",
@@ -1924,6 +2131,7 @@ def approve_invite_request(
     email = row["email"]
     name  = row.get("username", email)
     uuid  = row.get("uuid")
+    old_status = row.get("status")
 
     co_res = supabase.table("companies").select("name, invite_code").eq("id", cid).single().execute()
     company_name = co_res.data.get("name", "")        if co_res.data else ""
@@ -1933,8 +2141,8 @@ def approve_invite_request(
 
     email_sent = False
     try:
-        if not uuid:
-            supabase.auth.admin.invite_user_by_email(
+        if old_status == "invite_requested":
+            auth_res = supabase.auth.admin.invite_user_by_email(
                 email,
                 options={"data": {
                     "invite_code":  company_code,
@@ -1943,6 +2151,8 @@ def approve_invite_request(
                 }},
             )
             email_sent = True
+            if auth_res and auth_res.user:
+                supabase.table("users").update({"uuid": auth_res.user.id}).eq("id", request_id).execute()
             print(f"[approve_invite] Invite email sent to {email}")
         else:
             print(f"[approve_invite] Existing auth account preserved for {email}")
@@ -2059,7 +2269,10 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
     if existing_uname.data:
         raise HTTPException(status_code=400, detail="That username is already taken")
 
+    db_uuid = str(uuid_lib.uuid4())
+
     res = supabase.table("users").insert({
+        "uuid":                 db_uuid,
         "email":                req.email,
         "username":             req.username,
         "password_hash":        "",
@@ -2077,11 +2290,13 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
     try:
         co_res = supabase.table("companies").select("name").eq("id", cid).single().execute()
         company_name = co_res.data.get("name", "") if co_res.data else ""
-        supabase.auth.admin.invite_user_by_email(
+        auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"company_id": cid, "company_name": company_name, "role": req.role}},
+            options={"data": {"username": req.username, "company_name": company_name, "role": req.role}},
         )
         email_sent = True
+        if auth_res and auth_res.user:
+            supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
         print(f"[invite] Failed to send invite email: {e}")
 
@@ -2193,7 +2408,7 @@ def _cascade_delete_company(company_id: int):
         _delete_auth_user(member.get("uuid"))
         _cascade_delete_user_row(member)
 
-    for tbl in ("feedback", "training_batches"):
+    for tbl in ("bugs", "feedback", "training_batches"):
         try:
             supabase.table(tbl).delete().eq("company_id", company_id).execute()
         except Exception as e:

@@ -362,12 +362,26 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
     y = df["severity"]
 
     _progress("Training Random Forest (100 trees)", 55)
+    from sklearn.metrics import confusion_matrix as _sk_cm, f1_score, precision_score, recall_score
+
     rf = RandomForestClassifier(
         n_estimators=100, class_weight="balanced_subsample", max_depth=None,
         min_samples_split=5, random_state=42, n_jobs=-1,
     )
     rf.fit(X, y)
-    accuracy = round(float(rf.score(X, y)), 4)
+
+    _progress("Evaluating model performance", 75)
+    labels_order = ["S1", "S2", "S3", "S4"]
+    y_pred = rf.predict(X)
+    cm = _sk_cm(y, y_pred, labels=labels_order)
+    cm_data = [
+        {"actual": labels_order[i], **{labels_order[j]: int(cm[i][j]) for j in range(4)}}
+        for i in range(4)
+    ]
+    accuracy  = round(float(rf.score(X, y)), 4)
+    f1_val    = round(float(f1_score(y, y_pred, labels=labels_order, average="weighted", zero_division=0)), 4)
+    prec_val  = round(float(precision_score(y, y_pred, labels=labels_order, average="weighted", zero_division=0)), 4)
+    rec_val   = round(float(recall_score(y, y_pred, labels=labels_order, average="weighted", zero_division=0)), 4)
 
     _progress("Saving model artifacts", 88)
     artifact_paths = get_artifact_paths(company_id)
@@ -383,11 +397,18 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
     joblib.dump(encoders,   artifact_paths["enc"])
 
     metrics_out = {
-        "accuracy":     accuracy, "f1_score": accuracy, "precision": accuracy, "recall": accuracy,
-        "last_trained": _time_mod.ctime(), "sample_size": len(df), "total_trees": 100,
-        "mode":         "company" if company_id is not None else "global", "company_id": company_id,
-        "dataset_label": dataset_label or ("Company bug database" if company_id else "Global training data"),
-        "build": "active",
+        "accuracy":        accuracy,
+        "f1_score":        f1_val,
+        "precision":       prec_val,
+        "recall":          rec_val,
+        "confusion_matrix": cm_data,
+        "last_trained":    _time_mod.ctime(),
+        "sample_size":     len(df),
+        "total_trees":     100,
+        "mode":            "company" if company_id is not None else "global",
+        "company_id":      company_id,
+        "dataset_label":   dataset_label or ("Company bug database" if company_id else "Global training data"),
+        "build":           "active",
     }
     _promote_active_to_previous(artifact_paths)
     with open(artifact_paths["met"], "w") as f:
@@ -491,11 +512,35 @@ def fast_retrain(feedback_data: list, company_id=None, progress_cb=None, dataset
         y_new = safe_transform(encoders["severity"], df["severity"])
 
         _progress("Training random forest", 70)
+        from sklearn.metrics import confusion_matrix as _sk_cm, f1_score, precision_score, recall_score
+
         rf_model.warm_start = True
         old_tree_count = rf_model.n_estimators
         rf_model.n_estimators += 10
         print(f"Adding 10 new trees. Total: {old_tree_count} → {rf_model.n_estimators}")
         rf_model.fit(X_new, y_new)
+
+        _progress("Evaluating updated model", 80)
+        # Build confusion matrix from feedback labels vs model predictions on same data
+        sev_enc = encoders.get("severity")
+        labels_order = ["S1", "S2", "S3", "S4"]
+        try:
+            y_actual_labels = df["severity"].values  # string labels e.g. "S1"
+            y_pred_encoded  = rf_model.predict(X_new)
+            y_pred_labels   = sev_enc.inverse_transform(y_pred_encoded) if hasattr(sev_enc, "inverse_transform") else y_pred_encoded
+            cm = _sk_cm(y_actual_labels, y_pred_labels, labels=labels_order)
+            cm_data = [
+                {"actual": labels_order[i], **{labels_order[j]: int(cm[i][j]) for j in range(4)}}
+                for i in range(4)
+            ]
+            acc_val  = round(float((y_actual_labels == y_pred_labels).mean()), 4)
+            f1_val   = round(float(f1_score(y_actual_labels, y_pred_labels, labels=labels_order, average="weighted", zero_division=0)), 4)
+            prec_val = round(float(precision_score(y_actual_labels, y_pred_labels, labels=labels_order, average="weighted", zero_division=0)), 4)
+            rec_val  = round(float(recall_score(y_actual_labels, y_pred_labels, labels=labels_order, average="weighted", zero_division=0)), 4)
+        except Exception as _cm_err:
+            print(f"[fast_retrain] confusion matrix error: {_cm_err}")
+            cm_data = None
+            acc_val = prec_val = rec_val = f1_val = None
 
         _progress("Saving model artifacts", 88)
         artifact_paths = get_artifact_paths(company_id)
@@ -521,6 +566,9 @@ def fast_retrain(feedback_data: list, company_id=None, progress_cb=None, dataset
             "mode":          "company" if company_id is not None else "global",
             "company_id":    company_id,
             "build":         "active",
+            **({"confusion_matrix": cm_data} if cm_data else {}),
+            **({"accuracy": acc_val, "f1_score": f1_val, "precision": prec_val, "recall": rec_val}
+               if acc_val is not None else {}),
         }
         _promote_active_to_previous(artifact_paths)
         with open(artifact_paths["met"], "w") as _f:

@@ -15,3 +15,4 @@ httpx==0.28.1
 psycopg2-binary==2.9.11
 gunicorn==25.1.0
 joblib==1.5.3
+sqlalchemy>=2.0.0

@@ -55,12 +55,16 @@ export default function SuperAdmin({ user }) {
 
   const handleApprove = async (uuid, username) => {
     try {
-      await axios.patch(`/api/superadmin/users/${uuid}/approve`);
-      setActionMsg(`✓ ${username} approved.`);
+      const res = await axios.patch(`/api/superadmin/users/${uuid}/approve`);
+      const msg = res.data?.email_sent
+        ? `✓ ${username} approved — invite email sent.`
+        : `✓ ${username} approved — they can now sign in with their existing credentials.`;
+      setActionMsg(msg);
       setPending(p => p.filter(u => u.uuid !== uuid));
-      setTimeout(() => setActionMsg(''), 4000);
+      setTimeout(() => setActionMsg(''), 6000);
     } catch (e) {
       setActionMsg('Approval failed. Try again.');
+      setTimeout(() => setActionMsg(''), 4000);
     }
   };
 
