@@ -18,10 +18,10 @@ BACKEND_DIR = os.path.abspath(os.path.join(BASE_DIR, '../backend'))
 
 # Global model artifacts (legacy paths — kept for backward compatibility)
 GLOBAL_ARTIFACTS = {
-    "model":      os.path.join(BASE_DIR, "../Random Forest ML/rf_model.pkl"),
-    "vectorizer": os.path.join(BASE_DIR, "../Random Forest ML/tfidf_vectorizer.pkl"),
-    "encoders":   os.path.join(BASE_DIR, "../Random Forest ML/label_encoders.pkl"),
-    "metrics":    os.path.join(BASE_DIR, "../Random Forest ML/rf_metrics.json"),
+    "model":      os.path.join(BASE_DIR, "rf_model.pkl"),
+    "vectorizer": os.path.join(BASE_DIR, "tfidf_vectorizer.pkl"),
+    "encoders":   os.path.join(BASE_DIR, "label_encoders.pkl"),
+    "metrics":    os.path.join(BASE_DIR, "rf_metrics.json"),
 }
 
 def get_company_artifacts(company_id: int) -> dict:

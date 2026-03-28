@@ -58,10 +58,14 @@ function SevBadge({ sev }) {
     );
 }
 
+// Bugzilla bugs carry Bugzilla-specific workflow statuses that no other source uses.
+const BUGZILLA_STATUSES = new Set(['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS', 'RESOLVED', 'VERIFIED', 'REOPENED']);
+
 function inferOrigin(bug) {
     const status = (bug.status || '').toUpperCase();
-    const id = bug.id;
-    if (id > 100000) return { label: 'Bugzilla', icon: <Globe size={11} />, desc: 'Synced from Mozilla Bugzilla. Status values (UNCONFIRMED, RESOLVED, etc.) are preserved directly from Bugzilla\'s own workflow.' };
+    // Bugzilla: detected by its unique workflow status values — NOT by ID range,
+    // because bulk-imported bugs can also have high auto-incremented IDs.
+    if (BUGZILLA_STATUSES.has(status)) return { label: 'Bugzilla', icon: <Globe size={11} />, desc: 'Synced from Mozilla Bugzilla. Status values (UNCONFIRMED, RESOLVED, etc.) are preserved directly from Bugzilla\'s own workflow.' };
     if (status === 'PROCESSED') return { label: 'Dataset', icon: <Database size={11} />, desc: 'From the pre-loaded Firefox historical dataset (220k+ bugs used for ML training).' };
     if (bug.batch_id || status === 'BULK') return { label: 'Bulk upload', icon: <UploadCloud size={11} />, desc: 'Uploaded via admin bulk import (JSON/CSV file).' };
     return { label: 'Manual', icon: <PenTool size={11} />, desc: 'Submitted directly by a team member via the Submit tab.' };

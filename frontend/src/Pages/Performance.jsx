@@ -134,7 +134,7 @@ function TrainModal({ onClose, onDone, isSuperAdmin }) {
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadName, setUploadName] = useState('');
     const [uploading, setUploading]   = useState(false);
-    const esRef = useRef(null);
+    const pollRef = useRef(null);
 
     const startTrain = async () => {
         setPhase('training'); setStep('Initializing…'); setPct(0);
@@ -147,18 +147,33 @@ function TrainModal({ onClose, onDone, isSuperAdmin }) {
                 setErrMsg(res.data.message); setPhase('error'); return;
             }
             const key = res.data.stream_key || res.data.key || 'global';
-            const es = new EventSource(`/api/admin/model/train/stream?stream_key=${key}&token=${token}`);
-            esRef.current = es;
-            es.onmessage = (e) => {
-                const d = JSON.parse(e.data);
-                setStep(d.step || ''); setPct(d.pct || 0);
-                if (d.done) {
-                    es.close();
-                    if (d.error) { setErrMsg(d.error); setPhase('error'); }
-                    else { setResult(d); setPhase('done'); }
+
+            // Poll the status endpoint every second instead of an SSE connection.
+            // SSE over nginx/Docker is unreliable -- polling is simple and bulletproof.
+            let elapsed = 0;
+            pollRef.current = setInterval(async () => {
+                elapsed += 1;
+                if (elapsed > 600) {
+                    clearInterval(pollRef.current); pollRef.current = null;
+                    setErrMsg('Training timed out after 10 minutes.'); setPhase('error');
+                    return;
                 }
-            };
-            es.onerror = () => { es.close(); setErrMsg('Stream connection lost.'); setPhase('error'); };
+                try {
+                    const s = await axios.get(
+                        `/api/admin/model/train/status?stream_key=${key}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    const d = s.data;
+                    setStep(d.step || ''); setPct(d.pct || 0);
+                    if (d.done) {
+                        clearInterval(pollRef.current); pollRef.current = null;
+                        if (d.error) { setErrMsg(d.error); setPhase('error'); }
+                        else { setResult(d); setPhase('done'); }
+                    }
+                } catch (_) {
+                    // transient network hiccup -- keep polling
+                }
+            }, 1000);
         } catch (e) {
             setErrMsg(e.response?.data?.detail || e.message); setPhase('error');
         }
@@ -181,7 +196,7 @@ function TrainModal({ onClose, onDone, isSuperAdmin }) {
         } finally { setUploading(false); }
     };
 
-    useEffect(() => () => esRef.current?.close(), []);
+    useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">

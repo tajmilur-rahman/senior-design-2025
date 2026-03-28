@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Form, File, UploadFile, Query
+from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -18,22 +18,22 @@ _training_progress: dict = {}
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
-VECTOR_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")
+VECTOR_PATH= os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")
 
-rf_model = None
+rf_model   = None
 vectorizer = None
 
 def load_models():
     global rf_model, vectorizer
     try:
         if os.path.exists(MODEL_PATH) and os.path.exists(VECTOR_PATH):
-            rf_model = joblib.load(MODEL_PATH)
+            rf_model   = joblib.load(MODEL_PATH)
             vectorizer = joblib.load(VECTOR_PATH)
-            print("AI Models loaded successfully.")
+            print("[ml] Models loaded.")
         else:
-            print("AI Models not found. Training needed.")
+            print("[ml] Model files not found — training required.")
     except Exception as e:
-        print(f"AI Load Error: {e}")
+        print(f"[ml] Load error: {e}")
 
 app = FastAPI()
 load_models()
@@ -43,7 +43,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 
@@ -64,10 +64,11 @@ def get_company_table(company_id) -> str:
     if company_id is None:
         return "bugs"
     try:
-        res = supabase.table("companies").select("data_table").eq("id", cid).single().execute()
-        return res.data.get("data_table", "bugs") if res.data else "bugs"
+        res = supabase.table("companies").select("data_table") \
+                      .eq("id", company_id).single().execute()
+        return res.data.get("data_table") or "bugs" if res.data else "bugs"
     except Exception:
-        return "bugs"  # Safe fallback — always default to bugs table
+        return "bugs"
 
 def is_shared_table(table: str) -> bool:
     return table == "firefox_table" or (table.startswith("company_") and table.endswith("_bugs"))
@@ -100,10 +101,9 @@ class BugPayload(BaseModel):
     company_id: int | None = None
 
 class CompanyCreate(BaseModel):
-    name: str  # matches the 'name' column in companies table
+    name: str
 
 class RegisterRequest(BaseModel):
-    # One-shot registration: creates company + first admin user together
     company_name: str
     username:     str
     email:        str
@@ -166,12 +166,9 @@ def register(req: RegisterRequest):
         else:
             invite_code = _gen_invite_code()
 
-            is_firefox = db_provision.is_firefox_company(req.company_name)
-            initial_table = "firefox_table" if is_firefox else "bugs"
-
             co_res = supabase.table("companies").insert({
                 "name":        req.company_name,
-                "data_table":  initial_table,
+                "data_table":  "bugs",
                 "invite_code": invite_code,
                 "status":      "pending",
             }).execute()
@@ -180,14 +177,11 @@ def register(req: RegisterRequest):
             company_id   = co_res.data[0]["id"]
             company_name = co_res.data[0]["name"]
 
-            if not is_firefox:
-                try:
-                    table_name = db_provision.create_company_table(company_id)
-                    supabase.table("companies").update({"data_table": table_name}) \
-                        .eq("id", company_id).execute()
-                    print(f"[register] Created company table: {table_name}")
-                except Exception as tbl_err:
-                    print(f"[register] Warning: could not create company table: {tbl_err}")
+            try:
+                table_name = db_provision.create_company_table(company_id)
+                print(f"[register] Created company table: {table_name}")
+            except Exception as tbl_err:
+                print(f"[register] Warning: could not create company table: {tbl_err}")
 
         pw_hash = auth.get_password_hash(req.password) if req.password else ""
         user_res = supabase.table("users").insert({
@@ -205,11 +199,13 @@ def register(req: RegisterRequest):
         if not user_res.data:
             raise HTTPException(status_code=500, detail="Failed to create user record")
 
-    # Step 2: AUTO RETRAIN — fetch all feedback for this company and retrain
-    retrain_result = {"success": False, "message": "Retrain skipped"}
-    try:
-        all_feedback = supabase.table("feedback").select("*")\
-            .eq("company_id", cid).execute()
+        return {
+            "message":      "Registration successful",
+            "company_id":   company_id,
+            "company_name": company_name,
+            "username":     req.username,
+            "role":         "admin",
+        }
 
     if not req.invite_code or not req.invite_code.strip():
         raise HTTPException(
@@ -221,11 +217,12 @@ def register(req: RegisterRequest):
     co_res = supabase.table("companies").select("id, name").eq("invite_code", code_upper).execute()
     if not co_res.data:
         raise HTTPException(
-            status_code=403, 
-            detail="Unauthorized: Only the Apex Sentinel can trigger AI retraining."
+            status_code=400,
+            detail="Invalid invite code. Please check the code with your admin and try again."
         )
 
-    cid = current_user.get("company_id")
+    company_id   = co_res.data[0]["id"]
+    company_name = co_res.data[0]["name"]
 
     pw_hash = auth.get_password_hash(req.password) if req.password else ""
     user_res = supabase.table("users").insert({
@@ -240,43 +237,17 @@ def register(req: RegisterRequest):
         "status":               "active",
     }).execute()
 
-    # 3. Guard Rail: Don't retrain on empty data
-    if not feedback_list:
-        return {
-            "success": False,
-            "message": "AI is already up to date. No new human corrections found."
-        }
+    if not user_res.data:
+        raise HTTPException(status_code=500, detail="Failed to create user record")
 
-    # 4. Trigger the Intelligence Module
-    result = ml_logic.fast_retrain(feedback_list)
-
-    # 5. Return detailed system health
     return {
-        "success": result.get("success", False),
-        "status": "Apex AI Knowledge Updated",
-        "new_knowledge_points": len(feedback_list),
-        "total_trees_in_forest": result.get("total_trees", 0),
-        "timestamp": datetime.utcnow().isoformat()
+        "message":      "Registration successful",
+        "company_id":   company_id,
+        "company_name": company_name,
+        "username":     req.username,
+        "role":         "user",
     }
-@app.post("/api/users")
-def create_user(req: auth.UserCreate):
-    # Adds a new user to an EXISTING company (used by admin to invite teammates)
-    hashed_pwd = auth.get_password_hash(req.password)
-    new_user = {
-        "username": req.username,
-        "password_hash": hashed_pwd,
-        "role": "user",
-        "company_id": req.company_id  # from request, not hardcoded
-    }
-    supabase.table("users").insert(new_user).execute()
-    return {"message": "User created successfully"}
 
-@app.post("/api/users/complete_onboarding")
-def complete_onboarding(current_user = Depends(auth.get_current_user)):
-    # Use 'id' instead of 'username' to match Supabase logic
-    supabase.table("users").update({"onboarding_completed": True})\
-        .eq("id", current_user.get("id")).execute()
-    return {"message": "Onboarding complete"}
 
 @app.post("/api/onboarding/complete")
 def complete_onboarding(req: OnboardingRequest, current_user: dict = Depends(auth.get_current_user)):
@@ -323,9 +294,6 @@ def seed_company_data(
 
     data_table = co_res.data.get("data_table") or "bugs"
     company_name = co_res.data.get("name", "")
-
-    if data_table == "firefox_table":
-        return {"message": "Firefox company uses the live firefox_table — no seeding needed.", "count": 0}
 
     if data_table == "bugs":
         try:
@@ -436,29 +404,22 @@ def session_check(requested_role: str = "user", current_user: dict = Depends(aut
     uuid = current_user.get("uuid")
     db_profile = supabase.table("users").select("role, company_id").eq("uuid", uuid).single().execute()
 
-    company = res.data[0]
-    return {"message": "Company created", "company_id": company["id"], "company_name": company["name"]}
+    if not db_profile.data:
+        raise HTTPException(status_code=404, detail="User profile not found")
 
-@app.post("/api/register")
-def register(req: RegisterRequest):
-    # One-shot onboarding: creates the company AND the first admin user
-    # in a single request so the frontend doesn't need two round trips.
+    true_role = db_profile.data.get("role") or "user"
 
-    # Step 1: Check username is not already taken
-    existing_user = supabase.table("users").select("id").eq("username", req.username).execute()
-    if existing_user.data:
-        raise HTTPException(status_code=400, detail="Username already taken")
+    if requested_role != true_role and true_role != "super_admin":
+        raise HTTPException(status_code=403, detail="Role Mismatch")
 
-    # Step 2: Check company name is not already taken
-    existing_company = supabase.table("companies").select("id").eq("name", req.company_name).execute()
-    if existing_company.data:
-        raise HTTPException(status_code=400, detail="Company name already exists")
+    return {
+        "status": "ok",
+        "role": true_role,
+        "effective_role": true_role,
+        "company_id": db_profile.data.get("company_id"),
+        "is_global": true_role == "super_admin",
+    }
 
-    # Step 3: Create the company first to get the auto-generated company_id
-    company_res = supabase.table("companies").insert({"name": req.company_name}).execute()
-    if not company_res.data:
-        raise HTTPException(status_code=500, detail="Failed to create company")
-    company_id = company_res.data[0]["id"]
 
 @app.get("/api/hub/overview")
 def get_overview(current_user: dict = Depends(auth.get_current_user)):
@@ -493,14 +454,23 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
 
     components: dict = {}
     for b in bugs:
-        comp = b.get("component", "General")
+        comp = b.get("component") or "General"
         components[comp] = components.get(comp, 0) + 1
+    top_5 = sorted(
+        [{"name": k, "value": v} for k, v in components.items()],
+        key=lambda x: x["value"], reverse=True
+    )[:5]
 
-    top_5 = sorted([{"name": k, "value": v} for k, v in components.items()], key=lambda x: x['value'], reverse=True)[:5]
+    recent_feed = [
+        {"id": b.get("bug_id") or b.get("id"), "summary": b.get("summary"),
+         "severity": b.get("severity"), "status": b.get("status")}
+        for b in bugs[:5]
+    ]
+
     return {
         "stats": {"total_db": total_count, "analyzed": total_count, "critical": critical_count},
-        "recent": [{"id": b.get("bug_id") or b.get("id"), "summary": b.get("summary"), "severity": b.get("severity"), "status": b.get("status")} for b in bugs[:5]],
-        "charts": {"components": top_5}
+        "recent": recent_feed,
+        "charts": {"components": top_5},
     }
 
 
@@ -514,25 +484,13 @@ def get_bugs(
 ):
     true_role = current_user.get("role")
     cid = current_user.get("company_id")
-    table = get_company_table(cid)  # replaces hardcoded firefox_table
-    res = supabase.table(table).select("component")\
-        .eq("company_id", cid).limit(2000).execute() 
-    counts = {}
-    for r in (res.data or []):
-        comp = str(r.get("component")).strip().lower() if r.get("component") else "general"
-        counts[comp] = counts.get(comp, 0) + 1
-    return counts
 
     if cid is None and true_role != "super_admin":
         return {"total": 0, "role_context": true_role, "bugs": [], "onboarding_required": True}
 
-    cid = current_user.get("company_id")
-    # Determine the table dynamically from the companies record — no hardcoding
     table = get_company_table(cid)
-
-    # Both tables use bug_id as the primary key.
-    # If the frontend asks for "id", we map it to "bug_id" for the database query.
     db_sort = "bug_id" if sort_key == "id" else sort_key
+    query = supabase.table(table).select("*", count="exact")
 
     if true_role == "super_admin":
         pass
@@ -545,28 +503,27 @@ def get_bugs(
         else:
             query = query.ilike("summary", f"%{search.strip()}%")
 
-    # Filtering logic
-    if search: query = query.ilike("summary", f"%{search}%")
     if sev:    query = query.ilike("severity", f"%{sev}%")
-    if status: query = query.ilike("status", f"%{status}%")
-    if comp:   query = query.ilike("component", f"%{comp}%")
+    if status: query = query.ilike("status",   f"%{status}%")
+    if comp:   query = query.ilike("component",f"%{comp}%")
 
     offset = (page - 1) * limit
     res = query.order(db_sort, desc=(sort_dir.lower() == "desc")).range(offset, offset + limit - 1).execute()
 
-    # Map the response back to a unified "id" field for the frontend
     return {
         "total": res.count or 0,
         "role_context": true_role,
         "bugs": [
             {
-                "id": r.get("bug_id"),  # unified key
-                "summary": r.get("summary"),
+                "id":        r.get("bug_id") or r.get("id"),
+                "summary":   r.get("summary"),
                 "component": r.get("component"),
-                "severity": r.get("severity"),
-                "status": r.get("status")
-            } for r in (res.data or [])
-        ]
+                "severity":  r.get("severity"),
+                "status":    r.get("status"),
+                "company":   r.get("company_id") if true_role == "super_admin" else None
+            }
+            for r in (res.data or [])
+        ],
     }
 
 @app.get("/api/hub/export")
@@ -708,56 +665,11 @@ async def analyze_bug(
 
     return {"severity": result, "similar_bugs": similar_bugs}
 
-# --- BATCH & BULK ---
-@app.get("/api/batches")
-def get_batches(current_user = Depends(auth.get_current_user)):
-    res = supabase.table("training_batches").select("*").eq("company_id", current_user.get("company_id")).order("upload_time", desc=True).execute()
-    return res.data
 
-@app.post("/api/upload_and_train")
-async def upload_and_train(
-    batch_name: str = Form(...), 
-    file: UploadFile = File(...), 
-    current_user = Depends(auth.get_current_user)
-):
-    try:
-        content = await file.read()
-        cid = current_user.get("company_id")
-        
-        # 1. Parse JSON
-        import json
-        try:
-            data = json.loads(content)
-        except Exception as parse_err:
-            raise HTTPException(status_code=400, detail="Invalid JSON format")
-
-        # 2. Record the batch
-        batch_entry = {
-            "batch_name": batch_name, 
-            "company_id": cid, 
-            "bug_count": len(data), 
-            "status": "completed"
-        }
-        supabase.table("training_batches").insert(batch_entry).execute()
-
-        bugs_to_insert = []
-        feedback_to_insert = []
-
-        for item in data:
-            # Get values exactly as they appear in your JSON
-            summary = item.get('summary', 'No summary')
-            pred_sev = str(item.get('predicted_severity', 'S3')).upper()
-            act_sev = str(item.get('actual_severity', 'S3')).upper()
-            comp = item.get('component', 'General')
-
-            # Prepare entry for 'bugs' table
-            bugs_to_insert.append({
-                "summary": summary,
-                "component": comp,
-                "severity": act_sev,
-                "company_id": cid,
-                "status": "processed"
-            })
+@app.post("/api/feedback")
+async def submit_feedback(req: FeedbackPayload, current_user: dict = Depends(auth.get_current_user)):
+    cid = current_user.get("company_id")
+    is_correction = req.predicted_severity != req.actual_severity
 
     existing = supabase.table("feedback") \
         .select("id") \
@@ -810,7 +722,6 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
     last_trained_str = "Not yet trained"
     company_name = "Universal" if is_super else "Your Company"
 
-    # --- 1. Get LIVE counts and Latest Activity Timestamp ---
     try:
         table = get_company_table(cid)
         q_bugs = supabase.table(table).select("*", count="exact").limit(1)
@@ -838,8 +749,7 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
             if co_res.data:
                 company_name = co_res.data[0].get("name", company_name)
     except Exception as e:
-        print(f"Database count failed: {e}")
-        # total_live_volume stays at 1000 from the default above
+        print(f"[ml_metrics] DB error: {e}")
 
     current_metrics = {
         "accuracy": 0.0, "f1_score": 0.0, "precision": 0.0, "recall": 0.0,
@@ -980,9 +890,17 @@ async def bulk_submit(
     batch_name: str = "",
     current_user: dict = Depends(auth.require_admin),
 ):
-    """Insert bugs from a CSV/JSON file into the company database. No model training."""
+    """Insert bugs from a CSV/JSON file into the company database. No model training.
+
+    Bulk imports go into the company's primary data_table (`bugs` for most companies),
+    always with company_id set for reliable deletion and super-admin aggregation.
+    firefox_table is never written to — it is the ML baseline only.
+    """
     cid = current_user.get("company_id")
     table = get_company_table(cid)
+    # Fallback safety: never write into the shared ML baseline.
+    if table == "firefox_table":
+        table = "bugs"
     content = await file.read()
 
     try:
@@ -1000,20 +918,39 @@ async def bulk_submit(
             "component": str(row.get("component", "General")),
             "severity":  str(row.get("severity", "S3")).upper(),
             "status":    str(row.get("status", "PROCESSED")),
+            "company_id": cid,
         }
-        if not is_shared_table(table):
-            bug_row["company_id"] = cid
         rows.append(bug_row)
 
+    inserted_ids = []
     if rows:
-        supabase.table(table).insert(rows).execute()
+        result = supabase.table(table).insert(rows).execute()
+        for r in (result.data or []):
+            rid = r.get("bug_id") or r.get("id")
+            if rid is not None:
+                inserted_ids.append(int(rid))
 
-    supabase.table("training_batches").insert({
+    min_bug_id = min(inserted_ids) if inserted_ids else None
+    max_bug_id = max(inserted_ids) if inserted_ids else None
+
+    batch_payload = {
         "batch_name": batch_name or file.filename,
         "company_id": cid,
         "bug_count":  len(rows),
         "status":     "imported",
-    }).execute()
+    }
+    if min_bug_id is not None:
+        batch_payload["min_bug_id"] = min_bug_id
+        batch_payload["max_bug_id"] = max_bug_id
+
+    try:
+        supabase.table("training_batches").insert(batch_payload).execute()
+    except Exception:
+        # min_bug_id/max_bug_id columns may not exist in older schemas — fall back
+        supabase.table("training_batches").insert({
+            k: v for k, v in batch_payload.items()
+            if k not in ("min_bug_id", "max_bug_id")
+        }).execute()
 
     return {"message": "Bugs imported successfully", "records_processed": len(rows)}
 
@@ -1032,12 +969,129 @@ def get_batches(current_user: dict = Depends(auth.get_current_user)):
     return rows
 
 
+def _delete_bulk_imported_bugs(cid, since_ts: str) -> int:
+    """Delete bulk-imported bugs for a company inserted at or after `since_ts`.
+
+    Bulk imports always land in the `bugs` table with company_id set (see
+    bulk_submit), so this is a simple company_id + created_at filter.
+    """
+    try:
+        res = supabase.table("bugs").delete() \
+                      .eq("company_id", cid) \
+                      .gte("created_at", since_ts) \
+                      .execute()
+        return len(res.data or [])
+    except Exception as e:
+        print(f"[delete_bulk_imported_bugs] {e}")
+        return 0
+
+
+@app.delete("/api/batches")
+def delete_all_batches(current_user: dict = Depends(auth.get_current_user)):
+    """Delete every batch record and all bugs that were bulk-imported.
+
+    Strategy: find the earliest batch upload_time for this company and delete
+    every bug whose created_at >= that timestamp.  Seeded / baseline bugs were
+    inserted long before any admin batch upload so they are left untouched.
+    Works for both firefox_table (shared, no company_id column) and
+    company-specific tables.
+    """
+    cid = current_user.get("company_id")
+    if not cid:
+        return {"message": "No company assigned", "batches_deleted": 0, "bugs_deleted": 0}
+
+    batches_res = supabase.table("training_batches").select("upload_time") \
+                          .eq("company_id", cid).order("upload_time").execute()
+    batches = batches_res.data or []
+
+    from datetime import datetime, timedelta, timezone
+    bugs_deleted = 0
+    table = get_company_table(cid)
+    if batches:
+        earliest = batches[0].get("upload_time")
+    else:
+        # Batch records were already cleared (e.g. by old broken version) but bugs
+        # may still be present. Fall back to a 7-day rolling window — the baseline
+        # Firefox/seeded data is always much older than that.
+        earliest = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+
+    if earliest:
+        bugs_deleted = _delete_bulk_imported_bugs(cid, earliest)
+
+    supabase.table("training_batches").delete().eq("company_id", cid).execute()
+    return {"message": "All batches deleted", "batches_deleted": len(batches), "bugs_deleted": bugs_deleted}
+
+
 @app.delete("/api/batches/{batch_id}")
 def delete_batch(batch_id: int, current_user: dict = Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
+
+    batch_res = supabase.table("training_batches").select("upload_time") \
+                        .eq("id", batch_id).eq("company_id", cid).execute()
+    batch = batch_res.data[0] if batch_res.data else None
+
+    bugs_deleted = 0
+    if batch:
+        upload_time = batch.get("upload_time")
+        if upload_time:
+            table = get_company_table(cid)
+            bugs_deleted = _delete_bulk_imported_bugs(cid, upload_time)
+
     supabase.table("training_batches").delete() \
             .eq("id", batch_id).eq("company_id", cid).execute()
-    return {"message": "Batch deleted"}
+
+    return {"message": "Batch and bugs deleted", "bugs_deleted": bugs_deleted}
+
+
+@app.post("/api/admin/table/reset")
+def reset_company_table(current_user: dict = Depends(auth.require_admin)):
+    """Reset the company's bug database to its original seeded state.
+
+    - Deletes all bulk-imported bugs (always in `bugs` table with company_id).
+    - For company-specific tables (company_{id}_bugs): also wipes and re-seeds.
+    - Clears all training_batches records for the company.
+
+    Bulk imports always land in the `bugs` table (see bulk_submit), so deletion
+    is a simple DELETE WHERE company_id = cid — no timestamp guesswork needed.
+    """
+    cid = current_user.get("company_id")
+    role = current_user.get("role")
+    if role == "super_admin" or cid is None:
+        raise HTTPException(status_code=400, detail="Super admin does not own a company table.")
+
+    co_res = supabase.table("companies").select("data_table, name").eq("id", cid).single().execute()
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    table = co_res.data.get("data_table") or "bugs"
+    bugs_deleted = 0
+    reseeded = 0
+
+    # Delete all bugs for this company from the shared bugs table.
+    try:
+        del_res = supabase.table("bugs").delete().eq("company_id", cid).execute()
+        bugs_deleted = len(del_res.data or [])
+    except Exception as e:
+        print(f"[table/reset] bugs-table delete error: {e}")
+
+    # If the company has a dedicated table, wipe and re-seed it too.
+    if table not in ("bugs", "firefox_table"):
+        try:
+            supabase.table(table).delete().neq("bug_id", 0).execute()
+        except Exception as e:
+            print(f"[table/reset] company-table delete error: {e}")
+
+        try:
+            reseeded = db_provision.seed_company_table(cid, sample_size=5000)
+        except Exception as e:
+            print(f"[table/reset] re-seed error: {e}")
+
+    msg = f"Reset complete: removed {bugs_deleted} imported bugs, re-seeded {reseeded} sample bugs."
+
+    # Clear all batch records regardless of table type
+    supabase.table("training_batches").delete().eq("company_id", cid).execute()
+
+    return {"success": True, "message": msg, "bugs_deleted": bugs_deleted, "reseeded": reseeded}
 
 
 @app.post("/api/upload_and_train")
@@ -1297,6 +1351,8 @@ async def train_model_stream(
     stream_key: str = Query(default="global"),
     token: str = Query(default=None),
 ):
+    """Legacy SSE endpoint — kept for backwards compatibility.  Clients should
+    use the polling endpoint /api/admin/model/train/status instead."""
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
@@ -1310,23 +1366,38 @@ async def train_model_stream(
     key = stream_key
 
     async def event_gen():
-        max_wait = 120
+        max_wait = 600
         elapsed  = 0
+        last_ping = 0
         while elapsed < max_wait:
             state = _training_progress.get(key, {"step": "Waiting", "pct": 0, "done": False})
             yield f"data: {json.dumps(state)}\n\n"
             if state.get("done"):
                 break
+            if elapsed - last_ping >= 15:
+                yield ": ping\n\n"
+                last_ping = elapsed
             await asyncio.sleep(0.5)
             elapsed += 0.5
         else:
-            yield f"data: {json.dumps({'step': 'Timeout', 'pct': 0, 'done': True, 'error': 'Training timed out'})}\n\n"
+            yield f"data: {json.dumps({'step': 'Timeout', 'pct': 0, 'done': True, 'error': 'Training timed out after 10 minutes'})}\n\n"
 
     return StreamingResponse(
         event_gen(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
+
+
+@app.get("/api/admin/model/train/status")
+def train_model_status(
+    stream_key: str = Query(default="global"),
+    current_user: dict = Depends(auth.require_admin),
+):
+    """Polling endpoint: returns the current training progress for a given key.
+    The frontend polls this every second instead of holding an SSE connection."""
+    state = _training_progress.get(stream_key, {"step": "Waiting", "pct": 0, "done": False})
+    return state
 
 
 @app.post("/api/admin/model/validate")
@@ -2190,10 +2261,8 @@ def superadmin_company_detail(
     if not co.data:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    weak_components = sorted(
-        [{"component": k, "corrections": v} for k, v in component_errors.items()],
-        key=lambda x: x["corrections"], reverse=True
-    )[:5]
+    users_res = supabase.table("users").select("id", count="exact") \
+        .eq("company_id", company_id).execute()
 
     return {
         "id": co.data["id"],

@@ -233,8 +233,45 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
   const handleDeleteBatch = async (batchId) => {
     setBatches(prev => prev.filter(b => b.id !== batchId));
-    try { await axios.delete(`/api/batches/${batchId}`); showMsg('Batch removed'); }
-    catch { showMsg('Could not remove batch', 'error'); fetchBatches(); }
+    try {
+      const res = await axios.delete(`/api/batches/${batchId}`);
+      const n = res.data?.bugs_deleted;
+      showMsg(n > 0 ? `Batch deleted — ${n} bugs removed from database` : 'Batch record removed');
+    } catch {
+      showMsg('Could not remove batch', 'error');
+      fetchBatches();
+    }
+  };
+
+  const handleDeleteAllBatches = async () => {
+    setBatches([]);
+    try {
+      const res = await axios.delete('/api/batches');
+      const { batches_deleted: b, bugs_deleted: bugs } = res.data;
+      showMsg(`Cleared ${b} batch${b !== 1 ? 'es' : ''} — ${bugs} bugs removed from database`);
+      fetchBugs();
+    } catch {
+      showMsg('Could not clear batches', 'error');
+      fetchBatches();
+    }
+  };
+
+  const [resetting, setResetting]           = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+
+  const handleResetTable = async () => {
+    setConfirmingReset(false);
+    setResetting(true);
+    try {
+      const res = await axios.post('/api/admin/table/reset');
+      setBatches([]);
+      showMsg(res.data.message || 'Database reset complete.');
+      fetchBugs();
+    } catch (e) {
+      showMsg(e.response?.data?.detail || 'Reset failed.', 'error');
+    } finally {
+      setResetting(false);
+    }
   };
 
   const handleBulkUpload = async () => {
@@ -449,7 +486,13 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                 </button>
                 {batches.length > 0 && (
                   <div>
-                    <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">Previous batches</div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Previous batches</div>
+                      <button onClick={handleDeleteAllBatches}
+                        className="text-[10px] font-bold text-red-400/70 hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1">
+                        <Trash2 size={10} /> Clear all
+                      </button>
+                    </div>
                     <div className="flex flex-col gap-3">
                       {batches.slice(0, 5).map(b => (
                         <div key={b.id} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
@@ -466,6 +509,39 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     </div>
                   </div>
                 )}
+
+                {/* Reset database to original seeded state */}
+                <div className="mt-6 pt-6 border-t border-white/5">
+                  <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-3">Danger zone</div>
+                  {confirmingReset ? (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
+                      <p className="text-xs text-white/70 mb-4 leading-relaxed">
+                        This will permanently delete all bulk-imported bugs for your company. The Firefox baseline dataset will not be affected.
+                      </p>
+                      <div className="flex gap-2">
+                        <button onClick={handleResetTable} disabled={resetting}
+                          className="flex-1 py-2 bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs rounded-xl hover:bg-red-500/30 transition-all disabled:opacity-50">
+                          {resetting ? 'Resetting…' : 'Yes, delete imported bugs'}
+                        </button>
+                        <button onClick={() => setConfirmingReset(false)}
+                          className="flex-1 py-2 bg-white/5 border border-white/10 text-white/50 font-bold text-xs rounded-xl hover:bg-white/10 transition-all">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmingReset(true)} disabled={resetting}
+                      className="w-full flex items-center gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl hover:bg-red-500/10 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
+                      <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/20 transition-colors">
+                        {resetting ? <RefreshCw size={15} className="text-red-400 animate-spin" /> : <Trash2 size={15} className="text-red-400" />}
+                      </div>
+                      <div className="text-left">
+                        <div className="text-sm font-bold text-red-400">{resetting ? 'Resetting…' : 'Reset to Original Database'}</div>
+                        <div className="text-[10px] text-white/30 mt-0.5">Removes all bulk-imported bugs — Firefox baseline data stays intact</div>
+                      </div>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

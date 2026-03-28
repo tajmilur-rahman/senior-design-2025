@@ -10,12 +10,12 @@ services:
 
     command: >
       bash -c "
-      if [ ! -f 'backend/rf_model.pkl' ]; then
+      if [ ! -f 'ml_training/rf_model.pkl' ]; then
         echo '🚀 INITIALIZING FRESH ML MODELS FOR DEMO...';
-        python 'Random Forest ML/Train_Universal.py' --limit;
+        python ml_training/Train_Universal.py --fast;
       fi &&
       echo '🟢 STARTING GUNICORN SERVER...' &&
-      gunicorn -k uvicorn.workers.UvicornWorker -t 120 -w 1 -b 0.0.0.0:8000 backend.main:app
+      gunicorn -k uvicorn.workers.UvicornWorker -t 600 -w 1 -b 0.0.0.0:8000 backend.main:app
       "
 
   frontend:

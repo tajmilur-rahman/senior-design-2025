@@ -11,18 +11,24 @@ __pycache__/
 *.pyc
 
 # --- AI Models (Too large for Git) ---
-backend/*.pkl
+*.pkl
+*.pkl.old
+backend/models/
 
 # --- Databases & Vector Stores ---
-# This keeps your local data from overwriting your teammates' data
 *.db
 *.sqlite3
 data/
 rag_db/
 
+# --- Bugbug dataset downloads ---
+*.zst
+
 # --- Media & Large Data Assets ---
 *.mp4
 *.csv
-*.pkl
-*.pkl.old
 *.json.old
+
+# --- Generated ML metrics (rebuilt on each training run) ---
+ml_training/rf_metrics.json
+ml_training/main_brain_metrics.json
