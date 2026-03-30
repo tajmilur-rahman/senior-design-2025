@@ -1,5 +1,5 @@
 -- =============================================================================
--- Apex SystemOS — Supabase Cleanup & Architecture Fix
+-- Spotfixes — Supabase Cleanup & Architecture Fix
 -- Run these queries in the Supabase SQL Editor (in order).
 -- =============================================================================
 

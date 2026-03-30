@@ -44,7 +44,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("Apex SystemOS — Fill bugs from firefox_table")
+    print("Spotfixes — Fill bugs from firefox_table")
     print("=" * 60)
 
     conn = get_conn()

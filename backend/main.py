@@ -157,7 +157,11 @@ class FeedbackPayload(BaseModel):
     consent_global_model: bool = True
 
 class ResolutionSearchRequest(BaseModel):
-    summary: str
+    summary:           str
+    resolution_filter: str | None = None
+    component_filter:  str | None = None
+    min_days:          int | None = None
+    max_days:          int | None = None
 
 
 @app.post("/api/register")
@@ -2644,55 +2648,194 @@ def superadmin_company_detail(
     }
 
 
+def _resolution_source(current_user: dict):
+    """
+    Returns (table: str, is_mozilla: bool, company_id: int|None).
+
+    Routing rules:
+      - super_admin (no company)  → resolution_knowledge  (mozilla=True)
+      - Firefox / Mozilla company → resolution_knowledge  (mozilla=True)
+      - Any other company         → their own data_table  (mozilla=False)
+      - User with no company yet  → empty data            (mozilla=False)
+    """
+    role       = current_user.get("role")
+    company_id = current_user.get("company_id")
+
+    if role == "super_admin" or company_id is None:
+        return "resolution_knowledge", True, None
+
+    table = get_company_table(company_id)
+    if table == "firefox_table":
+        return "resolution_knowledge", True, company_id
+
+    return table, False, company_id
+
+
+def _fetch_resolved_rows(table: str, company_id, select: str = "*", limit: int = 1000) -> list:
+    """
+    Fetch resolved rows from the correct table with proper company scoping.
+    - resolution_knowledge  → no extra filter (all rows are resolved)
+    - shared 'bugs' table   → filter by company_id + status
+    - isolated company table → filter by status only
+    """
+    try:
+        q = supabase.table(table).select(select).limit(limit)
+        if table != "resolution_knowledge":
+            if not is_shared_table(table):          # shared 'bugs' table
+                q = q.eq("company_id", company_id)
+            q = q.eq("status", "RESOLVED")
+        return q.execute().data or []
+    except Exception:
+        return []
+
+
 @app.post("/api/resolution-support/search")
-def search_resolution_support(payload: ResolutionSearchRequest):
-    query = payload.summary.strip()
+def search_resolution_support(
+    payload:      ResolutionSearchRequest,
+    current_user: dict = Depends(auth.require_active),
+):
+    query             = payload.summary.strip()
+    resolution_filter = (payload.resolution_filter or "").strip().lower()
+    component_filter  = (payload.component_filter  or "").strip().lower()
+    min_days          = payload.min_days
+    max_days          = payload.max_days
 
     if not query:
-        return {"results": []}
+        return {"results": [], "source": "company"}
 
-    words = [w.lower() for w in re.split(r"\s+", query) if len(w) >= 3]
+    table, is_mozilla, company_id = _resolution_source(current_user)
 
-    try:
-        result = supabase.table("resolution_knowledge").select("*").limit(1000).execute()
-        rows = result.data or []
-    except Exception:
-        rows = []
+    # Users with no company assignment yet get an empty result set
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"results": [], "source": "company"}
 
-    if not rows:
-        try:
-            alt_res = supabase.table("firefox_table").select("*").eq("status", "RESOLVED").limit(500).execute()
-            rows = alt_res.data or []
-        except Exception:
-            pass
-
-    if not rows:
-        rows = [
-            { "id": 99101, "summary": "Video playback crashes on startup", "component": "Frontend", "status": "RESOLVED", "resolution": "FIXED", "resolution_text": "Updated codec initialization sequence to resolve race condition during memory allocation.", "resolved_in_days": 2 },
-            { "id": 99102, "summary": "Memory leak when opening many tabs", "component": "Core", "status": "RESOLVED", "resolution": "FIXED", "resolution_text": "Fixed unbounded array in tab manager that failed to garbage collect closed session IDs.", "resolved_in_days": 5 },
-            { "id": 99103, "summary": "Login fails on password protected sites", "component": "Security", "status": "RESOLVED", "resolution": "FIXED", "resolution_text": "Patched session token invalidation bug preventing authentication state persistence.", "resolved_in_days": 1 },
-            { "id": 99104, "summary": "Extension causes high CPU usage", "component": "DevTools", "status": "RESOLVED", "resolution": "FIXED", "resolution_text": "Throttled extension background polling to prevent 100% CPU lockups.", "resolved_in_days": 4 }
-        ]
-
+    words       = [w.lower() for w in re.split(r"\s+", query) if len(w) >= 3]
+    rows        = _fetch_resolved_rows(table, company_id, limit=1000)
     query_lower = query.lower()
-    scored = []
+    scored      = []
 
     for row in rows:
-        summary = (row.get("summary") or "").lower()
-        component = (row.get("component") or "").lower()
-        resolution_text = (row.get("resolution_text") or "").lower()
+        summary          = (row.get("summary")         or "").lower()
+        component        = (row.get("component")       or "").lower()
+        resolution_text  = (row.get("resolution_text") or "").lower()
+        resolution_value = (row.get("resolution")      or "").lower()
+        resolved_in_days = row.get("resolved_in_days")
 
-        score = 0
+        # Apply filters
+        if resolution_filter and resolution_value != resolution_filter:
+            continue
+        if component_filter and component_filter not in component:
+            continue
+
+        resolved_days_int = None
+        if resolved_in_days is not None:
+            try:
+                resolved_days_int = int(resolved_in_days)
+            except (TypeError, ValueError):
+                pass
+        if min_days is not None and (resolved_days_int is None or resolved_days_int < min_days):
+            continue
+        if max_days is not None and (resolved_days_int is None or resolved_days_int > max_days):
+            continue
+
+        # Scoring
+        exact_summary_match      = 0
+        summary_keyword_score    = 0
+        resolution_keyword_score = 0
+        component_keyword_score  = 0
+        matched_summary_keywords    = []
+        matched_resolution_keywords = []
+        matched_component_keywords  = []
+        match_reasons = []
+
         if query_lower in summary:
-            score += 10
+            exact_summary_match = 10
+            match_reasons.append("Exact query phrase matched in bug summary")
+
         for word in words:
-            if word in summary: score += 3
-            if word in resolution_text: score += 1
-            if word in component: score += 1
+            if word in summary:
+                summary_keyword_score += 3
+                matched_summary_keywords.append(word)
+            if word in resolution_text:
+                resolution_keyword_score += 1
+                matched_resolution_keywords.append(word)
+            if word in component:
+                component_keyword_score += 1
+                matched_component_keywords.append(word)
+
+        if matched_summary_keywords:
+            match_reasons.append(f"{len(matched_summary_keywords)} keyword(s) matched in summary")
+        if matched_resolution_keywords:
+            match_reasons.append(f"{len(matched_resolution_keywords)} keyword(s) matched in resolution details")
+        if matched_component_keywords:
+            match_reasons.append(f"{len(matched_component_keywords)} keyword(s) matched in component")
+
+        score = exact_summary_match + summary_keyword_score + resolution_keyword_score + component_keyword_score
 
         if score > 0:
             row["match_score"] = score
+            row["score_breakdown"] = {
+                "exact_summary_match":   exact_summary_match,
+                "summary_keyword_match": summary_keyword_score,
+                "resolution_text_match": resolution_keyword_score,
+                "component_match":       component_keyword_score,
+            }
+            row["matched_keywords"] = {
+                "summary":         matched_summary_keywords,
+                "resolution_text": matched_resolution_keywords,
+                "component":       matched_component_keywords,
+            }
+            row["match_reasons"] = match_reasons
             scored.append(row)
 
     scored.sort(key=lambda x: x["match_score"], reverse=True)
-    return {"results": scored[:5]}
+    return {"results": scored[:5], "source": "mozilla" if is_mozilla else "company"}
+
+
+@app.get("/api/resolution-support/component-trends")
+def get_resolution_component_trends(current_user: dict = Depends(auth.require_active)):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"trends": [], "source": "company"}
+
+    rows   = _fetch_resolved_rows(table, company_id, select="component", limit=5000)
+    counts: dict = {}
+    for row in rows:
+        comp = (row.get("component") or "Unknown").strip() or "Unknown"
+        counts[comp] = counts.get(comp, 0) + 1
+
+    trends = sorted(
+        [{"component": k, "count": v} for k, v in counts.items()],
+        key=lambda x: x["count"],
+        reverse=True,
+    )[:8]
+    return {"trends": trends, "source": "mozilla" if is_mozilla else "company"}
+
+
+@app.get("/api/resolution-support/component-resolution-correlation")
+def get_component_resolution_correlation(current_user: dict = Depends(auth.require_active)):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"correlations": [], "source": "company"}
+
+    rows    = _fetch_resolved_rows(table, company_id, select="component, resolved_in_days", limit=5000)
+    grouped: dict = {}
+    for row in rows:
+        comp = (row.get("component") or "Unknown").strip() or "Unknown"
+        try:
+            days = int(row.get("resolved_in_days"))
+        except (TypeError, ValueError):
+            continue
+        if comp not in grouped:
+            grouped[comp] = {"total_days": 0, "count": 0}
+        grouped[comp]["total_days"] += days
+        grouped[comp]["count"]      += 1
+
+    correlations = [
+        {"component": comp, "average_resolved_days": round(v["total_days"] / v["count"], 1), "count": v["count"]}
+        for comp, v in grouped.items() if v["count"] > 0
+    ]
+    correlations.sort(key=lambda x: x["average_resolved_days"], reverse=True)
+    return {"correlations": correlations[:8], "source": "mozilla" if is_mozilla else "company"}

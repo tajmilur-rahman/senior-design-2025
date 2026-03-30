@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-nuclear_reset.py — Complete data reset for Apex SystemOS.
+nuclear_reset.py — Complete data reset for Spotfixes.
 
 What this does:
   1. Clears `bugs` table (all companies' live bug data)
@@ -145,7 +145,7 @@ def insert_firefox_batch(cur, batch: list):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="Nuclear reset for Apex SystemOS data tables")
+    parser = argparse.ArgumentParser(description="Nuclear reset for Spotfixes data tables")
     parser.add_argument("--limit",     type=int, default=0,
                         help="Max bugs to insert into firefox_table (0 = all, ~220k)")
     parser.add_argument("--dry-run",   action="store_true",
@@ -158,7 +158,7 @@ def main():
     prefix = "[DRY RUN] " if dry else ""
 
     print("=" * 65)
-    print(f"{prefix}Apex SystemOS — Nuclear Data Reset")
+    print(f"{prefix}Spotfixes — Nuclear Data Reset")
     print("=" * 65)
     print("Preserving: companies, users, feedback")
     print("Wiping:     bugs, training_batches, firefox_table")

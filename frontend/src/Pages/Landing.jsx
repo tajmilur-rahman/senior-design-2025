@@ -468,7 +468,7 @@ function ArchitectureModal({ onClose }) {
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
               <span className="text-[10px] font-bold tracking-widest uppercase text-emerald-400">System Blueprint</span>
             </div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">ApexOS Architecture</h2>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Spotfixes Architecture</h2>
           </div>
           <button
             onClick={onClose}

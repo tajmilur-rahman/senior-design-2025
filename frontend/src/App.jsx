@@ -486,7 +486,7 @@ export default function App() {
   if (loading) return (
     <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-black">
       <div className="w-9 h-9 rounded-full border-2 border-white/10 border-t-white animate-spin" />
-      <span className="text-sm text-white/40 font-semibold tracking-wide">Loading ApexOS…</span>
+      <span className="text-sm text-white/40 font-semibold tracking-wide">Loading Spotfixes…</span>
     </div>
   );
 

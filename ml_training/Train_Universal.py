@@ -188,7 +188,7 @@ def run_training_pipeline(fast_mode=False, mode="global", company_id=None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train the ApexOS severity prediction model.")
+    parser = argparse.ArgumentParser(description="Train the Spotfixes severity prediction model.")
     parser.add_argument(
         "--mode", choices=["global", "company"], default="global",
         help="'global' trains the universal model (consent-filtered); 'company' trains a per-company model"

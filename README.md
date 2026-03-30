@@ -1,13 +1,13 @@
-# Apex SystemOS Intelligence
+# Spotfixes Intelligence
 Enterprise Bug Triage and Severity Prediction Engine
 
 ## Overview
 
-Apex SystemOS is a machine learning platform designed to automate the triage and prioritization of software vulnerabilities. The system analyzes bug reports and predicts severity levels while identifying duplicate issues across large repositories.
+Spotfixes is a machine learning platform designed to automate the triage and prioritization of software vulnerabilities. The system analyzes bug reports and predicts severity levels while identifying duplicate issues across large repositories.
 
 The platform is trained using more than 222,000 historical Mozilla Firefox bug records and provides near real-time predictions to assist engineering teams in prioritizing critical incidents.
 
-Apex SystemOS integrates machine learning, natural language processing, and secure multi-tenant infrastructure to create a scalable bug triage intelligence system.
+Spotfixes integrates machine learning, natural language processing, and secure multi-tenant infrastructure to create a scalable bug triage intelligence system.
 
 ---
 
@@ -183,8 +183,8 @@ All database timestamps are stored in UTC and automatically converted to local s
 ### Clone Repository
 
 ```
-git clone https://github.com/yourusername/apex-systemos.git
-cd apex-systemos
+git clone https://github.com/yourusername/spotfixes.git
+cd spotfixes
 ```
 
 ### Create Virtual Environment
