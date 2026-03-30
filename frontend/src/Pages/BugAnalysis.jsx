@@ -1,20 +1,108 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   AlertTriangle, Search, Bug,
   ThumbsUp, ThumbsDown, Sparkles, ArrowRight,
-  RefreshCw, CheckCircle, RotateCcw, Database, Zap, Globe, Building2
+  RefreshCw, CheckCircle, RotateCcw, Database, Zap, Globe, Building2, X, ChevronRight
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
 
 const SAMPLE_BUGS = [
-  'Firefox crashes when opening more than 50 tabs on macOS',
-  'Dark mode colours inconsistent across the Settings panel',
-  '4K video playback stutters on YouTube',
-  'Login button unresponsive on password-protected sites',
+  'Application crashes when submitting a form with empty required fields',
+  'Dark mode colors are inconsistent across settings panel',
+  'UI freezes for 5+ seconds when loading large data tables',
+  'Login button unresponsive after failed authentication attempt',
+  'Export to CSV produces incorrect column ordering',
+  'Search results don\'t update when filters are changed',
 ];
 
-export default function BugAnalysis() {
+// Mini floating database search panel
+function DbSearchOverlay({ onSelect, onClose }) {
+  const [q,       setQ]       = useState('');
+  const [bugs,    setBugs]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    fetchBugs('');
+  }, []);
+
+  const fetchBugs = async (search) => {
+    setLoading(true);
+    try {
+      const res = await axios.get('/api/hub/explorer', {
+        params: { page: 1, limit: 12, search: search || undefined },
+      });
+      setBugs(res.data?.bugs || []);
+    } catch { setBugs([]); }
+    finally { setLoading(false); }
+  };
+
+  const handleSearch = (val) => {
+    setQ(val);
+    fetchBugs(val);
+  };
+
+  const SEV_COLORS = {
+    S1: 'bg-red-500/10 text-red-400 border-red-500/20',
+    S2: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    S3: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    S4: 'bg-white/5 text-white/50 border-white/10',
+  };
+
+  return (
+    <div className="absolute top-full left-0 right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+      <div className="bg-black/90 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
+          <Database size={14} className="text-blue-400 flex-shrink-0" />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={e => handleSearch(e.target.value)}
+            placeholder="Search your database…"
+            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
+          />
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors flex-shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-white/30 text-sm">
+              <RefreshCw size={14} className="animate-spin" /> Loading bugs…
+            </div>
+          ) : bugs.length === 0 ? (
+            <div className="py-8 text-center text-white/30 text-sm">No bugs found</div>
+          ) : bugs.map((bug, i) => (
+            <button
+              key={i}
+              onClick={() => { onSelect(bug.summary || ''); onClose(); }}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/[0.04] last:border-0 group"
+            >
+              {bug.severity && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono flex-shrink-0 ${SEV_COLORS[bug.severity] || SEV_COLORS.S4}`}>
+                  {bug.severity}
+                </span>
+              )}
+              <span className="flex-1 text-sm text-white/70 group-hover:text-white transition-colors truncate">
+                {bug.summary || '—'}
+              </span>
+              <ChevronRight size={12} className="text-white/20 group-hover:text-white/60 flex-shrink-0 transition-colors" />
+            </button>
+          ))}
+        </div>
+        <div className="px-4 py-2.5 border-t border-white/10 flex items-center gap-2">
+          <span className="text-[10px] text-white/30 font-bold uppercase tracking-widest">
+            Click any bug to analyze its severity
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function BugAnalysis({ user }) {
   const [query,              setQuery]              = useState('');
   const [analyzing,          setAnalyzing]          = useState(false);
   const [prediction,         setPrediction]         = useState(null);
@@ -25,23 +113,41 @@ export default function BugAnalysis() {
   const [correctedSev,       setCorrectedSev]       = useState('S2');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [showGlossary,       setShowGlossary]       = useState(false);
-  const [modelSource,        setModelSource]        = useState('universal'); // 'universal' | 'company'
+  const [modelSource,        setModelSource]        = useState('universal');
   const [hasOwnModel,        setHasOwnModel]        = useState(false);
+  const [showDbOverlay,      setShowDbOverlay]      = useState(false);
+  const searchWrapRef = useRef(null);
+
+  const isSuperAdmin = user?.role === 'super_admin';
 
   useEffect(() => {
+    if (isSuperAdmin) return; // super_admin always uses universal
     const token = localStorage.getItem('token');
     axios.get('/api/admin/company_profile', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => { if (res.data?.has_own_model) { setHasOwnModel(true); setModelSource('company'); } })
       .catch(() => {});
+  }, [isSuperAdmin]);
+
+  // Close DB overlay when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target)) {
+        setShowDbOverlay(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const handleAnalyze = async (overrideQuery = null) => {
     const text = overrideQuery || query;
     if (!text.trim()) return;
+    setShowDbOverlay(false);
     setAnalyzing(true); setError(null); setPrediction(null); setFeedbackSent(false); setShowCorrection(false);
     if (overrideQuery) setQuery(overrideQuery);
     try {
-      const res = await axios.get('/api/analyze_bug', { params: { bug_text: text, model_source: modelSource } });
+      const src = isSuperAdmin ? 'universal' : modelSource;
+      const res = await axios.get('/api/analyze_bug', { params: { bug_text: text, model_source: src } });
       setPrediction(res.data.severity);
       setDuplicates(res.data.similar_bugs || []);
     } catch (err) {
@@ -56,11 +162,36 @@ export default function BugAnalysis() {
     setError(null); setFeedbackSent(false); setShowCorrection(false);
   };
 
+  // Submit positive confirmation to improve the model
+  const submitPositiveFeedback = async () => {
+    if (!prediction) { setFeedbackSent(true); return; }
+    try {
+      await axios.post('/api/feedback', {
+        summary:            query,
+        predicted_severity: prediction.prediction,
+        actual_severity:    prediction.prediction, // confirmed correct
+        confidence:         prediction.confidence || 0.6,
+        component:          'General',
+        is_correction:      false,
+        consent_global_model: true,
+      });
+    } catch { /* best-effort */ }
+    finally { setFeedbackSent(true); }
+  };
+
   const submitCorrection = async () => {
     if (!prediction) return;
     setSubmittingFeedback(true);
     try {
-      await axios.post('/api/feedback', { summary: query, predicted_severity: prediction.prediction, actual_severity: correctedSev, confidence: prediction.confidence || 0.6, component: 'General', consent_global_model: true });
+      await axios.post('/api/feedback', {
+        summary:              query,
+        predicted_severity:   prediction.prediction,
+        actual_severity:      correctedSev,
+        confidence:           prediction.confidence || 0.6,
+        component:            'General',
+        is_correction:        true,
+        consent_global_model: true,
+      });
       setFeedbackSent(true); setShowCorrection(false);
     } catch { setFeedbackSent(true); setShowCorrection(false); }
     finally { setSubmittingFeedback(false); }
@@ -94,34 +225,52 @@ export default function BugAnalysis() {
       </div>
 
       <div className="mb-8">
-        {/* Model source toggle */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Model:</span>
-          <div className="flex gap-1 bg-white/5 border border-white/10 p-0.5 rounded-xl">
-            <button onClick={() => setModelSource('universal')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${modelSource === 'universal' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}>
-              <Globe size={11} /> Universal
-            </button>
-            <button onClick={() => setModelSource('company')} disabled={!hasOwnModel}
-              title={!hasOwnModel ? 'Train a company model first on the Performance tab' : ''}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${modelSource === 'company' ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white/70'}`}>
-              <Building2 size={11} /> Company
-            </button>
+        {/* Model source toggle — hidden for super_admin (system always uses universal) */}
+        {!isSuperAdmin && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Model:</span>
+            <div className="flex gap-1 bg-white/5 border border-white/10 p-0.5 rounded-xl">
+              <button onClick={() => setModelSource('universal')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${modelSource === 'universal' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}>
+                <Globe size={11} /> Universal
+              </button>
+              <button onClick={() => setModelSource('company')} disabled={!hasOwnModel}
+                title={!hasOwnModel ? 'Train a company model first on the Performance tab' : ''}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${modelSource === 'company' ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white/70'}`}>
+                <Building2 size={11} /> Company
+              </button>
+            </div>
+            {modelSource === 'company' && (
+              <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" /> Using your trained model
+              </span>
+            )}
           </div>
-          {modelSource === 'company' && (
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" /> Using your trained model
-            </span>
-          )}
-        </div>
+        )}
 
+        {/* Search bar — click opens DB overlay */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 relative flex items-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-colors focus-within:border-blue-500/50 focus-within:bg-white/10">
-            <button onClick={() => handleAnalyze()} disabled={analyzing || !query.trim()} className="absolute left-4 p-1 text-white/40 hover:text-white/70 transition-colors disabled:pointer-events-none">
-              <Search size={18} />
-            </button>
-            <input type="text" placeholder="Describe the bug in plain language…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
-              className="w-full bg-transparent h-14 pl-12 pr-4 text-white placeholder:text-white/30 focus:outline-none text-base" />
+          <div ref={searchWrapRef} className="flex-1 relative">
+            <div className="flex items-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-colors focus-within:border-blue-500/50 focus-within:bg-white/10">
+              <button onClick={() => handleAnalyze()} disabled={analyzing || !query.trim()} className="absolute left-4 p-1 text-white/40 hover:text-white/70 transition-colors disabled:pointer-events-none">
+                <Search size={18} />
+              </button>
+              <input
+                type="text"
+                placeholder="Describe the bug — or click to browse your database…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
+                onFocus={() => setShowDbOverlay(true)}
+                className="w-full bg-transparent h-14 pl-12 pr-4 text-white placeholder:text-white/30 focus:outline-none text-base"
+              />
+            </div>
+            {showDbOverlay && (
+              <DbSearchOverlay
+                onSelect={(text) => { setQuery(text); setShowDbOverlay(false); }}
+                onClose={() => setShowDbOverlay(false)}
+              />
+            )}
           </div>
           <div className="flex gap-2">
             <button onClick={() => handleAnalyze()} disabled={analyzing || !query.trim()}
@@ -138,7 +287,7 @@ export default function BugAnalysis() {
         </div>
         <div className="flex items-center gap-2 mt-4 px-2 opacity-60">
           <Database size={12} className="text-white/60" />
-          <span className="text-xs text-white/60">Similar issues retrieved via <strong className="text-white font-semibold">semantic search (RAG)</strong></span>
+          <span className="text-xs text-white/60">Semantic search (RAG) retrieves similar historical bugs · Click search bar to browse your live database</span>
         </div>
       </div>
 
@@ -193,23 +342,32 @@ export default function BugAnalysis() {
               <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Recommended action</div>
               <div className="text-sm font-semibold text-white">{sevDef?.action || prediction.diagnosis}</div>
             </div>
-            
+
+            {/* Feedback */}
             {!feedbackSent && !showCorrection && (
-              <div className="pt-6 border-t border-white/10 flex items-center justify-between gap-4 mt-auto">
-                <span className="text-xs text-white/50 font-medium">Is this accurate?</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setFeedbackSent(true)} className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
-                    <ThumbsUp size={13} /> Yes
-                  </button>
-                  <button onClick={() => setShowCorrection(true)} className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
-                    <ThumbsDown size={13} /> Correct it
-                  </button>
+              <div className="pt-6 border-t border-white/10 flex flex-col gap-3 mt-auto">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-white/70 font-semibold">Is this accurate?</div>
+                    <div className="text-[10px] text-white/30 mt-0.5">Your response trains the model</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={submitPositiveFeedback}
+                      className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
+                      <ThumbsUp size={13} /> Yes — correct
+                    </button>
+                    <button onClick={() => setShowCorrection(true)}
+                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
+                      <ThumbsDown size={13} /> Fix it
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
             {showCorrection && !feedbackSent && (
               <div className="animate-in fade-in pt-6 border-t border-white/10 mt-auto">
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">What should it be?</p>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">What should it be?</p>
+                <p className="text-[10px] text-white/30 mb-3">This correction will retrain the model to improve future predictions.</p>
                 <select value={correctedSev} onChange={e => setCorrectedSev(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white mb-3 text-sm focus:outline-none focus:border-white/30 appearance-none">
                   <option value="S1">S1 — Critical</option>
                   <option value="S2">S2 — High</option>
@@ -219,7 +377,7 @@ export default function BugAnalysis() {
                 <div className="flex gap-2">
                   <button onClick={() => setShowCorrection(false)} className="flex-1 px-4 py-2.5 bg-transparent border border-white/20 text-white/60 hover:text-white rounded-xl text-xs font-bold transition-all">Cancel</button>
                   <button onClick={submitCorrection} disabled={submittingFeedback} className="flex-1 px-4 py-2.5 bg-white text-black hover:bg-zinc-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2">
-                    {submittingFeedback ? <RefreshCw size={12} className="animate-spin" /> : <><CheckCircle size={12} /> Submit</>}
+                    {submittingFeedback ? <RefreshCw size={12} className="animate-spin" /> : <><CheckCircle size={12} /> Submit correction</>}
                   </button>
                 </div>
               </div>
@@ -227,7 +385,10 @@ export default function BugAnalysis() {
             {feedbackSent && (
               <div className="pt-6 border-t border-white/10 flex items-center gap-2 mt-auto text-emerald-400">
                 <CheckCircle size={14} />
-                <span className="text-xs font-bold">Feedback received — model updating.</span>
+                <div>
+                  <div className="text-xs font-bold">Feedback received</div>
+                  <div className="text-[10px] text-emerald-400/60">Model will improve with your input</div>
+                </div>
               </div>
             )}
           </div>

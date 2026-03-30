@@ -365,7 +365,7 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
     from sklearn.metrics import confusion_matrix as _sk_cm, f1_score, precision_score, recall_score
 
     rf = RandomForestClassifier(
-        n_estimators=100, class_weight="balanced_subsample", max_depth=None,
+        n_estimators=60, class_weight="balanced_subsample", max_depth=None,
         min_samples_split=5, random_state=42, n_jobs=-1,
     )
     rf.fit(X, y)

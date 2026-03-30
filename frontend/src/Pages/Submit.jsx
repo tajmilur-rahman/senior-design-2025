@@ -365,6 +365,21 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Summary</span>
                     <span className="text-[9px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                    <span className="ml-auto text-[9px] font-bold text-white/30 uppercase tracking-widest">Demo samples →</span>
+                  </div>
+                  {/* Quick sample bug chips for demo purposes */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {[
+                      'Application crashes on form submit with empty fields',
+                      'Dashboard freezes when loading large datasets',
+                      'Login button unresponsive after failed auth',
+                      'Export CSV produces wrong column order',
+                    ].map(s => (
+                      <button key={s} type="button" onClick={() => setSummary(s)}
+                        className="text-[10px] px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/50 hover:text-white rounded-lg transition-all font-medium truncate max-w-[200px]">
+                        {s}
+                      </button>
+                    ))}
                   </div>
                   <textarea className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm min-h-[120px] resize-y"
                     placeholder="Describe the bug — what happened, what was expected, and how to reproduce it."
@@ -459,9 +474,14 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
                 <label className="flex items-start gap-3 mb-6 cursor-pointer group">
                   <input type="checkbox" checked={consentGlobal} onChange={e => setConsentGlobal(e.target.checked)} className="mt-1 w-4 h-4 rounded border-white/20 text-blue-500 focus:ring-blue-500/50 bg-black/50 cursor-pointer" />
-                  <span className="text-xs text-white/50 leading-relaxed group-hover:text-white/80 transition-colors">
-                    Allow this report to improve the <strong className="text-white">Universal Model</strong> (shared across all companies)
-                  </span>
+                  <div>
+                    <span className="text-xs text-white/60 font-semibold group-hover:text-white/90 transition-colors">
+                      Contribute to the <strong className="text-white">Universal Model</strong>
+                    </span>
+                    <p className="text-[10px] text-white/30 mt-0.5 leading-relaxed">
+                      When checked, this bug report is anonymously added to the shared training dataset — improving severity predictions across all companies. Uncheck to keep it private to your company only.
+                    </p>
+                  </div>
                 </label>
 
                 <button onClick={handleManualSubmit} disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}

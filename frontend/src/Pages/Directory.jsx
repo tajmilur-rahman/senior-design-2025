@@ -58,12 +58,23 @@ export default function Directory({ onNavigate, user }) {
       .sort((a, b) => b.count - a.count);
   }, [counts]);
 
-  // If any returned component name matches a Mozilla taxonomy team, stay on the taxonomy view
-  // (those are Firefox/Mozilla companies — the taxonomy IS their directory)
-  const matchesTaxonomy = dynamicComponents.some(({ name }) =>
+  // Detect if this is a Firefox/Mozilla company by checking their data_table
+  const compName = (user?.company_name || '').toLowerCase();
+  const userName = (user?.username || '').toLowerCase();
+  const isFirefoxCompany = user?.data_table === 'firefox_table' ||
+    compName.includes('firefox') || compName.includes('mozilla') ||
+    userName.includes('firefox') || userName.includes('mozilla');
+
+  // Detect whether the component data looks like Mozilla taxonomy —
+  // this catches non-Firefox companies whose DB was seeded from firefox_table
+  // before the component-stripping fix was applied.
+  const looksLikeMozilla = dynamicComponents.some(({ name }) =>
     Object.keys(mozillaTaxonomy).some(k => k.toLowerCase() === name.toLowerCase())
   );
-  const showDynamic = dynamicComponents.length > 0 && !matchesTaxonomy;
+
+  // Only show dynamic component cards for non-Firefox companies that have
+  // their own real (non-Mozilla) component data.
+  const showDynamic = !isFirefoxCompany && dynamicComponents.length > 0 && !looksLikeMozilla;
   const companyLabel = user?.company_name || 'your company';
 
   const getTeamCount = (teamName) => counts[teamName.toLowerCase()] || 0;
@@ -191,14 +202,18 @@ export default function Directory({ onNavigate, user }) {
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             {showDynamic
               ? `Live components from ${companyLabel} data. Select one to pre-fill a bug report.`
-              : 'Select a component to pre-fill a bug report, or browse the architecture.'}
+              : isFirefoxCompany
+                ? 'Select a component to pre-fill a bug report, or browse the architecture.'
+                : `Components will appear here as your team submits bugs. Submit your first bug to get started.`}
           </p>
         </div>
-        <div className="relative z-10">
-          <button onClick={() => window.open('https://bugzilla.mozilla.org/', '_blank')} className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm whitespace-nowrap">
-            Open Bugzilla <ExternalLink size={14} className="opacity-70" />
-          </button>
-        </div>
+        {isFirefoxCompany && (
+          <div className="relative z-10">
+            <button onClick={() => window.open('https://bugzilla.mozilla.org/', '_blank')} className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm whitespace-nowrap">
+              Open Bugzilla <ExternalLink size={14} className="opacity-70" />
+            </button>
+          </div>
+        )}
         <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/20 via-white/5 to-transparent" />
       </div>
 
@@ -226,6 +241,26 @@ export default function Directory({ onNavigate, user }) {
               </div>
             </div>
           ))
+        ) : !isFirefoxCompany ? (
+          // Non-Firefox company with no own-component data yet — show empty state
+          <div className="col-span-full flex flex-col items-center justify-center py-24 gap-6 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <FolderTree size={28} className="text-white/20" />
+            </div>
+            <div>
+              <p className="text-white/50 text-base font-medium mb-2">No components yet</p>
+              <p className="text-white/30 text-sm max-w-sm">
+                Components are automatically detected from your submitted bugs.
+                Tag bugs with a component when submitting to start building your directory.
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('submit')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 rounded-xl text-sm font-bold transition-all"
+            >
+              Submit a bug <ArrowRight size={14} />
+            </button>
+          </div>
         ) : (
           Object.keys(mozillaTaxonomy).map((team) => {
             const tCount = getTeamCount(team);

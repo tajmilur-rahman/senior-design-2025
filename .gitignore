@@ -29,6 +29,10 @@ rag_db/
 *.csv
 *.json.old
 
-# --- Generated ML metrics (rebuilt on each training run) ---
-ml_training/rf_metrics.json
-ml_training/main_brain_metrics.json
+# --- Generated ML artifacts (rebuilt on each training run) ---
+ml_training/*.pkl
+ml_training/*.json
+
+# --- Root-level stale artifacts ---
+package.json
+package-lock.json

@@ -1,13 +1,5 @@
 import os
 
-DB = {
-    "dbname": "bugbug_data",
-    "user": "postgres",
-    "password": "2331",
-    "host": "127.0.0.1",
-    "port": "5432"
-}
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ML_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "ml_training"))
 COMPANY_MODELS_DIR = os.path.join(BASE_DIR, "models")

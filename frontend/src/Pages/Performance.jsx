@@ -425,20 +425,47 @@ export default function Performance({ user, onTrainStart }) {
     </div>
   );
 
+  // ── Global model banner (shown when company hasn't trained yet) ──────────────
+  const GlobalModelBanner = () => (
+    <div className="mb-8 p-6 lg:p-8 rounded-[2rem] border-2 border-blue-500/30 bg-blue-500/5 backdrop-blur-md relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 relative z-10">
+        <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+          <Globe size={24} className="text-blue-400" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg font-bold text-white">Global Model (Shared)</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 uppercase tracking-widest">Active</span>
+          </div>
+          <p className="text-sm text-white/60 leading-relaxed max-w-2xl">
+            Your company is currently using the <strong className="text-white">universal Random Forest model</strong> trained on 220,000+ real-world bugs.
+            Submit feedback corrections or bulk-upload your own data on the Performance tab to train an isolated company model — improving predictions for your specific bug patterns.
+          </p>
+        </div>
+        <button onClick={() => setShowTrainModal(true)}
+          className="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-300 font-bold rounded-2xl transition-all text-sm whitespace-nowrap">
+          <Play size={15} /> Train Company Model
+        </button>
+      </div>
+    </div>
+  );
+
   // ── No model trained empty state ─────────────────────────────────────────────
   if (meta.model_status === 'not_trained') return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
       {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} onTrainStart={onTrainStart} />}
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
+      {!isSuperAdmin && <GlobalModelBanner />}
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-6 text-center">
         <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-t from-white/5 to-transparent" />
           <BrainCircuit size={32} className="text-white/20 relative z-10" />
         </div>
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">No Model Trained Yet</h2>
+          <h2 className="text-3xl font-bold text-white mb-2">No Company Model Trained Yet</h2>
           <p className="text-white/40 text-sm max-w-sm leading-relaxed">
-            Train a model on your company's bug data to unlock severity predictions, performance metrics, and the confusion matrix.
+            Train a model on your company's bug data to unlock isolated severity predictions, performance metrics, and the confusion matrix.
           </p>
         </div>
         <button onClick={() => setShowTrainModal(true)}
@@ -457,6 +484,10 @@ export default function Performance({ user, onTrainStart }) {
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
       {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} onTrainStart={onTrainStart} />}
+      {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
+
+      {/* Global model banner — shown when company hasn't yet trained their own model */}
+      {!isSuperAdmin && meta.model_source === 'global' && <GlobalModelBanner />}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 relative">

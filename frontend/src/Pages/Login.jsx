@@ -54,11 +54,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
         setMode('reset');
         setViewState('form');
         setIsRecovery(true);
-
-        if (session?.user?.email) {
-        setEmail(session.user.email);
-      }
-      
+        if (session?.user?.email) setEmail(session.user.email);
         setMsg("Recovery session active. Please enter your new password.");
       }
     });
@@ -158,7 +154,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
     } catch (err) {
       const errMsg = err?.message || 'Something went wrong. Please try again.';
       if (mode === 'login' && /invalid login credentials/i.test(errMsg)) {
-        setMsg('Invalid email or password. If your account was recently approved, try the latest invite link to set/reset your password.');
+        setMsg('Invalid email or password. If your account was recently approved, check your email for an invite link to set your password.');
       } else {
         setMsg(errMsg);
       }

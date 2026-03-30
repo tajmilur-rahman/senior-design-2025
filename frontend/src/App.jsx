@@ -17,7 +17,7 @@ import PendingApproval   from './Pages/PendingApproval';
 import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
-import { LogOut, Crown, Users, ChevronDown, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle } from 'lucide-react';
+import { LogOut, Crown, Users, ChevronDown, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell } from 'lucide-react';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -41,7 +41,14 @@ const NAV_TABS = [
 async function fetchUserRowWithRetry(uuid, maxAttempts = 6, delayMs = 600) {
   for (let i = 0; i < maxAttempts; i++) {
     const { data: rows } = await supabase.from('users').select('*').eq('uuid', uuid);
-    if (rows && rows.length > 0 && rows[0].role) return rows[0];
+    if (rows && rows.length > 0 && rows[0].role) {
+      let apiProfile = {};
+      try {
+        const res = await axios.get('/api/users/me/profile');
+        apiProfile = res.data || {};
+      } catch {}
+      return { ...rows[0], _apiProfile: apiProfile };
+    }
     if (i < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
   }
   try {
@@ -108,6 +115,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [submitPrefill, setPrefill] = useState(null);
   const [extFilters,    setExtFilters] = useState(null);
   const [trainingJob,   setTrainingJob] = useState({ key: null, step: '', pct: 0, done: false, error: null });
+  const [perfRefreshKey, setPerfRefreshKey] = useState(0);
   const pollRef = useRef(null);
 
   const navigate = (targetTab, query = '', prefill = null, filters = null) => {
@@ -134,9 +142,12 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
       try {
         const s = await axios.get(`/api/admin/model/train/status?stream_key=${trainingJob.key}`);
         const d = s.data;
+        if (d.done) {
+          clearInterval(pollRef.current);
+          if (!d.error) setPerfRefreshKey(k => k + 1);
+        }
         setTrainingJob(j => ({ ...j, step: d.step || j.step, pct: d.pct || j.pct,
           done: d.done, error: d.done && d.error ? d.error : null }));
-        if (d.done) clearInterval(pollRef.current);
       } catch { /* transient — keep polling */ }
     }, 1000);
     return () => clearInterval(pollRef.current);
@@ -144,6 +155,23 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin      = isSuperAdmin || user?.role === 'admin';
+
+  // Pending approval notifications
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchPending = async () => {
+      try {
+        const endpoint = isSuperAdmin ? '/api/superadmin/pending' : '/api/admin/users/pending';
+        const res = await axios.get(endpoint);
+        const data = res.data || [];
+        setPendingCount(Array.isArray(data) ? data.length : 0);
+      } catch { setPendingCount(0); }
+    };
+    fetchPending();
+    const iv = setInterval(fetchPending, 30000);
+    return () => clearInterval(iv);
+  }, [isAdmin, isSuperAdmin]);
 
   return (
     <div className="app-container bg-black text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden">
@@ -187,7 +215,22 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           </div>
 
           {/* User pill — right */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex items-center gap-2">
+            {/* Notification bell — admins only */}
+            {isAdmin && (
+              <button
+                onClick={() => navigate(isSuperAdmin ? 'superadmin' : 'users')}
+                className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+                title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
+              >
+                <Bell size={15} className={pendingCount > 0 ? 'text-amber-400' : 'text-white/50'} />
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </button>
+            )}
             <div className="group relative">
               <div className="flex items-center gap-2 px-1 pr-3 py-1 bg-white/5 border border-white/10 rounded-full cursor-pointer hover:bg-white/10 transition-all">
                 <div className="w-7 h-7 bg-white text-black text-xs font-bold flex items-center justify-center rounded-full">
@@ -204,7 +247,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                   <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('profile')}>
                     <UserCog size={14} /> Profile Settings
                   </button>
-                  {isAdmin && (
+                  {isAdmin && !isSuperAdmin && (
                     <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('users')}>
                       <Users size={14} /> Admin Panel
                     </button>
@@ -228,8 +271,8 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
       <main className="main-scroll pt-24 relative z-10">
         {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} />}
         {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
-        {tab === 'performance' && isAdmin       && <Performance   user={user} onTrainStart={handleTrainStart} />}
-        {tab === 'analysis'    && <BugAnalysis />}
+        {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
+        {tab === 'analysis'    && <BugAnalysis  user={user} />}
         {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
         {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
         {tab === 'resolution'  && <ResolutionSupport />}
@@ -242,7 +285,11 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
       <TrainingBanner
         job={trainingJob}
         onDismiss={() => setTrainingJob({ key: null, step: '', pct: 0, done: false, error: null })}
-        onViewResults={() => { navigate('performance'); setTrainingJob(j => ({ ...j, key: null })); }}
+        onViewResults={() => { 
+          navigate('performance'); 
+          setPerfRefreshKey(k => k + 1);
+          setTrainingJob(j => ({ ...j, key: null })); 
+        }}
       />
     </div>
   );
@@ -251,13 +298,11 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 export default function App() {
   const [user,           setUser]           = useState(null);
   const [loading,        setLoading]        = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [forceRecoveryReset, setForceRecoveryReset] = useState(
     () => window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')
   );
   const [showLogin,      setShowLogin]      = useState(false);
   const [initialTab,     setInitialTab]     = useState(null);
-  const onboardingShownRef = useRef(false);
 
   const resolveContextRole = (dbRole) => {
     const saved = localStorage.getItem('user_context_role');
@@ -273,8 +318,6 @@ export default function App() {
       try {
         if (!session) {
           setUser(null);
-          setShowOnboarding(false);
-          onboardingShownRef.current = false;
           return;
         }
 
@@ -291,12 +334,26 @@ export default function App() {
         const uuid = session.user.id;
         const db = await fetchUserRowWithRetry(uuid);
 
+        let companyName = db?._apiProfile?.company_name || null;
+        let dataTable = null;
+        if (db && db.company_id) {
+          try {
+            const { data: co } = await supabase.from('companies').select('name, data_table').eq('id', db.company_id).single();
+            if (co) {
+              companyName = co.name || companyName;
+              dataTable = co.data_table;
+            }
+          } catch {}
+        }
+
         if (db) {
           setUser({
             id:                   uuid,
             uuid:                 uuid,
             email:                session.user.email || db.email,
             username:             db.username || session.user.email?.split('@')[0],
+            company_name:         companyName,
+            data_table:           dataTable,
             role:                 db.role || 'user',
             context_role:         resolveContextRole(db.role || 'user'),
             company_id:           db.company_id,
@@ -304,20 +361,8 @@ export default function App() {
             onboarding_completed: db.onboarding_completed || false,
             status:               db.status || 'active',
           });
-          const isCompanyAdmin = db.role === 'admin';
           if (event === 'SIGNED_IN') {
-          sessionStorage.setItem('apex_session_active', 'true');
-        }
-
-        if (!fromInitialSession && event === 'SIGNED_IN') {
-            if (isCompanyAdmin && !db.onboarding_completed && !onboardingShownRef.current) {
-              onboardingShownRef.current = true;
-              setShowOnboarding(true);
-            } else {
-              setShowOnboarding(false);
-            }
-          } else {
-            setShowOnboarding(false);
+            sessionStorage.setItem('apex_session_active', 'true');
           }
         } else {
           setUser({
@@ -326,13 +371,13 @@ export default function App() {
             username: session.user.email?.split('@')[0],
             role: 'user', context_role: 'user',
             company_id: null, onboarding_completed: false,
+            company_name: null,
+            data_table: null,
           });
-          setShowOnboarding(false);
         }
       } catch (err) {
         console.error('[App] initAuth:', err);
         setUser(null);
-        setShowOnboarding(false);
       } finally {
         setLoading(false);
       }
@@ -367,6 +412,7 @@ export default function App() {
             username:             u.username,
             role:                 u.role,
             company_id:           u.company_id,
+            company_name:         companyName || prev?.company_name,
             onboarding_completed: true,
           }));
         }
@@ -381,19 +427,19 @@ export default function App() {
           .from('users')
           .update({ onboarding_completed: true })
           .eq('uuid', user?.uuid || user?.id);
+        
+        setUser(prev => prev ? { ...prev, onboarding_completed: true } : prev);
       } catch (err) {
         console.error('[App] marking onboarding complete:', err);
       }
-      setUser(prev => prev ? { ...prev, onboarding_completed: true } : prev);
     }
-    setShowOnboarding(false);
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('user_context_role');
     sessionStorage.removeItem('apex_session_active');
-    setUser(null); setShowOnboarding(false);
+    setUser(null);
   };
 
   const handleLogin = async (loginUser) => {
@@ -405,6 +451,18 @@ export default function App() {
       console.error('[App] handleLogin DB fetch:', err);
     }
 
+    let companyName = db?._apiProfile?.company_name || null;
+    let dataTable = null;
+    if (db && db.company_id) {
+      try {
+        const { data: co } = await supabase.from('companies').select('name, data_table').eq('id', db.company_id).single();
+        if (co) {
+          companyName = co.name || companyName;
+          dataTable = co.data_table;
+        }
+      } catch {}
+    }
+
     const dbRole   = db?.role   || 'user';
     const dbStatus = db?.status || 'active';
     localStorage.setItem('user_context_role', dbRole);
@@ -414,6 +472,8 @@ export default function App() {
       id:                   loginUser.id,
       uuid:                 loginUser.id,
       username:             db?.username || loginUser.email?.split('@')[0],
+      company_name:         companyName,
+      data_table:           dataTable,
       role:                 dbRole,
       context_role:         resolveContextRole(dbRole),
       status:               dbStatus,
@@ -467,7 +527,7 @@ export default function App() {
       }}
     />
   );
-  if (showOnboarding) return (
+  if (user && (user.role === 'admin' || user.is_admin) && !user.onboarding_completed) return (
     <Onboarding onComplete={handleOnboardingComplete} user={user} />
   );
   return (
