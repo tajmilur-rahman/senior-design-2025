@@ -185,7 +185,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           {/* Brand — left */}
           <div className="flex items-center cursor-pointer flex-shrink-0" onClick={() => navigate('overview')}>
             <span className="text-xl font-bold tracking-tight text-white">
-              Apex<span className="text-zinc-500">OS</span>
+              Spot<span className="text-zinc-500">fixes</span>
             </span>
           </div>
 

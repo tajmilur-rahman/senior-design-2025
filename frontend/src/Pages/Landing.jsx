@@ -611,7 +611,7 @@ export default function Landing({ onEnterWorkspace }) {
             {/* Brand — left */}
             <div className="flex items-center cursor-pointer flex-shrink-0" onClick={() => scrollTo('hero')}>
               <span className="text-xl font-bold tracking-tight text-white">
-                Apex<span className="text-zinc-500">OS</span>
+                Spot<span className="text-zinc-500">fixes</span>
               </span>
             </div>
 

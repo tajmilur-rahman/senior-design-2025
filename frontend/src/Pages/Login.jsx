@@ -261,7 +261,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
           <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
              <ShieldCheck size={22} className="text-black" />
           </div>
-          <span className="font-bold text-2xl tracking-tight text-white">Apex<span className="text-white/50 font-medium">OS</span></span>
+          <span className="font-bold text-2xl tracking-tight text-white">Spot<span className="text-white/50 font-medium">fixes</span></span>
         </div>
 
         <div className="w-full flex flex-col justify-center">
