@@ -381,6 +381,24 @@ export default function Performance({ user, onTrainStart }) {
 
   const feedbackStats = modelData.feedback_stats || { total_corrections: 0, correction_rate: 0, weak_components: [] };
 
+  const isLight = !!document.querySelector('[data-theme="light"]');
+  const chartTooltipStyle = {
+    borderRadius: '12px',
+    border: `1px solid ${isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'}`,
+    background: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(0,0,0,0.9)',
+    backdropFilter: 'blur(12px)',
+    color: isLight ? '#0f172a' : '#fff',
+    fontSize: '13px',
+    boxShadow: isLight ? '0 10px 40px rgba(0,0,0,0.12)' : '0 10px 40px rgba(0,0,0,0.5)',
+    padding: '10px 14px',
+  };
+  const chartItemStyle  = { color: isLight ? '#0f172a' : '#fff', fontWeight: 700 };
+  const chartCursorFill = isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.03)';
+  const axisTickDim     = isLight ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.3)';
+  const axisTickBright  = isLight ? 'rgba(15,23,42,0.65)' : 'rgba(255,255,255,0.6)';
+  const axisStroke      = isLight ? 'rgba(15,23,42,0.40)' : 'rgba(255,255,255,0.4)';
+  const gridStroke      = isLight ? 'rgba(15,23,42,0.07)' : 'rgba(255,255,255,0.05)';
+
   const formatPct = (val) => `${(val * 100).toFixed(1)}%`;
 
   const getHeatmapColor = (val, max) => {
@@ -648,13 +666,12 @@ export default function Performance({ user, onTrainStart }) {
           <div className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={comparisonData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis domain={[0, 100]} stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={t => `${t}%`} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', color: '#fff', fontSize: '13px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', padding: '10px 14px' }}
-                itemStyle={{ color: '#fff', fontWeight: 700 }} formatter={v => [`${v.toFixed(1)}%`, '']} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+              <XAxis dataKey="name" stroke={axisStroke} fontSize={11} tickLine={false} axisLine={false} />
+              <YAxis domain={[0, 100]} stroke={axisStroke} fontSize={11} tickLine={false} axisLine={false} tickFormatter={t => `${t}%`} />
+              <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v.toFixed(1)}%`, '']} cursor={{ fill: chartCursorFill }} />
               <Bar dataKey="Enterprise" fill="#38bdf8" radius={[4,4,0,0]} barSize={14} opacity={0.85} />
-              <Bar dataKey="Previous"   fill="rgba(255,255,255,0.1)" radius={[4,4,0,0]} barSize={14} />
+              <Bar dataKey="Previous"   fill={isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'} radius={[4,4,0,0]} barSize={14} />
               <Bar dataKey="Active"     fill="#3b82f6" radius={[4,4,0,0]} barSize={14} />
             </BarChart>
           </ResponsiveContainer>
@@ -675,10 +692,9 @@ export default function Performance({ user, onTrainStart }) {
           <div className="h-[250px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={classMetrics} layout="vertical" margin={{ left: -10, right: 20, top: 0, bottom: 0 }}>
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.3)' }} tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} />
-              <YAxis dataKey="subject" type="category" width={90} tick={{ fontSize: 11, fontWeight: 600, fill: 'rgba(255,255,255,0.6)' }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', color: '#fff', fontSize: '13px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', padding: '10px 14px' }}
-                itemStyle={{ color: '#fff', fontWeight: 700 }} formatter={v => [`${v}%`, '']} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: axisTickDim }} tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} />
+              <YAxis dataKey="subject" type="category" width={90} tick={{ fontSize: 11, fontWeight: 600, fill: axisTickBright }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v}%`, '']} cursor={{ fill: chartCursorFill }} />
               <Bar dataKey="precision" name="Precision" fill="#3b82f6" radius={[0,4,4,0]} barSize={10} />
               <Bar dataKey="recall"    name="Recall"    fill="#10b981" radius={[0,4,4,0]} barSize={10} />
             </BarChart>

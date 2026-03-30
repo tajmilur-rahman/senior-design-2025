@@ -340,22 +340,22 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     <div>
                       <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Team</label>
                       <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none" value={team} onChange={handleTeamChange}>
-                        <option value="" disabled className="bg-black text-white/50">Select a team…</option>
-                        {teams.map(t => <option key={t} value={t} className="bg-black text-white">{t}</option>)}
+                        <option value="" disabled>Select a team…</option>
+                        {teams.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Category</label>
                       <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none disabled:opacity-50" value={category} onChange={handleCategoryChange} disabled={!team}>
-                        <option value="" disabled className="bg-black text-white/50">{team ? 'Select a category…' : 'Select a team first'}</option>
-                        {categories.map(c => <option key={c} value={c} className="bg-black text-white">{c}</option>)}
+                        <option value="" disabled>{team ? 'Select a category…' : 'Select a team first'}</option>
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Component</label>
                       <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none disabled:opacity-50" value={component} onChange={e => setComponent(e.target.value)} disabled={!category}>
-                        <option value="" disabled className="bg-black text-white/50">{category ? 'Select a component…' : 'Select a category first'}</option>
-                        {components.map(c => <option key={c} value={c} className="bg-black text-white">{c}</option>)}
+                        <option value="" disabled>{category ? 'Select a component…' : 'Select a category first'}</option>
+                        {components.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
@@ -422,8 +422,8 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                       <span className="text-[9px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
                     </div>
                     <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500/50 focus:bg-white/10 outline-none transition-all text-sm appearance-none" value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)}>
-                      <option value="" disabled className="bg-black text-white/50">Select a company…</option>
-                      {companies.map(c => <option key={c.id} value={c.id} className="bg-black text-white">{c.name}</option>)}
+                      <option value="" disabled>Select a company…</option>
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                 )}

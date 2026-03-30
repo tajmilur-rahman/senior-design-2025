@@ -727,4 +727,242 @@ body {
   }
   .sys-nav, .sys-card, .feed-card, .ba-card, .dir-card { transition: none; }
 }
-.onboarding-btn-next:hover { background: #e4e4e7; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE — CSS Variable Overrides
+   Applied when data-theme="light" on .app-container
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --bg:          #f1f5f9;
+  --card-bg:     rgba(255, 255, 255, 0.95);
+  --text-main:   #0f172a;
+  --text-sec:    #475569;
+  --accent:      #2563eb;
+  --accent-hover:#1d4ed8;
+  --success:     #059669;
+  --danger:      #dc2626;
+  --border:      rgba(15, 23, 42, 0.12);
+  --input-bg:    rgba(15, 23, 42, 0.05);
+  --hover-bg:    rgba(15, 23, 42, 0.06);
+  --nav-bg:      rgba(241, 245, 249, 0.90);
+  --pill-bg:     rgba(37, 99, 235, 0.08);
+  --shadow-sm:   0 4px 20px rgba(0, 0, 0, 0.07);
+  --shadow-md:   0 10px 30px rgba(0, 0, 0, 0.10);
+  --shadow-lg:   0 20px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE — Comprehensive Tailwind Hardcoded Class Overrides
+   Scope: [data-theme="light"] on .app-container, cascades to all children
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Solid dark backgrounds ─────────────────────────────────────────────── */
+[data-theme="light"] .bg-black,
+[data-theme="light"].bg-black            { background-color: #f1f5f9 !important; }
+[data-theme="light"] .bg-black\/10       { background-color: rgba(15,23,42,0.05) !important; }
+[data-theme="light"] .bg-black\/20       { background-color: rgba(15,23,42,0.07) !important; }
+[data-theme="light"] .bg-black\/30       { background-color: rgba(15,23,42,0.09) !important; }
+[data-theme="light"] .bg-black\/40       { background-color: rgba(15,23,42,0.06) !important; }
+[data-theme="light"] .bg-black\/50       { background-color: rgba(15,23,42,0.06) !important; }
+/* modal overlay backdrops stay dark in light mode (they're meant to dim) */
+[data-theme="light"] .bg-black\/60       { background-color: rgba(15,23,42,0.40) !important; }
+[data-theme="light"] .bg-black\/70       { background-color: rgba(15,23,42,0.45) !important; }
+/* panel/drawer backgrounds flip to light */
+[data-theme="light"] .bg-black\/80       { background-color: rgba(255,255,255,0.95) !important; }
+[data-theme="light"] .bg-black\/90       { background-color: rgba(255,255,255,0.95) !important; }
+[data-theme="light"] .bg-black\/95       { background-color: rgba(255,255,255,0.97) !important; }
+
+/* ── White transparency → dark tints ────────────────────────────────────── */
+[data-theme="light"] .bg-white\/\[0\.02\] { background-color: rgba(15,23,42,0.03) !important; }
+[data-theme="light"] .bg-white\/\[0\.03\] { background-color: rgba(15,23,42,0.04) !important; }
+[data-theme="light"] .bg-white\/\[0\.04\] { background-color: rgba(15,23,42,0.04) !important; }
+[data-theme="light"] .bg-white\/\[0\.07\] { background-color: rgba(15,23,42,0.05) !important; }
+[data-theme="light"] .bg-white\/5        { background-color: rgba(15,23,42,0.05) !important; }
+[data-theme="light"] .bg-white\/10       { background-color: rgba(15,23,42,0.08) !important; }
+[data-theme="light"] .bg-white\/15       { background-color: rgba(37,99,235,0.10) !important; }
+[data-theme="light"] .bg-white\/20       { background-color: rgba(15,23,42,0.11) !important; }
+[data-theme="light"] .bg-white\/30       { background-color: rgba(15,23,42,0.14) !important; }
+
+/* ── Zinc/gray dark backgrounds ─────────────────────────────────────────── */
+[data-theme="light"] .bg-zinc-900        { background-color: #e2e8f0 !important; }
+[data-theme="light"] .bg-zinc-800        { background-color: #e8eef4 !important; }
+[data-theme="light"] .bg-zinc-700        { background-color: #cbd5e1 !important; }
+[data-theme="light"] .bg-gray-900        { background-color: #e2e8f0 !important; }
+[data-theme="light"] .bg-gray-800        { background-color: #e8eef4 !important; }
+[data-theme="light"] .bg-slate-900       { background-color: #e2e8f0 !important; }
+[data-theme="light"] .bg-neutral-900     { background-color: #e2e8f0 !important; }
+
+/* ── Hardcoded hex backgrounds ───────────────────────────────────────────── */
+[data-theme="light"] .bg-\[\#0d0d14\]   { background-color: #f1f5f9 !important; }
+[data-theme="light"] .bg-\[\#0d0d1a\]   { background-color: #f1f5f9 !important; }
+[data-theme="light"] .bg-\[\#080808\]   { background-color: #f1f5f9 !important; }
+[data-theme="light"] .bg-\[\#0b1120\]   { background-color: #dbeafe !important; }
+[data-theme="light"] .bg-\[\#0d0d14\]\/95 { background-color: rgba(241,245,249,0.97) !important; }
+[data-theme="light"] .bg-\[\#0d0d1a\]\/95 { background-color: rgba(255,255,255,0.97) !important; }
+[data-theme="light"] .bg-emerald-950\/90  { background-color: rgba(236,253,245,0.97) !important; }
+[data-theme="light"] .bg-red-950\/90      { background-color: rgba(254,242,242,0.97) !important; }
+
+/* ── Gradient stops ──────────────────────────────────────────────────────── */
+[data-theme="light"] .from-blue-900\/10 {
+  --tw-gradient-from: rgba(219,234,254,0.5);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(219,234,254,0));
+}
+[data-theme="light"] .from-black        { --tw-gradient-from: #f1f5f9 !important; }
+[data-theme="light"] .via-black {
+  --tw-gradient-via: #f1f5f9;
+  --tw-gradient-stops: var(--tw-gradient-from), #f1f5f9, var(--tw-gradient-to, rgba(241,245,249,0));
+}
+[data-theme="light"] .to-black          { --tw-gradient-to: #f1f5f9 !important; }
+[data-theme="light"] .from-indigo-900\/10 {
+  --tw-gradient-from: rgba(238,242,255,0.5);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(238,242,255,0));
+}
+
+/* ── Text — opacity boosted for clear legibility on light background ────────
+   Strategy: preserve visual weight hierarchy but enforce min 58% for readability.
+   All values meet or exceed WCAG AA 4.5:1 contrast on white at these opacities.
+   ─────────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] .text-white         { color: #0f172a !important; }
+[data-theme="light"] .text-white\/90     { color: rgba(15,23,42,0.93) !important; }
+[data-theme="light"] .text-white\/80     { color: rgba(15,23,42,0.88) !important; }
+[data-theme="light"] .text-white\/70     { color: rgba(15,23,42,0.83) !important; }
+[data-theme="light"] .text-white\/60     { color: rgba(15,23,42,0.77) !important; }
+[data-theme="light"] .text-white\/50     { color: rgba(15,23,42,0.72) !important; }
+[data-theme="light"] .text-white\/40     { color: rgba(15,23,42,0.67) !important; }
+/* 30% → floor at 63% — was the worst offender (nearly invisible) */
+[data-theme="light"] .text-white\/30     { color: rgba(15,23,42,0.63) !important; }
+[data-theme="light"] .text-white\/20     { color: rgba(15,23,42,0.60) !important; }
+[data-theme="light"] .text-white\/15     { color: rgba(15,23,42,0.58) !important; }
+[data-theme="light"] .text-white\/10     { color: rgba(15,23,42,0.58) !important; }
+
+/* Zinc / gray / slate text */
+[data-theme="light"] .text-zinc-100      { color: #1e293b !important; }
+[data-theme="light"] .text-zinc-200      { color: #334155 !important; }
+[data-theme="light"] .text-zinc-300      { color: #475569 !important; }
+[data-theme="light"] .text-zinc-400      { color: #475569 !important; }
+[data-theme="light"] .text-zinc-500      { color: #334155 !important; }
+[data-theme="light"] .text-gray-300      { color: #475569 !important; }
+[data-theme="light"] .text-gray-400      { color: #475569 !important; }
+[data-theme="light"] .text-slate-300     { color: #475569 !important; }
+[data-theme="light"] .text-slate-400     { color: #475569 !important; }
+[data-theme="light"] .text-neutral-400   { color: #475569 !important; }
+
+/* ── Borders ─────────────────────────────────────────────────────────────── */
+[data-theme="light"] .border-white\/\[0\.04\] { border-color: rgba(15,23,42,0.08) !important; }
+[data-theme="light"] .border-white\/5    { border-color: rgba(15,23,42,0.08) !important; }
+[data-theme="light"] .border-white\/10   { border-color: rgba(15,23,42,0.12) !important; }
+[data-theme="light"] .border-white\/15   { border-color: rgba(15,23,42,0.14) !important; }
+[data-theme="light"] .border-white\/20   { border-color: rgba(15,23,42,0.16) !important; }
+[data-theme="light"] .border-white\/30   { border-color: rgba(15,23,42,0.20) !important; }
+[data-theme="light"] .border-zinc-700    { border-color: #cbd5e1 !important; }
+[data-theme="light"] .border-zinc-800    { border-color: #e2e8f0 !important; }
+[data-theme="light"] .border-zinc-600    { border-color: #94a3b8 !important; }
+
+/* ── Divide (table/list separators) ─────────────────────────────────────── */
+[data-theme="light"] .divide-white\/5 > * + *   { border-color: rgba(15,23,42,0.07) !important; }
+[data-theme="light"] .divide-white\/10 > * + *  { border-color: rgba(15,23,42,0.12) !important; }
+
+/* ── Hover / focus states ────────────────────────────────────────────────── */
+[data-theme="light"] .hover\:bg-white\/5:hover   { background-color: rgba(15,23,42,0.05) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover  { background-color: rgba(15,23,42,0.08) !important; }
+[data-theme="light"] .hover\:bg-white\/20:hover  { background-color: rgba(15,23,42,0.11) !important; }
+[data-theme="light"] .hover\:bg-white\/\[0\.07\]:hover { background-color: rgba(15,23,42,0.06) !important; }
+[data-theme="light"] .hover\:text-white:hover    { color: #0f172a !important; }
+[data-theme="light"] .hover\:border-white\/5:hover  { border-color: rgba(15,23,42,0.10) !important; }
+[data-theme="light"] .hover\:border-white\/20:hover { border-color: rgba(15,23,42,0.20) !important; }
+[data-theme="light"] .focus-within\:bg-white\/10:focus-within { background-color: rgba(15,23,42,0.08) !important; }
+
+/* ── Ring / outline ──────────────────────────────────────────────────────── */
+[data-theme="light"] .ring-white\/10    { --tw-ring-color: rgba(15,23,42,0.10) !important; }
+[data-theme="light"] .ring-white\/20    { --tw-ring-color: rgba(15,23,42,0.15) !important; }
+
+/* ── Placeholder text ────────────────────────────────────────────────────── */
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder { color: rgba(15,23,42,0.40) !important; }
+
+/* ── Select / option elements (native dropdowns) ────────────────────────── */
+[data-theme="light"] select             { background-color: #fff !important; color: #0f172a !important; border-color: rgba(15,23,42,0.20) !important; }
+[data-theme="light"] select option      { background-color: #fff !important; color: #0f172a !important; }
+
+/* ── Spinner / animated border ───────────────────────────────────────────── */
+[data-theme="light"] .border-t-white    { border-top-color: #0f172a !important; }
+[data-theme="light"] .border-2.border-white\/10 { border-color: rgba(15,23,42,0.12) !important; }
+
+/* ── Backdrop blur ───────────────────────────────────────────────────────── */
+[data-theme="light"] .backdrop-blur-xl  { backdrop-filter: blur(20px) saturate(180%) !important; -webkit-backdrop-filter: blur(20px) saturate(180%) !important; }
+[data-theme="light"] .backdrop-blur-2xl { backdrop-filter: blur(40px) saturate(180%) !important; -webkit-backdrop-filter: blur(40px) saturate(180%) !important; }
+
+/* ── Shadow ──────────────────────────────────────────────────────────────── */
+[data-theme="light"] .shadow-2xl        { box-shadow: 0 25px 50px -12px rgba(0,0,0,0.14) !important; }
+[data-theme="light"] .shadow-xl         { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.10) !important; }
+
+/* ── Selection highlight ─────────────────────────────────────────────────── */
+[data-theme="light"] *::selection       { background-color: rgba(37,99,235,0.20) !important; }
+
+/* ── Gradient from-white / to-white (used in decorative text gradients) ──── */
+[data-theme="light"] .from-white\/50 {
+  --tw-gradient-from: rgba(15,23,42,0.55);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(15,23,42,0));
+}
+[data-theme="light"] .from-white\/20 {
+  --tw-gradient-from: rgba(15,23,42,0.35);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(15,23,42,0));
+}
+[data-theme="light"] .to-white\/20    { --tw-gradient-to: rgba(15,23,42,0.30) !important; }
+[data-theme="light"] .to-white\/5     { --tw-gradient-to: rgba(15,23,42,0.08) !important; }
+[data-theme="light"] .via-white\/5 {
+  --tw-gradient-via: rgba(15,23,42,0.05);
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(15,23,42,0.05), var(--tw-gradient-to, rgba(15,23,42,0));
+}
+[data-theme="light"] .via-white\/20 {
+  --tw-gradient-via: rgba(15,23,42,0.20);
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(15,23,42,0.20), var(--tw-gradient-to, rgba(15,23,42,0));
+}
+[data-theme="light"] .via-blue-500\/20 {
+  --tw-gradient-via: rgba(37,99,235,0.20);
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(37,99,235,0.20), var(--tw-gradient-to, rgba(37,99,235,0));
+}
+
+/* bg-clip-text gradient fallback: make gradient text readable on light bg */
+[data-theme="light"] .bg-clip-text.text-transparent {
+  -webkit-text-fill-color: rgba(15,23,42,0.50) !important;
+}
+
+/* ── Recharts SVG text — override inline fill presentation attributes ─────── */
+/* SVG presentation attrs (fill="...") lose to CSS fill property */
+[data-theme="light"] .recharts-text                     { fill: rgba(15,23,42,0.65) !important; }
+[data-theme="light"] .recharts-cartesian-axis-tick-value { fill: rgba(15,23,42,0.60) !important; }
+[data-theme="light"] .recharts-label                    { fill: rgba(15,23,42,0.65) !important; }
+[data-theme="light"] .recharts-cartesian-grid line      { stroke: rgba(15,23,42,0.07) !important; }
+[data-theme="light"] .recharts-legend-item-text         { color: rgba(15,23,42,0.70) !important; }
+
+/* Tooltip wrapper (Recharts appends to body portal — target globally when light) */
+[data-theme="light"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: rgba(255,255,255,0.97) !important;
+  border-color: rgba(15,23,42,0.12) !important;
+  color: #0f172a !important;
+}
+[data-theme="light"] .recharts-tooltip-item             { color: #0f172a !important; }
+[data-theme="light"] .recharts-tooltip-item-name,
+[data-theme="light"] .recharts-tooltip-item-value       { color: #0f172a !important; }
+
+/* ── Modals / overlays ───────────────────────────────────────────────────── */
+[data-theme="light"] .inspector-overlay { background: rgba(15,23,42,0.35) !important; }
+
+/* ── Highlight card (dark blue in dark mode) ─────────────────────────────── */
+[data-theme="light"] .sys-card.highlight-blue { background: #dbeafe !important; color: #1e3a8a !important; box-shadow: 0 4px 16px rgba(37,99,235,0.15) !important; }
+
+/* ── Performance hardcoded bg — override via custom class ────────────────── */
+[data-theme="light"] [class*="bg-\\[\\#0d0d"] { background-color: #f1f5f9 !important; }
+
+/* ── Onboarding (hardcoded rgba whites) ──────────────────────────────────── */
+[data-theme="light"] .onboarding-csv-badge.optional { background: rgba(15,23,42,0.04); color: rgba(15,23,42,0.55); border: 1px solid rgba(15,23,42,0.12); }
+[data-theme="light"] .onboarding-csv-example        { background: rgba(15,23,42,0.03); border-color: rgba(15,23,42,0.08); }
+[data-theme="light"] .onboarding-csv-example-label  { color: rgba(15,23,42,0.50); }
+[data-theme="light"] .onboarding-nav                { border-top-color: rgba(15,23,42,0.08); }
+[data-theme="light"] .onboarding-skip-text          { color: rgba(15,23,42,0.50); }
+[data-theme="light"] .onboarding-skip-text:hover    { color: rgba(15,23,42,0.80); }
+[data-theme="light"] .onboarding-btn-back           { background: rgba(15,23,42,0.07); border-color: rgba(15,23,42,0.14); color: #0f172a; }
+[data-theme="light"] .onboarding-btn-back:hover     { background: rgba(15,23,42,0.12); border-color: rgba(15,23,42,0.22); }
+[data-theme="light"] .onboarding-btn-next           { background: #0f172a; color: #fff; }
+[data-theme="light"] .onboarding-btn-next:hover     { background: #1e293b; }

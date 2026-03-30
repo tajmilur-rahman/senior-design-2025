@@ -18,6 +18,14 @@
   --radius: 1rem;
 }
 
+[data-theme="light"] {
+  --background: 210 40% 96%;
+  --foreground: 222 47% 11%;
+  --muted: 210 40% 93%;
+  --muted-foreground: 215 16% 47%;
+  --border: 214 32% 88%;
+}
+
 body {
   margin: 0;
   padding: 0;

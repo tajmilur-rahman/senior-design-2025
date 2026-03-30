@@ -250,12 +250,12 @@ export default function ResolutionSupport() {
                   onChange={e => setResolutionFilter(e.target.value)}
                   className="h-10 px-3 rounded-xl border border-white/10 bg-zinc-900 text-white text-sm focus:outline-none focus:border-blue-500/50"
                 >
-                  <option value=""       className="bg-zinc-900 text-white">All types</option>
-                  <option value="fixed"       className="bg-zinc-900 text-white">FIXED</option>
-                  <option value="duplicate"   className="bg-zinc-900 text-white">DUPLICATE</option>
-                  <option value="worksforme"  className="bg-zinc-900 text-white">WORKSFORME</option>
-                  <option value="invalid"     className="bg-zinc-900 text-white">INVALID</option>
-                  <option value="wontfix"     className="bg-zinc-900 text-white">WONTFIX</option>
+                  <option value="">All types</option>
+                  <option value="fixed">FIXED</option>
+                  <option value="duplicate">DUPLICATE</option>
+                  <option value="worksforme">WORKSFORME</option>
+                  <option value="invalid">INVALID</option>
+                  <option value="wontfix">WONTFIX</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1 flex-1 min-w-[160px]">

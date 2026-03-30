@@ -78,6 +78,7 @@ export default function Overview({ user, onNavigate }) {
   );
 
   const topComponent = data.charts?.components?.[0]?.name || 'General';
+  const isLight = !!document.querySelector('[data-theme="light"]');
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
@@ -94,7 +95,7 @@ export default function Overview({ user, onNavigate }) {
             )}
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Command <span className="text-transparent bg-clip-text bg-gradient-to-r from-white/50 to-white/20">Center</span>
+            Command <span className={isLight ? 'text-slate-400' : 'text-transparent bg-clip-text bg-gradient-to-r from-white/50 to-white/20'}>Center</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             Real-time telemetry on your issue tracking ecosystem. Monitor incoming anomalies, AI severity classifications, and systemic bottlenecks.
@@ -200,16 +201,16 @@ export default function Overview({ user, onNavigate }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.charts.components} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.6)', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fill: isLight ? 'rgba(15,23,42,0.65)' : 'rgba(255,255,255,0.6)', fontWeight: 600 }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(16px)', color: '#fff', fontSize: '13px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', padding: '12px 16px' }}
-                      itemStyle={{ color: '#fff', fontWeight: 700 }}
+                      cursor={{ fill: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.04)' }}
+                      contentStyle={{ borderRadius: '16px', border: `1px solid ${isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'}`, background: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(10,10,10,0.95)', backdropFilter: 'blur(16px)', color: isLight ? '#0f172a' : '#fff', fontSize: '13px', boxShadow: isLight ? '0 20px 40px rgba(0,0,0,0.12)' : '0 20px 40px rgba(0,0,0,0.5)', padding: '12px 16px' }}
+                      itemStyle={{ color: isLight ? '#0f172a' : '#fff', fontWeight: 700 }}
                       formatter={(v) => [v, 'Issues Open']}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
                       {data.charts.components.map((_, i) => (
-                        <Cell key={i} fill={i === 0 ? '#3b82f6' : 'rgba(255,255,255,0.15)'} />
+                        <Cell key={i} fill={i === 0 ? '#3b82f6' : isLight ? 'rgba(37,99,235,0.15)' : 'rgba(255,255,255,0.15)'} />
                       ))}
                     </Bar>
                   </BarChart>

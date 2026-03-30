@@ -17,7 +17,7 @@ import PendingApproval   from './Pages/PendingApproval';
 import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
-import { LogOut, Crown, Users, ChevronDown, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell } from 'lucide-react';
+import { LogOut, Crown, Users, ChevronDown, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon } from 'lucide-react';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -118,6 +118,19 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [perfRefreshKey, setPerfRefreshKey] = useState(0);
   const pollRef = useRef(null);
 
+  const [theme, setTheme] = useState(() => localStorage.getItem('spotfixes_theme') || 'dark');
+  const toggleTheme = () => setTheme(t => {
+    const next = t === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('spotfixes_theme', next);
+    return next;
+  });
+
+  // Sync to document.body so createPortal elements (modals, inspector) also get themed
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+    return () => document.body.removeAttribute('data-theme'); // cleanup on logout
+  }, [theme]);
+
   const navigate = (targetTab, query = '', prefill = null, filters = null) => {
     setTab(targetTab); setExtQ(query);
     if (prefill) setPrefill(prefill);
@@ -174,7 +187,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   }, [isAdmin, isSuperAdmin]);
 
   return (
-    <div className="app-container bg-black text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden">
+    <div className="app-container bg-black text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden" data-theme={theme}>
       {/* Ambient Dashboard Background Glow */}
       <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/10 via-black to-black pointer-events-none" />
       
@@ -216,6 +229,15 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
           {/* User pill — right */}
           <div className="flex-shrink-0 flex items-center gap-2">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.5)' }}
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
             {/* Notification bell — admins only */}
             {isAdmin && (
               <button
@@ -398,6 +420,9 @@ export default function App() {
   }, []);
 
   const handleOnboardingComplete = async (companyName, displayName, navigateTo = null, skipped = false) => {
+    // Persist locally so it never re-shows, even if DB lags or session re-reads
+    const localKey = `sf_onboarded_${user?.uuid || user?.id}`;
+    localStorage.setItem(localKey, '1');
     if (navigateTo) setInitialTab(navigateTo);
     if (companyName) {
       try {
@@ -527,7 +552,11 @@ export default function App() {
       }}
     />
   );
-  if (user && (user.role === 'admin' || user.is_admin) && !user.onboarding_completed) return (
+  const _onboardLocalKey = `sf_onboarded_${user?.uuid || user?.id}`;
+  const _onboardingDone  = user.onboarding_completed
+    || !!user.company_id                             // already in a company → setup complete
+    || !!localStorage.getItem(_onboardLocalKey);     // completed in a previous session
+  if (user && user.role === 'admin' && !_onboardingDone) return (
     <Onboarding onComplete={handleOnboardingComplete} user={user} />
   );
   return (
