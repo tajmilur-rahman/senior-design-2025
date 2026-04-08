@@ -7,6 +7,9 @@ services:
     env_file: ./backend/.env
     ports:
       - "8000:8000"
+    volumes:
+      - ./ml_training:/app/ml_training
+      - ./backend/models:/app/backend/models
 
     command: >
       bash -c "

@@ -155,9 +155,12 @@ export default function SuperAdmin({ user }) {
         role:       createForm.role,
         company_id: Number(createForm.company_id),
       });
-      setCreateMsg({ type: 'success', text: res.data.message });
+      const msg = res.data.email_sent
+        ? res.data.message
+        : `${res.data.message}${res.data.invite_code ? ` Invite code: ${res.data.invite_code}` : ''}`;
+      setCreateMsg({ type: res.data.email_sent ? 'success' : 'warning', text: msg });
       setCreateForm(BLANK_USER);
-      setTimeout(() => { setShowCreate(false); setCreateMsg(null); loadOrgs(); loadUsers(); }, 2500);
+      setTimeout(() => { setShowCreate(false); setCreateMsg(null); loadOrgs(); loadUsers(); }, 4000);
     } catch (err) {
       setCreateMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to create user.' });
     } finally { setCreating(false); }

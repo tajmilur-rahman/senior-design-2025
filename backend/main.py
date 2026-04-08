@@ -1516,7 +1516,7 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
                     print(f"[train/thread] company aggregation warning: {agg_err}")
                 bug_records = raw_rows
             else:
-                # Company-specific: fetch entire dataset
+                # Company-specific: fetch full dataset
                 table = get_company_table(target_cid)
                 filters = None if is_shared_table(table) else [("company_id", target_cid)]
                 bug_records = _fetch_paginated(table, "summary, severity",
@@ -2115,6 +2115,7 @@ def superadmin_create_user(
     }).execute()
 
     email_sent = False
+    invite_code = co_res.data.get("invite_code", "") if co_res.data else ""
     try:
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
@@ -2125,17 +2126,18 @@ def superadmin_create_user(
         if auth_res and auth_res.user:
             supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
-        print(f"[superadmin create_user] Failed to send invite email: {e}")
+        print(f"[superadmin create_user] Failed to send invite email to {req.email}: {e}")
 
     return {
         "message":    (
             f"User '{req.username}' created and invite sent to {req.email}."
             if email_sent
-            else "User pre-registered. Email invite could not be sent — share login credentials manually."
+            else f"User '{req.username}' pre-registered. Email could not be delivered to {req.email} — share the invite code manually."
         ),
-        "email_sent": email_sent,
-        "username":   req.username,
-        "company":    company_name,
+        "email_sent":  email_sent,
+        "invite_code": invite_code,
+        "username":    req.username,
+        "company":     company_name,
     }
 
 
@@ -2419,9 +2421,12 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
         raise HTTPException(status_code=500, detail="Failed to create user record")
 
     email_sent = False
+    invite_code = ""
+    email_error = ""
     try:
-        co_res = supabase.table("companies").select("name").eq("id", cid).single().execute()
+        co_res = supabase.table("companies").select("name, invite_code").eq("id", cid).single().execute()
         company_name = co_res.data.get("name", "") if co_res.data else ""
+        invite_code  = co_res.data.get("invite_code", "") if co_res.data else ""
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
             options={"data": {"username": req.username, "company_name": company_name, "role": req.role}},
@@ -2430,18 +2435,27 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
         if auth_res and auth_res.user:
             supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
-        print(f"[invite] Failed to send invite email: {e}")
+        email_error = str(e)
+        print(f"[invite] Failed to send invite email to {req.email}: {email_error}")
+        # Fetch invite code even on failure so admin can share it manually
+        if not invite_code:
+            try:
+                co_res2 = supabase.table("companies").select("invite_code").eq("id", cid).single().execute()
+                invite_code = co_res2.data.get("invite_code", "") if co_res2.data else ""
+            except Exception:
+                pass
 
     return {
         "message":    (
             f"Invitation sent to {req.email}."
             if email_sent
-            else "User pre-registered. Email invite could not be sent — share the invite code manually."
+            else f"User pre-registered. Email could not be delivered to {req.email} — share the invite code below manually."
         ),
-        "email_sent": email_sent,
-        "username":   req.username,
-        "email":      req.email,
-        "role":       req.role,
+        "email_sent":  email_sent,
+        "invite_code": invite_code,
+        "username":    req.username,
+        "email":       req.email,
+        "role":        req.role,
     }
 
 

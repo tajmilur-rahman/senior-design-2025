@@ -187,10 +187,6 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
               <div className="relative z-10">
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 w-max mb-4">
-                  <Database size={12} className="text-emerald-500" />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">System Database</span>
-                </div>
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
                   Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Explorer</span>
                 </h1>
@@ -202,6 +198,10 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                 </p>
               </div>
               <div className="relative z-10 flex flex-col items-start md:items-end gap-4">
+                 <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 w-max">
+                   <Database size={12} className="text-emerald-500" />
+                   <span className="text-[10px] font-bold tracking-widest uppercase">System Database</span>
+                 </div>
                  <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Labels & statuses" />
                  <div className="flex flex-wrap items-center gap-2">
                         {QUICK_FILTERS.map(f => (

@@ -321,7 +321,7 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
 
     _progress("Building TF-IDF vocabulary", 25)
     vectorizer = TfidfVectorizer(
-        max_features=10000, stop_words="english", ngram_range=(1, 2), min_df=2, sublinear_tf=True,
+        max_features=10000, stop_words="english", ngram_range=(1, 2), min_df=3, sublinear_tf=True,
     )
     X_text = vectorizer.fit_transform(df["summary"])
 
@@ -361,11 +361,12 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
     X = hstack([csr_matrix(X_meta), csr_matrix(X_flags), X_text])
     y = df["severity"]
 
-    _progress("Training Random Forest (100 trees)", 55)
+    n_trees = 60
+    _progress(f"Training Random Forest ({n_trees} trees)", 55)
     from sklearn.metrics import confusion_matrix as _sk_cm, f1_score, precision_score, recall_score
 
     rf = RandomForestClassifier(
-        n_estimators=60, class_weight="balanced_subsample", max_depth=None,
+        n_estimators=n_trees, class_weight="balanced_subsample", max_depth=None,
         min_samples_split=5, random_state=42, n_jobs=-1,
     )
     rf.fit(X, y)
@@ -404,7 +405,7 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
         "confusion_matrix": cm_data,
         "last_trained":    _time_mod.ctime(),
         "sample_size":     len(df),
-        "total_trees":     100,
+        "total_trees":     rf.n_estimators,
         "mode":            "company" if company_id is not None else "global",
         "company_id":      company_id,
         "dataset_label":   dataset_label or ("Company bug database" if company_id else "Global training data"),

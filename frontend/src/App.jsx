@@ -17,7 +17,7 @@ import PendingApproval   from './Pages/PendingApproval';
 import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
-import { LogOut, Crown, Users, ChevronDown, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon } from 'lucide-react';
+import { LogOut, Crown, Users, ChevronDown, ChevronLeft, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon } from 'lucide-react';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -111,6 +111,7 @@ function TrainingBanner({ job, onDismiss, onViewResults }) {
 
 function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [tab, setTab]               = useState(initialTab || 'overview');
+  const [previousTab, setPreviousTab] = useState(null);
   const [externalQuery, setExtQ]    = useState('');
   const [submitPrefill, setPrefill] = useState(null);
   const [extFilters,    setExtFilters] = useState(null);
@@ -132,9 +133,20 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   }, [theme]);
 
   const navigate = (targetTab, query = '', prefill = null, filters = null) => {
-    setTab(targetTab); setExtQ(query);
+    setTab(prev => { setPreviousTab(prev); return targetTab; });
+    setExtQ(query);
     if (prefill) setPrefill(prefill);
     setExtFilters(filters || null);
+  };
+
+  const goBack = () => {
+    if (previousTab) {
+      const dest = previousTab;
+      setPreviousTab(null);
+      setTab(dest);
+      setExtQ('');
+      setExtFilters(null);
+    }
   };
 
   // Start global polling when a training key is registered
@@ -196,10 +208,24 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           <div className="flex h-16 items-center gap-4">
 
           {/* Brand — left */}
-          <div className="flex items-center cursor-pointer flex-shrink-0" onClick={() => navigate('overview')}>
-            <span className="text-xl font-bold tracking-tight text-white">
-              Spot<span className="text-zinc-500">fixes</span>
-            </span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={goBack}
+              disabled={!previousTab}
+              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
+                previousTab
+                  ? 'bg-white/5 border-white/10 hover:bg-white/15 hover:border-white/20 cursor-pointer'
+                  : 'bg-transparent border-white/5 cursor-not-allowed opacity-30'
+              }`}
+              title={previousTab ? `Back to ${previousTab}` : 'No previous page'}
+            >
+              <ChevronLeft size={15} className="text-white/70" />
+            </button>
+            <div className="flex items-center cursor-pointer" onClick={() => navigate('overview')}>
+              <span className="text-xl font-bold tracking-tight text-white">
+                Spot<span className="text-zinc-500">fixes</span>
+              </span>
+            </div>
           </div>
 
           {/* Nav pills — flex-1 center column, pills themselves centered inside */}
@@ -217,7 +243,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                         ? 'bg-white/15 text-white shadow-sm'
                         : 'text-white/60 hover:bg-white/10 hover:text-white'
                     }`}
-                    onClick={() => { setTab(t.id); setExtQ(''); }}
+                    onClick={() => navigate(t.id)}
                   >
                     {t.superAdminOnly && <Crown size={11} className="mr-1.5 opacity-80" />}
                     {label}
