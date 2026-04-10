@@ -111,6 +111,8 @@ const QUICK_FILTERS = [
 ];
 
 export default function Explorer({ user, initialQuery = "", initialFilters = null, onNavigate }) {
+    const isSystemLevel = user?.role === 'super_admin' || user?.role === 'developer';
+
     const [bugs,            setBugs]            = useState([]);
     const [total,           setTotal]           = useState(0);
     const [loading,         setLoading]         = useState(true);
@@ -121,10 +123,20 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
     const [sevFilter,       setSevFilter]       = useState(initialFilters?.sev || '');
     const [statusFilter,    setStatusFilter]    = useState(initialFilters?.status || '');
     const [compFilter,      setCompFilter]      = useState(initialFilters?.comp || '');
+    const [companyFilter,   setCompanyFilter]   = useState('');  // company_id for system users
+    const [companies,       setCompanies]       = useState([]);
     const [sortConfig,      setSortConfig]      = useState({ key: 'id', direction: 'desc' });
     const [page,            setPage]            = useState(1);
     const [itemsPerPage,    setItemsPerPage]    = useState(10);
     const [selectedBug,     setSelectedBug]     = useState(null);
+
+    // Fetch companies list for system-level users
+    useEffect(() => {
+        if (!isSystemLevel) return;
+        axios.get('/api/superadmin/companies')
+            .then(r => setCompanies(r.data || []))
+            .catch(() => {});
+    }, [isSystemLevel]);
 
     useEffect(() => { setSearch(initialQuery); setPage(1); }, [initialQuery]);
     useEffect(() => {
@@ -135,27 +147,27 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
     const fetchBugs = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await axios.get('/api/hub/explorer', {
-                params: {
-                    page, limit: itemsPerPage, search: debouncedSearch,
-                    sort_key: sortConfig.key, sort_dir: sortConfig.direction,
-                    sev: sevFilter, status: statusFilter, comp: compFilter,
-                    requested_role: user?.context_role || user?.role || 'user',
-                }
-            });
+            const params = {
+                page, limit: itemsPerPage, search: debouncedSearch,
+                sort_key: sortConfig.key, sort_dir: sortConfig.direction,
+                sev: sevFilter, status: statusFilter, comp: compFilter,
+                requested_role: user?.context_role || user?.role || 'user',
+            };
+            if (isSystemLevel && companyFilter) params.filter_company_id = companyFilter;
+            const response = await axios.get('/api/hub/explorer', { params });
             setBugs(response.data.bugs || []);
             setTotal(response.data.total || 0);
         } catch (err) {
             if (err.response?.status === 401 && onNavigate) onNavigate('login');
         } finally { setLoading(false); }
-    }, [page, itemsPerPage, debouncedSearch, sortConfig, sevFilter, statusFilter, compFilter, onNavigate, user?.context_role, user?.role]);
+    }, [page, itemsPerPage, debouncedSearch, sortConfig, sevFilter, statusFilter, compFilter, companyFilter, onNavigate, user?.context_role, user?.role, isSystemLevel]);
 
     useEffect(() => { fetchBugs(); }, [fetchBugs]);
     useEffect(() => { const iv = setInterval(fetchBugs, 30000); return () => clearInterval(iv); }, [fetchBugs]);
 
     const totalPages = Math.ceil(total / itemsPerPage);
     const requestSort = (key) => { setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' })); setPage(1); };
-    const clearFilters = () => { setSearch(''); setSevFilter(''); setStatusFilter(''); setCompFilter(''); setPage(1); };
+    const clearFilters = () => { setSearch(''); setSevFilter(''); setStatusFilter(''); setCompFilter(''); setCompanyFilter(''); setPage(1); };
     const applyQuickFilter = (type) => {
         clearFilters();
         if (type === 'critical') { setSevFilter('S1'); setStatusFilter('NEW'); }
@@ -178,7 +190,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
         } catch { alert('Export failed.'); } finally { setExporting(false); }
     };
 
-    const hasFilters = !!(sevFilter || statusFilter || compFilter || search);
+    const hasFilters = !!(sevFilter || statusFilter || compFilter || companyFilter || search);
 
     return (
         <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
@@ -214,6 +226,28 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
               </div>
               <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-emerald-500/20 via-white/5 to-transparent" />
             </div>
+
+            {/* Company filter for system-level users */}
+            {isSystemLevel && companies.length > 0 && (
+                <div className="mb-4">
+                    <div className="w-full md:w-72">
+                        <CustomSelect
+                            value={companyFilter}
+                            onChange={v => { setCompanyFilter(v); setPage(1); }}
+                            options={[
+                                { value: '', label: 'All companies (global)' },
+                                ...companies.map(c => ({ value: String(c.id), label: c.name })),
+                            ]}
+                            placeholder="All companies (global)"
+                        />
+                    </div>
+                    {companyFilter && (
+                        <p className="text-[10px] font-bold text-amber-500/70 uppercase tracking-widest mt-2 ml-1">
+                            Filtering by: {companies.find(c => String(c.id) === companyFilter)?.name || companyFilter}
+                        </p>
+                    )}
+                </div>
+            )}
 
             {/* Search and Filters */}
             <div className="flex flex-col md:flex-row gap-4 items-center flex-wrap mb-8">

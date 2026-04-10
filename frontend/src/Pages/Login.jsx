@@ -30,7 +30,7 @@ function PasswordInput({ value, onChange, placeholder, required = true }) {
   );
 }
 
-export default function Login({ onLogin, forceResetRecovery = false, onResetDone = null, onBack = null }) {
+export default function Login({ onLogin, forceResetRecovery = false, onResetDone = null, onBack = null, forceInviteSetup = false, onInviteSetupDone = null }) {
   const [mode, setMode]                       = useState('login');
   const [viewState, setViewState]             = useState('form');
   const [email, setEmail]                     = useState('');
@@ -43,6 +43,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
   const [msg, setMsg]                         = useState('');
   const [isLoading, setIsLoading]             = useState(false);
   const [isRecovery, setIsRecovery]           = useState(false);
+  const [inviteViewState, setInviteViewState] = useState('form'); // 'form' | 'success'
 
   const [reqCompanyId, setReqCompanyId]         = useState('');
   const [companies, setCompanies]               = useState([]);
@@ -70,6 +71,14 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
       if (data?.user?.email) setEmail(data.user.email);
     }).catch(() => {});
   }, [forceResetRecovery]);
+
+  useEffect(() => {
+    if (!forceInviteSetup) return;
+    // Pre-fill email from the current invite session
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) setEmail(data.user.email);
+    }).catch(() => {});
+  }, [forceInviteSetup]);
 
   useEffect(() => {
     if (mode !== 'register' || registerRole !== 'user') return;
@@ -212,6 +221,28 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
     }
   };
 
+  const handleInviteSetPassword = async (e) => {
+    e.preventDefault();
+    setMsg('');
+    if (password !== confirmPassword) { setMsg("Passwords don't match."); return; }
+    if (password.length < 6) { setMsg('Password must be at least 6 characters.'); return; }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setInviteViewState('success');
+      setTimeout(async () => {
+        const { data } = await supabase.auth.getUser();
+        if (onInviteSetupDone) onInviteSetupDone();
+        if (data?.user && onLogin) onLogin(data.user);
+      }, 2000);
+    } catch (err) {
+      setMsg(err?.message || 'Failed to set password. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const switchTo = (newMode) => {
     setMode(newMode); setViewState('form'); setIsRecovery(false);
     setMsg(''); setEmail(''); setPassword(''); setConfirmPassword('');
@@ -264,6 +295,66 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
           <span className="font-bold text-2xl tracking-tight text-white">Spot<span className="text-white/50 font-medium">fixes</span></span>
         </div>
 
+        {/* ── Invite set-password flow ── */}
+        {forceInviteSetup && (
+          <div className="w-full flex flex-col justify-center animate-in fade-in duration-500">
+            {inviteViewState === 'success' ? (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <CheckCircle size={28} className="text-emerald-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Password set!</h2>
+                <p className="text-white/50 text-sm">Taking you to your workspace…</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-widest mb-5">
+                    <ShieldCheck size={12} /> Workspace Invite
+                  </div>
+                  <h2 className="text-3xl font-bold tracking-tight text-white mb-2">Set your password</h2>
+                  <p className="text-white/50 text-sm leading-relaxed">
+                    Your account has been approved. Choose a password to secure your workspace.
+                  </p>
+                  {email && (
+                    <p className="mt-3 text-xs text-white/30 font-mono">{email}</p>
+                  )}
+                </div>
+                <form onSubmit={handleInviteSetPassword} className="flex flex-col gap-4">
+                  <PasswordInput
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="New password"
+                  />
+                  <PasswordInput
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm password"
+                  />
+                  {msg && (
+                    <div className="p-4 text-sm rounded-2xl border text-center bg-red-500/10 border-red-500/20 text-red-400">
+                      {msg}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isLoading || !password || !confirmPassword}
+                    className="w-full mt-2 bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? 'Setting password…' : (
+                      <><Lock size={16} /> Set Password & Enter Workspace</>
+                    )}
+                  </button>
+                </form>
+                <p className="mt-6 text-center text-xs text-white/30 leading-relaxed">
+                  By setting a password you agree to keep it confidential. You can change it later from your profile settings.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {!forceInviteSetup && (
         <div className="w-full flex flex-col justify-center">
           {viewState === 'request_sent' && (
             <div className="w-full max-w-[420px] mx-auto text-center animate-in fade-in duration-500">
@@ -465,6 +556,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
@@ -12,9 +12,10 @@ const BLANK_USER = { email: '', username: '', role: 'user', company_id: '' };
 
 function RoleBadge({ role }) {
   const map = {
-    super_admin: { text: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Super Admin' },
+    super_admin: { text: 'text-amber-500',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  label: 'Super Admin' },
+    developer:   { text: 'text-sky-400',    bg: 'bg-sky-500/10',    border: 'border-sky-500/20',    label: 'Developer' },
     admin:       { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', label: 'Admin' },
-    user:        { text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'User' },
+    user:        { text: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   label: 'User' },
   };
   const s = map[role] || map.user;
   return (
@@ -51,7 +52,9 @@ function Toast({ msg, onClose }) {
   );
 }
 
-export default function SuperAdmin({ user }) {
+const BLANK_SYSTEM_INVITE = { email: '', username: '', role: 'super_admin' };
+
+export default function SuperAdmin({ user, canManage = true, canApprove = true, canDelete = true }) {
   const [activeTab, setActiveTab] = useState('orgs');
 
   // --- Organizations state ---
@@ -62,15 +65,20 @@ export default function SuperAdmin({ user }) {
   const [orgError,   setOrgError]   = useState(null);
   const [pending,    setPending]    = useState([]);
   const [actionMsg,  setActionMsg]  = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState(BLANK_USER);
-  const [creating,   setCreating]   = useState(false);
-  const [createMsg,  setCreateMsg]  = useState(null);
+  const [showCreate,       setShowCreate]       = useState(false);
+  const [createForm,       setCreateForm]       = useState(BLANK_USER);
+  const [creating,         setCreating]         = useState(false);
+  const [createMsg,        setCreateMsg]        = useState(null);
+  const [showSystemInvite, setShowSystemInvite] = useState(false);
+  const [systemInviteForm, setSystemInviteForm] = useState(BLANK_SYSTEM_INVITE);
+  const [systemInviting,   setSystemInviting]   = useState(false);
+  const [systemInviteMsg,  setSystemInviteMsg]  = useState(null);
 
   // --- Users state ---
   const [users,      setUsers]      = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+  const deferredSearch = useDeferredValue(userSearch);
   const [actioning,  setActioning]  = useState(null);
   const [toDelete,   setToDelete]   = useState(null);
   const [deleting,   setDeleting]   = useState(false);
@@ -166,6 +174,19 @@ export default function SuperAdmin({ user }) {
     } finally { setCreating(false); }
   };
 
+  const handleSystemInvite = async (e) => {
+    e.preventDefault();
+    setSystemInviting(true); setSystemInviteMsg(null);
+    try {
+      const res = await axios.post('/api/superadmin/invite-system-user', systemInviteForm);
+      setSystemInviteMsg({ type: 'success', text: res.data.message });
+      setSystemInviteForm(BLANK_SYSTEM_INVITE);
+      setTimeout(() => { setShowSystemInvite(false); setSystemInviteMsg(null); loadUsers(); }, 4000);
+    } catch (err) {
+      setSystemInviteMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to send invite.' });
+    } finally { setSystemInviting(false); }
+  };
+
   // --- User actions ---
   const handlePromote = async (u) => {
     const newRole = u.role === 'admin' ? 'user' : 'admin';
@@ -223,8 +244,8 @@ export default function SuperAdmin({ user }) {
   const filteredUsers = users
     .filter(u => {
       if (!u) return false;
-      if (!userSearch.trim()) return true;
-      const q = userSearch.toLowerCase();
+      if (!deferredSearch.trim()) return true;
+      const q = deferredSearch.toLowerCase();
       return (u.username || '').toLowerCase().includes(q)
           || (u.email || '').toLowerCase().includes(q)
           || (u.role  || '').toLowerCase().includes(q)
@@ -256,10 +277,18 @@ export default function SuperAdmin({ user }) {
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">
             <RefreshCw size={14} className={(loadingOrgs || loadingUsers) ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-            <UserPlus size={16} /> Create User
-          </button>
+          {canManage && (
+            <>
+              <button onClick={() => { setShowSystemInvite(true); setSystemInviteMsg(null); setSystemInviteForm(BLANK_SYSTEM_INVITE); }}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">
+                <ShieldCheck size={16} /> Invite System User
+              </button>
+              <button onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                <UserPlus size={16} /> Create User
+              </button>
+            </>
+          )}
         </div>
         <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-amber-500/20 via-white/5 to-transparent" />
       </div>
@@ -326,16 +355,20 @@ export default function SuperAdmin({ user }) {
                           <td className="px-6 py-4"><RoleBadge role={u.role} /></td>
                           <td className="px-6 py-4 text-sm text-white/50">{u.company_name || '—'}</td>
                           <td className="px-6 py-4">
-                            <div className="flex gap-2">
-                              <button onClick={() => handleApprove(u.uuid, u.username)}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
-                                <CheckCircle size={14} /> Approve
-                              </button>
-                              <button onClick={() => handleReject(u.uuid, u.username)}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
-                                <XCircle size={14} /> Reject
-                              </button>
-                            </div>
+                            {canApprove ? (
+                              <div className="flex gap-2">
+                                <button onClick={() => handleApprove(u.uuid, u.username)}
+                                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                                  <CheckCircle size={14} /> Approve
+                                </button>
+                                <button onClick={() => handleReject(u.uuid, u.username)}
+                                  className="flex items-center gap-1.5 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                                  <XCircle size={14} /> Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">View only</span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -490,35 +523,40 @@ export default function SuperAdmin({ user }) {
                         <td className="px-6 py-4 max-w-[200px]"><span className="text-sm text-white/50 truncate block">{u.email || '—'}</span></td>
                         <td className="px-6 py-4"><RoleBadge role={u.role || 'user'} /></td>
                         <td className="px-6 py-4">
-                          {u.role === 'super_admin'
-                            ? <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-500"><Globe size={14} /> System (global)</span>
+                          {(u.role === 'super_admin' || u.role === 'developer')
+                            ? <span className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-400"><Globe size={14} /> System (global)</span>
                             : <span className="text-sm text-white/50 truncate max-w-[150px] inline-block">{u.company_name || '—'}</span>}
                         </td>
                         <td className="px-6 py-4"><StatusBadge status={u.status || 'active'} /></td>
                         <td className="px-6 py-4">
-                          <div className="flex gap-2 flex-wrap">
-                            {!isSelf && u.role !== 'super_admin' && (
-                              <button onClick={() => handlePromote(u)} disabled={actioning === u.uuid}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${u.role === 'admin' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20'}`}>
-                                {u.role === 'admin' ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}
-                                {u.role === 'admin' ? 'Demote' : 'Promote'}
-                              </button>
-                            )}
-                            {!isSelf && u.role !== 'super_admin' && (
-                              <button onClick={() => handleToggleStatus(u)} disabled={actioning === u.uuid}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${(u.status || 'active') === 'active' ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
-                                {(u.status || 'active') === 'active' ? <UserMinus size={12} /> : <UserCheck size={12} />}
-                                {(u.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
-                              </button>
-                            )}
-                            {!isSelf && (
-                              <button onClick={() => setToDelete(u)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all">
-                                <Trash2 size={12} /> Delete
-                              </button>
-                            )}
-                            {isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
-                          </div>
+                          {(canManage || canApprove) ? (
+                            <div className="flex gap-2 flex-wrap">
+                              {canManage && !isSelf && u.role !== 'super_admin' && (
+                                <button onClick={() => handlePromote(u)} disabled={actioning === u.uuid}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${u.role === 'admin' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20'}`}>
+                                  {u.role === 'admin' ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}
+                                  {u.role === 'admin' ? 'Demote' : 'Promote'}
+                                </button>
+                              )}
+                              {canManage && !isSelf && u.role !== 'super_admin' && (
+                                <button onClick={() => handleToggleStatus(u)} disabled={actioning === u.uuid}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${(u.status || 'active') === 'active' ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                                  {(u.status || 'active') === 'active' ? <UserMinus size={12} /> : <UserCheck size={12} />}
+                                  {(u.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
+                                </button>
+                              )}
+                              {canDelete && !isSelf && (
+                                <button onClick={() => setToDelete(u)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all">
+                                  <Trash2 size={12} /> Delete
+                                </button>
+                              )}
+                              {isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
+                              {!canManage && !isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">View only</span>}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">View only</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -565,6 +603,51 @@ export default function SuperAdmin({ user }) {
             </div>
           </div>
         </>,
+        document.body
+      )}
+
+      {/* Invite System User modal */}
+      {showSystemInvite && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowSystemInvite(false); }}>
+          <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] w-full max-w-md p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30"><ShieldCheck size={18} /></div>
+              <span className="text-lg font-bold text-white">Invite System User</span>
+              <button onClick={() => setShowSystemInvite(false)} className="ml-auto text-white/40 hover:text-white p-1 transition-colors"><X size={16} /></button>
+            </div>
+            <p className="text-xs text-white/40 mb-8 ml-[52px] leading-relaxed">System users belong to Spotfixes, not a company. They receive a direct email invite.</p>
+            <form onSubmit={handleSystemInvite}>
+              {[
+                { label: 'Email', key: 'email', type: 'email', placeholder: 'dev@spotfixes.com' },
+                { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
+              ].map(f => (
+                <div key={f.key} className="mb-5">
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{f.label}</label>
+                  <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-amber-500/50 focus:bg-white/10 outline-none transition-all text-sm"
+                    type={f.type} required placeholder={f.placeholder}
+                    value={systemInviteForm[f.key]} onChange={e => setSystemInviteForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                </div>
+              ))}
+              <div className="mb-8">
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">System Role</label>
+                <select className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500/50 outline-none transition-all text-sm appearance-none"
+                  value={systemInviteForm.role} onChange={e => setSystemInviteForm(p => ({ ...p, role: e.target.value }))}>
+                  <option value="super_admin" className="bg-black">Super Admin</option>
+                  <option value="developer" className="bg-black">Developer</option>
+                </select>
+              </div>
+              {systemInviteMsg && (
+                <div className={`flex items-center gap-2 mb-6 text-xs font-bold ${systemInviteMsg.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {systemInviteMsg.type === 'error' ? <AlertTriangle size={13} /> : <CheckCircle size={13} />}
+                  {systemInviteMsg.text}
+                </div>
+              )}
+              <button type="submit" disabled={systemInviting} className="w-full bg-amber-500 text-black hover:bg-amber-400 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {systemInviting ? <><RefreshCw size={16} className="animate-spin" /> Sending…</> : <><Mail size={16} /> Send System Invite</>}
+              </button>
+            </form>
+          </div>
+        </div>,
         document.body
       )}
 

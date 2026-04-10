@@ -123,3 +123,9 @@ def require_super_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super admin access required")
     return current_user
+
+
+def require_developer_or_above(current_user: dict = Depends(require_active)) -> dict:
+    if current_user.get("role") not in ("super_admin", "developer"):
+        raise HTTPException(status_code=403, detail="Developer access required")
+    return current_user

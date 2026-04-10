@@ -51,9 +51,11 @@ export default function ProfileSettings({ user, onUpdate }) {
     try {
       // Verify current password before allowing update
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: user?.email, password: currentPassword });
-      if (signInError) { setPasswordMsg({ type: 'error', text: 'Current password is incorrect.' }); return; }
+      if (signInError) { setPasswordMsg({ type: 'error', text: 'Current password is incorrect.' }); setSavingPassword(false); return; }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+      // Sync bcrypt hash in users table so legacy systems stay consistent
+      await axios.post('/api/users/me/sync-password-hash', { password: newPassword }).catch(() => {});
       setPasswordMsg({ type: 'success', text: 'Password updated successfully.' });
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
     } catch (err) {
@@ -119,8 +121,8 @@ export default function ProfileSettings({ user, onUpdate }) {
         <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50" />
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Display Name</div>
-          <form onSubmit={handleSaveProfile} className="flex flex-col h-full justify-between">
-            <div className="mb-6">
+          <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
+            <div>
               <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Name</label>
               <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} />
             </div>
@@ -150,8 +152,8 @@ export default function ProfileSettings({ user, onUpdate }) {
         <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent opacity-50" />
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Change Password</div>
-          <form onSubmit={handleChangePassword} className="flex flex-col h-full justify-between">
-            <div className="mb-6 space-y-4">
+          <form onSubmit={handleChangePassword} className="flex flex-col gap-6">
+            <div className="space-y-4">
               {[
                 { label: 'Current password', value: currentPassword, setter: setCurrentPassword },
                 { label: 'New password',     value: newPassword,     setter: setNewPassword },

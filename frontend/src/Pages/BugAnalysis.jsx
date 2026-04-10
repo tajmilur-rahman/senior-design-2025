@@ -298,8 +298,8 @@ export default function BugAnalysis({ user }) {
           </p>
           <div className="flex flex-wrap gap-3 justify-center max-w-3xl mx-auto">
             {SAMPLE_BUGS.map((sample, i) => (
-              <button key={i} onClick={() => handleAnalyze(sample)} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-full text-xs px-5 py-2.5 font-medium transition-all flex items-center gap-2 group">
-                {sample} <ArrowRight size={12} className="opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+              <button key={i} onClick={() => handleAnalyze(sample)} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-full text-xs px-5 py-2.5 font-medium transition-colors flex items-center gap-2 group">
+                {sample} <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -316,7 +316,7 @@ export default function BugAnalysis({ user }) {
       {prediction && (
         <div className="animate-in fade-in duration-500 mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Prediction */}
-          <div className="lg:col-span-5 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md flex flex-col relative overflow-hidden">
+          <div className="lg:col-span-5 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
             <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
               <AlertTriangle size={14} className="text-white/30" /> Severity prediction
@@ -394,7 +394,7 @@ export default function BugAnalysis({ user }) {
           </div>
 
           {/* Right Column: RAG Results */}
-          <div className="lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md flex flex-col relative overflow-hidden">
+          <div className="lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
             <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
               <Database size={14} className="text-white/30" /> Similar bugs found via Vector RAG

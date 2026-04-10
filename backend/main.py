@@ -10,6 +10,8 @@ import uuid as uuid_lib
 import requests as http_requests
 from datetime import datetime, timezone
 from database import supabase, SUPABASE_URL, SUPABASE_KEY, DATABASE_URL
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 import psycopg2
 import ml_logic
 from config import company_model_exists, ART_RF, get_artifact_paths
@@ -452,6 +454,22 @@ def update_me(req: UpdateMeRequest, current_user: dict = Depends(auth.get_curren
     return updated.data
 
 
+class SyncPasswordHashRequest(BaseModel):
+    password: str
+
+@app.post("/api/users/me/sync-password-hash")
+def sync_password_hash(req: SyncPasswordHashRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Store a bcrypt hash of the user's new password in the users table (called after Supabase Auth update)."""
+    uuid = current_user.get("uuid")
+    if not uuid:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password too short")
+    hashed = auth.get_password_hash(req.password)
+    supabase.table("users").update({"password_hash": hashed}).eq("uuid", uuid).execute()
+    return {"ok": True}
+
+
 @app.get("/api/users/me/profile")
 def get_my_profile(current_user: dict = Depends(auth.get_current_user)):
     uuid = current_user.get("uuid")
@@ -520,7 +538,7 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
     cid   = current_user.get("company_id")
     role  = current_user.get("role")
 
-    if cid is None and role != "super_admin":
+    if cid is None and role not in ("super_admin", "developer"):
         return {
             "stats": {"total_db": 0, "analyzed": 0, "critical": 0},
             "recent": [],
@@ -528,7 +546,7 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
             "onboarding_required": True,
         }
 
-    is_super = (role == "super_admin")
+    is_super = role in ("super_admin", "developer")
     table = get_company_table(cid) if not is_super else "bugs"
 
     # Build top-5 component hotspots via real GROUP BY — accurate across entire dataset
@@ -611,20 +629,27 @@ def get_bugs(
     search: str = "", sort_key: str = "id", sort_dir: str = "desc",
     sev: str = "", status: str = "", comp: str = "",
     requested_role: str = "user",
+    filter_company_id: int = None,
     current_user: dict = Depends(auth.get_current_user),
 ):
     true_role = current_user.get("role")
     cid = current_user.get("company_id")
 
-    if cid is None and true_role != "super_admin":
+    if cid is None and true_role not in ("super_admin", "developer"):
         return {"total": 0, "role_context": true_role, "bugs": [], "onboarding_required": True}
 
     db_sort = "bug_id" if sort_key == "id" else sort_key
     offset  = (page - 1) * limit
 
-    if true_role == "super_admin":
-        # Super admin queries bugs table directly — proper server-side pagination
-        query = supabase.table("bugs").select("*", count="exact")
+    if true_role in ("super_admin", "developer"):
+        if filter_company_id is not None:
+            # Route to the correct table for this specific company
+            co_table = get_company_table(filter_company_id)
+            query = supabase.table(co_table).select("*", count="exact")
+            if not is_shared_table(co_table):
+                query = query.eq("company_id", filter_company_id)
+        else:
+            query = supabase.table("bugs").select("*", count="exact")
         query = _apply_bug_filters(query, search, sev, status, comp, db_sort, sort_dir)
         res   = query.range(offset, offset + limit - 1).execute()
 
@@ -1866,7 +1891,7 @@ def create_company(req: CompanyCreate, current_user: dict = Depends(auth.require
 
 
 @app.get("/api/superadmin/companies")
-def superadmin_get_companies(current_user: dict = Depends(auth.require_super_admin)):
+def superadmin_get_companies(current_user: dict = Depends(auth.require_developer_or_above)):
     companies_res = supabase.table("companies").select("*").execute()
     companies = companies_res.data or []
 
@@ -1930,7 +1955,7 @@ def superadmin_get_companies(current_user: dict = Depends(auth.require_super_adm
 
 
 @app.get("/api/superadmin/users")
-def superadmin_get_users(current_user: dict = Depends(auth.require_super_admin)):
+def superadmin_get_users(current_user: dict = Depends(auth.require_developer_or_above)):
     users_res = supabase.table("users").select(
         "uuid, username, email, role, is_admin, company_id, onboarding_completed, status"
     ).execute()
@@ -1946,7 +1971,7 @@ def superadmin_get_users(current_user: dict = Depends(auth.require_super_admin))
 
 
 @app.get("/api/superadmin/pending")
-def superadmin_get_pending(current_user: dict = Depends(auth.require_super_admin)):
+def superadmin_get_pending(current_user: dict = Depends(auth.require_developer_or_above)):
     users_res = supabase.table("users").select(
         "uuid, username, email, role, company_id, onboarding_completed, status"
     ).eq("status", "pending").execute()
@@ -2015,7 +2040,7 @@ def superadmin_approve_user(
                 auth_res = supabase.auth.admin.create_user({
                     "email":         email,
                     "password":      reg_password,
-                    "email_confirm": False,
+                    "email_confirm": True,
                     "user_metadata": {"username": name, "company_name": company_name, "role": role},
                 })
                 if auth_res and auth_res.user:
@@ -2085,6 +2110,12 @@ class SuperAdminCreateUserRequest(BaseModel):
     company_id: int
 
 
+class SystemInviteRequest(BaseModel):
+    email:    str
+    username: str
+    role:     str  # "super_admin" or "developer"
+
+
 @app.post("/api/superadmin/users/create")
 def superadmin_create_user(
     req: SuperAdminCreateUserRequest,
@@ -2095,6 +2126,8 @@ def superadmin_create_user(
         raise HTTPException(status_code=404, detail="Company not found")
     company_name = co_res.data.get("name", "")
 
+    if req.role in ("super_admin", "developer"):
+        raise HTTPException(status_code=400, detail="Use /api/superadmin/invite-system-user for system roles")
     role = req.role if req.role in ("user", "admin") else "user"
 
     existing = supabase.table("users").select("email").eq("email", req.email).execute()
@@ -2119,7 +2152,7 @@ def superadmin_create_user(
     try:
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "company_name": company_name, "role": role}},
+            options={"data": {"username": req.username, "company_name": company_name, "role": role}, "redirect_to": FRONTEND_URL},
         )
         email_sent = True
         # Link the newly created auth UUID back to the database
@@ -2138,6 +2171,56 @@ def superadmin_create_user(
         "invite_code": invite_code,
         "username":    req.username,
         "company":     company_name,
+    }
+
+
+@app.post("/api/superadmin/invite-system-user")
+def superadmin_invite_system_user(
+    req: SystemInviteRequest,
+    current_user: dict = Depends(auth.require_super_admin),
+):
+    if req.role not in ("super_admin", "developer"):
+        raise HTTPException(status_code=400, detail="Role must be 'super_admin' or 'developer'")
+
+    existing = supabase.table("users").select("email").eq("email", req.email).execute()
+    if existing.data:
+        raise HTTPException(status_code=400, detail="A user with that email already exists")
+
+    system_res = supabase.table("companies").select("id").eq("name", "System").execute()
+    system_company_id = system_res.data[0]["id"] if system_res.data else None
+
+    db_uuid = str(uuid_lib.uuid4())
+    supabase.table("users").insert({
+        "uuid":                 db_uuid,
+        "email":                req.email,
+        "username":             req.username,
+        "role":                 req.role,
+        "is_admin":             False,
+        "company_id":           system_company_id,
+        "onboarding_completed": True,
+        "status":               "active",
+    }).execute()
+
+    email_sent = False
+    try:
+        auth_res = supabase.auth.admin.invite_user_by_email(
+            req.email,
+            options={"data": {"username": req.username, "role": req.role}, "redirect_to": FRONTEND_URL},
+        )
+        email_sent = True
+        if auth_res and auth_res.user:
+            supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
+    except Exception as e:
+        print(f"[superadmin invite_system_user] Failed to send invite to {req.email}: {e}")
+
+    role_label = "Super Admin" if req.role == "super_admin" else "Developer"
+    return {
+        "message": (
+            f"{role_label} invite sent to {req.email}."
+            if email_sent
+            else f"{role_label} '{req.username}' pre-registered. Email could not be delivered to {req.email}."
+        ),
+        "email_sent": email_sent,
     }
 
 
@@ -2646,7 +2729,7 @@ def admin_delete_user(
 @app.get("/api/superadmin/company_detail/{company_id}")
 def superadmin_company_detail(
         company_id: int,
-        current_user: dict = Depends(auth.require_super_admin),
+        current_user: dict = Depends(auth.require_developer_or_above),
 ):
     co = supabase.table("companies").select("id, name").eq("id", company_id).single().execute()
     if not co.data:

@@ -34,7 +34,7 @@ const NAV_TABS = [
   { id: 'directory',   label: 'Directory' },
   { id: 'database',    label: 'Database' },
   { id: 'resolution',  label: 'Resolution' },
-  { id: 'company',     label: 'Company',     adminOnly: true },
+  { id: 'company',     label: 'Company',     adminOnly: true, hideForSystemLevel: true },
 ];
 
 
@@ -178,8 +178,10 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     return () => clearInterval(pollRef.current);
   }, [trainingJob.key, trainingJob.done]);
 
-  const isSuperAdmin = user?.role === 'super_admin';
-  const isAdmin      = isSuperAdmin || user?.role === 'admin';
+  const isSuperAdmin  = user?.role === 'super_admin';
+  const isDeveloper   = user?.role === 'developer';
+  const isSystemLevel = isSuperAdmin || isDeveloper;
+  const isAdmin       = isSystemLevel || user?.role === 'admin';
 
   // Pending approval notifications
   const [pendingCount, setPendingCount] = useState(0);
@@ -187,7 +189,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     if (!isAdmin) return;
     const fetchPending = async () => {
       try {
-        const endpoint = isSuperAdmin ? '/api/superadmin/pending' : '/api/admin/users/pending';
+        const endpoint = isSystemLevel ? '/api/superadmin/pending' : '/api/admin/users/pending';
         const res = await axios.get(endpoint);
         const data = res.data || [];
         setPendingCount(Array.isArray(data) ? data.length : 0);
@@ -196,7 +198,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     fetchPending();
     const iv = setInterval(fetchPending, 30000);
     return () => clearInterval(iv);
-  }, [isAdmin, isSuperAdmin]);
+  }, [isAdmin, isSystemLevel]);
 
   return (
     <div className="app-container bg-black text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden" data-theme={theme}>
@@ -232,9 +234,10 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           <div className="flex-1 flex justify-center">
             <div className="hidden md:flex items-center gap-0.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 p-1">
               {NAV_TABS.map(t => {
-                if (t.superAdminOnly && !isSuperAdmin) return null;
-                if (t.adminOnly      && !isAdmin)      return null;
-                const label = (t.id === 'company' && isSuperAdmin) ? 'System' : t.label;
+                if (t.superAdminOnly && !isSuperAdmin)  return null;
+                if (t.adminOnly      && !isAdmin)       return null;
+                if (t.hideForSystemLevel && isSystemLevel) return null;
+                const label = t.label;
                 return (
                   <button
                     key={t.id}
@@ -267,7 +270,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
             {/* Notification bell — admins only */}
             {isAdmin && (
               <button
-                onClick={() => navigate(isSuperAdmin ? 'superadmin' : 'users')}
+                onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')}
                 className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
                 title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
               >
@@ -305,6 +308,11 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                       <Crown size={14} /> Super Admin Panel
                     </button>
                   )}
+                  {isDeveloper && (
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
+                      <Crown size={14} /> System Panel
+                    </button>
+                  )}
                   <div className="h-px bg-white/10 my-1 mx-2" />
                   <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
                     <LogOut size={14} /> Sign out
@@ -325,9 +333,10 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
         {tab === 'resolution'  && <ResolutionSupport />}
         {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
-        {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin     user={user} />}
+        {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin user={user} canManage={true} canApprove={true} canDelete={true} />}
+        {tab === 'superadmin'  && isDeveloper   && <SuperAdmin user={user} canManage={false} canApprove={true} canDelete={false} />}
         {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
-        {tab === 'company'     && isAdmin       && <CompanyProfile  user={user} />}
+        {tab === 'company'     && !isDeveloper  && isAdmin && <CompanyProfile  user={user} />}
       </main>
 
       <TrainingBanner
@@ -348,6 +357,9 @@ export default function App() {
   const [loading,        setLoading]        = useState(true);
   const [forceRecoveryReset, setForceRecoveryReset] = useState(
     () => window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')
+  );
+  const [forceInviteSetPassword, setForceInviteSetPassword] = useState(
+    () => window.location.hash.includes('type=invite') || window.location.search.includes('type=invite')
   );
   const [showLogin,      setShowLogin]      = useState(false);
   const [initialTab,     setInitialTab]     = useState(null);
@@ -437,6 +449,11 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setForceRecoveryReset(true);
+      }
+      // When an invite link is clicked, Supabase fires SIGNED_IN with type=invite in the URL hash
+      if (event === 'SIGNED_IN' &&
+          (window.location.hash.includes('type=invite') || window.location.search.includes('type=invite'))) {
+        setForceInviteSetPassword(true);
       }
       if (event !== 'INITIAL_SESSION') {
         initAuth(session, { event, fromInitialSession: false });
@@ -559,6 +576,13 @@ export default function App() {
       onLogin={handleLogin}
       forceResetRecovery={true}
       onResetDone={() => setForceRecoveryReset(false)}
+    />
+  );
+  if (forceInviteSetPassword) return (
+    <Login
+      onLogin={(u) => { setForceInviteSetPassword(false); handleLogin(u); }}
+      forceInviteSetup={true}
+      onInviteSetupDone={() => setForceInviteSetPassword(false)}
     />
   );
   if (['pending', 'inactive', 'invite_requested'].includes(user.status)) return (
