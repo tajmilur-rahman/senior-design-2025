@@ -60,7 +60,6 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   // --- Organizations state ---
   const [companies,  setCompanies]  = useState([]);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
-  const [usingDemo,  setUsingDemo]  = useState(false);
   const [selected,   setSelected]   = useState(null);
   const [orgError,   setOrgError]   = useState(null);
   const [pending,    setPending]    = useState([]);
@@ -84,13 +83,6 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   const [deleting,   setDeleting]   = useState(false);
   const [toast,      setToast]      = useState({ text: '', type: '' });
 
-  const DEMO = [
-    { id: 1, name: 'Apex Demo Corp',    total: 222847, critical: 1203, resolved: 186400, users: 14, model_acc: 86.3, last_active: 'Live' },
-    { id: 2, name: 'FirefoxOS Labs',    total: 14820,  critical: 87,   resolved: 12300,  users: 6,  model_acc: 83.1, last_active: 'Live' },
-    { id: 3, name: 'Meridian Systems',  total: 3410,   critical: 22,   resolved: 2900,   users: 4,  model_acc: 81.7, last_active: 'Live' },
-    { id: 4, name: 'Quantum Dev Group', total: 980,    critical: 5,    resolved: 801,    users: 2,  model_acc: 79.4, last_active: 'Live' },
-  ];
-
   const showToast = (text, type = 'success') => {
     setToast({ text, type });
     setTimeout(() => setToast({ text: '', type: '' }), 4000);
@@ -103,15 +95,10 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
         axios.get('/api/superadmin/companies'),
         axios.get('/api/superadmin/pending'),
       ]);
-      if (companiesRes.data?.length > 0) {
-        setCompanies(companiesRes.data); setUsingDemo(false);
-      } else {
-        setCompanies(DEMO); setUsingDemo(true);
-      }
+      setCompanies(companiesRes.data || []);
       setPending(pendingRes.data || []);
     } catch (e) {
-      setCompanies(DEMO);
-      setUsingDemo(e.response?.status !== 403);
+      setCompanies([]);
       if (e.response?.status === 403) setOrgError('Super admin access required on this account.');
     } finally { setLoadingOrgs(false); }
   };
@@ -265,7 +252,6 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
               <Crown size={12} /> <span className="text-[10px] font-bold tracking-widest uppercase">Global Control</span>
             </div>
             <span className="text-[10px] font-bold px-2 py-1 rounded border bg-red-500/10 border-red-500/20 text-red-400 uppercase tracking-widest">Restricted</span>
-            {usingDemo && <span className="text-[10px] font-bold px-2 py-1 rounded border bg-indigo-500/10 border-indigo-500/20 text-indigo-400 uppercase tracking-widest">Demo data</span>}
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
             Super <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Admin</span>

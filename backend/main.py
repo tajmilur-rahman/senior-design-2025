@@ -232,9 +232,8 @@ def register(req: RegisterRequest):
                 except Exception as tbl_err:
                     print(f"[register] Warning: could not create company table: {tbl_err}")
 
-        # Store the registration password temporarily so approval can create the
-        # Supabase Auth account with it — prefixed "plain:" to distinguish from a hash.
-        # This field is cleared immediately after the Supabase account is created.
+        # Temporarily store the registration password so approval can set it on the
+        # Supabase Auth account after invite_user_by_email creates it.
         pw_store = "plain:" + base64.b64encode(req.password.encode()).decode() if req.password else ""
 
         user_res = supabase.table("users").insert({
@@ -463,10 +462,38 @@ def sync_password_hash(req: SyncPasswordHashRequest, current_user: dict = Depend
     uuid = current_user.get("uuid")
     if not uuid:
         raise HTTPException(status_code=401, detail="Authentication required")
-    if len(req.password) < 8:
+    if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Password too short")
     hashed = auth.get_password_hash(req.password)
     supabase.table("users").update({"password_hash": hashed}).eq("uuid", uuid).execute()
+    return {"ok": True}
+
+
+@app.post("/api/users/me/apply-registration-password")
+def apply_registration_password(current_user: dict = Depends(auth.get_current_user)):
+    """Called once when an approved user clicks their invite link.
+    Applies their stored registration password to Supabase Auth and replaces
+    the plain: temp value with a bcrypt hash — no password input from the user needed."""
+    uuid      = current_user.get("uuid")
+    pw_store  = current_user.get("password_hash", "")
+
+    if not pw_store.startswith("plain:"):
+        return {"ok": True, "skipped": True}  # already applied or no reg password
+
+    try:
+        reg_password = base64.b64decode(pw_store[6:]).decode()
+    except Exception:
+        return {"ok": False, "error": "Could not decode stored password"}
+
+    try:
+        supabase.auth.admin.update_user_by_id(uuid, {"password": reg_password})
+    except Exception as e:
+        print(f"[apply-reg-password] update_user_by_id failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+    pw_hash = auth.get_password_hash(reg_password)
+    supabase.table("users").update({"password_hash": pw_hash}).eq("uuid", uuid).execute()
+    print(f"[apply-reg-password] Registration password applied for uuid={uuid}")
     return {"ok": True}
 
 
@@ -2024,68 +2051,39 @@ def superadmin_approve_user(
     email_sent = False
 
     if old_status == "pending":
-        # Recover the registration password (stored as "plain:<b64>" until this moment).
-        pw_store       = target.get("password_hash", "")
-        reg_password   = None
-        if pw_store.startswith("plain:"):
-            try:
-                reg_password = base64.b64decode(pw_store[6:]).decode()
-            except Exception:
-                pass
+        pw_store = target.get("password_hash", "")
+        has_reg_password = pw_store.startswith("plain:")
 
-        if reg_password:
-            # Create Supabase Auth account with the password the admin chose at registration.
-            # Create as unconfirmed so we can send an invite/notification email.
-            try:
-                auth_res = supabase.auth.admin.create_user({
-                    "email":         email,
-                    "password":      reg_password,
-                    "email_confirm": True,
-                    "user_metadata": {"username": name, "company_name": company_name, "role": role},
-                })
-                if auth_res and auth_res.user:
-                    supabase.table("users").update({
-                        "uuid":          auth_res.user.id,
-                        "password_hash": "",   # clear the temporary stored password
-                    }).eq("uuid", user_uuid).execute()
-                    print(f"[superadmin approve] Auth account created with registration password for {email}")
-
-                    try:
-                        supabase.auth.admin.invite_user_by_email(
-                            email,
-                            options={"data": {"username": name, "company_name": company_name, "role": role}},
-                        )
-                        email_sent = True
-                        print(f"[superadmin approve] Invite email sent to {email}")
-                    except Exception as invite_err:
-                        print(f"[superadmin approve] Post-creation invite failed: {invite_err}")
-            except Exception as e:
-                print(f"[superadmin approve] create_user failed, falling back to invite: {e}")
-                reg_password = None   # fall through to invite below
-
-        if not reg_password:
-            # Fallback: no stored password (old-style registration) — send invite email.
-            try:
-                auth_res = supabase.auth.admin.invite_user_by_email(
-                    email,
-                    options={"data": {"username": name, "company_name": company_name, "role": role}},
-                )
-                email_sent = True
-                if auth_res and auth_res.user:
-                    supabase.table("users").update({"uuid": auth_res.user.id}).eq("uuid", user_uuid).execute()
-                print(f"[superadmin approve] Invite email sent to {email}")
-            except Exception as e:
-                print(f"[superadmin approve] Invite failed: {e}")
+        # invite_user_by_email is the only admin method that sends an email.
+        # We do NOT call update_user_by_id here — doing so invalidates the OTP in the
+        # invite link. Instead the password is applied transparently when the user clicks
+        # the link (see /api/users/me/apply-registration-password).
+        try:
+            auth_res = supabase.auth.admin.invite_user_by_email(
+                email,
+                options={"data": {
+                    "username":         name,
+                    "company_name":     company_name,
+                    "role":             role,
+                    "password_prefilled": has_reg_password,
+                }, "redirect_to": FRONTEND_URL},
+            )
+            email_sent = True
+            if auth_res and auth_res.user:
+                supabase.table("users").update({"uuid": auth_res.user.id}).eq("uuid", user_uuid).execute()
+            print(f"[superadmin approve] Invite email sent to {email}")
+        except Exception as e:
+            print(f"[superadmin approve] Invite failed: {e}")
     else:
         print(f"[superadmin approve] {email} already had auth, status set to active")
 
+    if email_sent:
+        msg_suffix = " Invite email sent — they can sign in with their registration password."
+    else:
+        msg_suffix = " Invite email could not be sent — ask them to use password reset."
+
     return {
-        "message": (
-            f"'{name}' approved."
-            + (" Invite email sent — they must click the link to set their password."
-               if email_sent
-               else " They can now sign in with the password they registered with.")
-        ),
+        "message": f"'{name}' approved." + msg_suffix,
         "email_sent": email_sent,
     }
 
@@ -2152,7 +2150,7 @@ def superadmin_create_user(
     try:
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "company_name": company_name, "role": role}, "redirect_to": FRONTEND_URL},
+            options={"data": {"username": req.username, "company_name": company_name, "role": role, "needs_password_setup": True}, "redirect_to": FRONTEND_URL},
         )
         email_sent = True
         # Link the newly created auth UUID back to the database
@@ -2205,7 +2203,7 @@ def superadmin_invite_system_user(
     try:
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "role": req.role}, "redirect_to": FRONTEND_URL},
+            options={"data": {"username": req.username, "role": req.role, "needs_password_setup": True}, "redirect_to": FRONTEND_URL},
         )
         email_sent = True
         if auth_res and auth_res.user:

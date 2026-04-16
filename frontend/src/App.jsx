@@ -358,9 +358,7 @@ export default function App() {
   const [forceRecoveryReset, setForceRecoveryReset] = useState(
     () => window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery')
   );
-  const [forceInviteSetPassword, setForceInviteSetPassword] = useState(
-    () => window.location.hash.includes('type=invite') || window.location.search.includes('type=invite')
-  );
+  const [forceInviteSetPassword, setForceInviteSetPassword] = useState(false);
   const [showLogin,      setShowLogin]      = useState(false);
   const [initialTab,     setInitialTab]     = useState(null);
 
@@ -450,10 +448,23 @@ export default function App() {
       if (event === 'PASSWORD_RECOVERY') {
         setForceRecoveryReset(true);
       }
-      // When an invite link is clicked, Supabase fires SIGNED_IN with type=invite in the URL hash
-      if (event === 'SIGNED_IN' &&
-          (window.location.hash.includes('type=invite') || window.location.search.includes('type=invite'))) {
-        setForceInviteSetPassword(true);
+      // When an approved user signs in via invite link, handle password setup based on metadata.
+      // We check user_metadata instead of the URL hash because Supabase clears the hash
+      // before firing onAuthStateChange, so the URL is no longer reliable.
+      if (event === 'SIGNED_IN') {
+        const passwordPrefilled = session?.user?.user_metadata?.password_prefilled;
+        const needsPasswordSetup = session?.user?.user_metadata?.needs_password_setup;
+        if (passwordPrefilled) {
+          // Registered admin — silently apply their pre-set registration password.
+          setForceInviteSetPassword(false);
+          axios.post('/api/users/me/apply-registration-password').catch(() => {});
+        } else if (needsPasswordSetup && !sessionStorage.getItem('invite_setup_shown')) {
+          // System user (super_admin/developer) or directly-invited user — show set-password screen.
+          // Guard with sessionStorage so it only appears once even if SIGNED_IN fires multiple times.
+          sessionStorage.setItem('invite_setup_shown', 'true');
+          sessionStorage.setItem('apex_session_active', 'true');
+          setForceInviteSetPassword(true);
+        }
       }
       if (event !== 'INITIAL_SESSION') {
         initAuth(session, { event, fromInitialSession: false });

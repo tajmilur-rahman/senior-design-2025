@@ -228,8 +228,9 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
     if (password.length < 6) { setMsg('Password must be at least 6 characters.'); return; }
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await supabase.auth.updateUser({ password, data: { needs_password_setup: false } });
       if (error) throw error;
+      await axios.post('/api/users/me/sync-password-hash', { password }).catch(() => {});
       setInviteViewState('success');
       setTimeout(async () => {
         const { data } = await supabase.auth.getUser();
@@ -487,7 +488,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
                           </p>
                         )}
                         <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                          A super admin will review and approve your registration.
+                          A super admin will review your registration. Once approved, you'll receive an email and can sign in with the password you set here.
                         </p>
                       </div>
                     )}
