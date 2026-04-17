@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import { useEscapeKey } from '../Components/Modal';
 import {
     Search, Download, ChevronLeft, ChevronRight, Loader,
     X, Target, Clock, ShieldAlert, CheckCircle, Zap, ChevronDown, Database,
@@ -16,32 +17,75 @@ function statusColor(status) {
     return 'text-white/40';
 }
 
-function CustomSelect({ value, onChange, options, placeholder, dropUp = false }) {
-    const [open, setOpen] = useState(false);
-    const ref = useRef(null);
-    useEffect(() => {
-        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
-    const selected = options.find(o => o.value === value);
-    return (
-        <div ref={ref} className="relative select-none w-full">
-            <div onClick={() => setOpen(o => !o)} className={`h-14 flex items-center justify-between px-5 bg-white/5 border rounded-2xl cursor-pointer text-sm font-bold transition-all ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}>
-                <span>{selected ? selected.label : placeholder}</span>
-                <ChevronDown size={14} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-            </div>
-            {open && (
-                <div className={`absolute z-[9999] w-full bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.8)] overflow-hidden py-2 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
-                    {options.map(opt => (
-                        <div key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }} className={`px-5 py-3 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-2 rounded-xl ${opt.value === value ? 'bg-blue-500/20 text-blue-400' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
-                            {opt.label}
-                        </div>
-                    ))}
+function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const ref = useRef(null);
+  const listRef = useRef(null);
+  const listId = useRef(`sf-listbox-${Math.random().toString(36).slice(2, 9)}`).current;
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectedIdx = options.findIndex(o => String(o.value) === String(value));
+  const selected = selectedIdx >= 0 ? options[selectedIdx] : null;
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIdx(selectedIdx >= 0 ? selectedIdx : 0);
+  }, [open]);
+
+  const openAnd = (idx) => { if (disabled) return; setOpen(true); setActiveIdx(idx); };
+  const commit = (idx) => {
+    if (idx < 0 || idx >= options.length) return;
+    onChange(options[idx].value);
+    setOpen(false);
+  };
+
+  const onKeyDown = (e) => {
+    if (disabled) return;
+    switch (e.key) {
+      case 'Enter': case ' ': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else commit(activeIdx); break;
+      case 'ArrowDown': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else setActiveIdx(i => Math.min(options.length - 1, i + 1)); break;
+      case 'ArrowUp': e.preventDefault(); if (!open) openAnd(Math.max(0, selectedIdx)); else setActiveIdx(i => Math.max(0, i - 1)); break;
+      case 'Escape': if (open) { e.preventDefault(); setOpen(false); } break;
+      case 'Tab': setOpen(false); break;
+      default: break;
+    }
+  };
+
+  return (
+    <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div
+        role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder}
+        onClick={() => { if (!disabled) setOpen(o => !o); }}
+        onKeyDown={onKeyDown}
+        className={triggerClassName || `h-14 flex items-center justify-between px-5 border rounded-2xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/40 ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+      >
+        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
+      </div>
+      {open && (
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+            {options.map((opt, i) => {
+              const isSelected = String(opt.value) === String(value);
+              const isActive   = i === activeIdx;
+              return (
+                <div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)}
+                  className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
+                  {opt.label}
                 </div>
-            )}
+              );
+            })}
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
 }
 
 function SevBadge({ sev }) {
@@ -129,6 +173,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
     const [page,            setPage]            = useState(1);
     const [itemsPerPage,    setItemsPerPage]    = useState(10);
     const [selectedBug,     setSelectedBug]     = useState(null);
+    useEscapeKey(() => setSelectedBug(null), !!selectedBug);
 
     // Fetch companies list for system-level users
     useEffect(() => {
@@ -200,7 +245,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
               <div className="relative z-10">
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-                  Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Explorer</span>
+                  Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">explorer</span>
                 </h1>
                 <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
                   Search, filter, and export the comprehensive history of all logged anomalies across your organization.
@@ -346,14 +391,14 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                 const statusDef = STATUS_DEFS.find(d => d.code === (selectedBug.status || '').toUpperCase());
                 return createPortal(
                     <>
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300" onClick={() => setSelectedBug(null)} />
-                        <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[500px] bg-black/80 backdrop-blur-3xl border-l border-white/10 shadow-[-20px_0_60px_rgba(0,0,0,0.7)] z-[9999] p-6 lg:p-10 overflow-y-auto animate-in slide-in-from-right duration-300 custom-scrollbar">
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9998] animate-in fade-in duration-300" onClick={() => setSelectedBug(null)} aria-hidden="true" />
+                        <div role="dialog" aria-modal="true" aria-label="Bug detail" className="fixed top-0 right-0 bottom-0 w-full sm:w-[500px] bg-black/80 backdrop-blur-3xl border-l border-white/10 shadow-[-20px_0_60px_rgba(0,0,0,0.7)] z-[9999] p-6 lg:p-10 overflow-y-auto animate-in slide-in-from-right duration-300 custom-scrollbar">
                             <div className="flex justify-between items-center mb-8">
                                 <div className="flex items-center gap-3">
                                     <Target size={18} className="text-emerald-400" />
                                     <span className="text-sm font-bold text-white uppercase tracking-widest">Telemetry Detail</span>
                                 </div>
-                                <button onClick={() => setSelectedBug(null)} className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/50 hover:text-white transition-colors"><X size={16} /></button>
+                                <button onClick={() => setSelectedBug(null)} aria-label="Close bug detail" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/50 hover:text-white transition-colors"><X size={16} /></button>
                             </div>
 
                             <div className="font-mono text-xs text-white/40 mb-2">#{selectedBug.id}</div>

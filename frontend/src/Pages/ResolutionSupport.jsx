@@ -1,10 +1,58 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
   Search, History, Clock3, CheckCircle2, Wrench,
   ExternalLink, Lightbulb, BarChart2, BookOpen, X,
   RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Filter,
 } from "lucide-react";
+
+function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const ref = useRef(null);
+  const listRef = useRef(null);
+  const listId = useRef(`sf-listbox-${Math.random().toString(36).slice(2, 9)}`).current;
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const selectedIdx = options.findIndex(o => String(o.value) === String(value));
+  const selected = selectedIdx >= 0 ? options[selectedIdx] : null;
+  useEffect(() => { if (!open) return; setActiveIdx(selectedIdx >= 0 ? selectedIdx : 0); }, [open]);
+  const openAnd = (idx) => { if (disabled) return; setOpen(true); setActiveIdx(idx); };
+  const commit = (idx) => { if (idx < 0 || idx >= options.length) return; onChange(options[idx].value); setOpen(false); };
+  const onKeyDown = (e) => {
+    if (disabled) return;
+    switch (e.key) {
+      case 'Enter': case ' ': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else commit(activeIdx); break;
+      case 'ArrowDown': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else setActiveIdx(i => Math.min(options.length - 1, i + 1)); break;
+      case 'ArrowUp': e.preventDefault(); if (!open) openAnd(Math.max(0, selectedIdx)); else setActiveIdx(i => Math.max(0, i - 1)); break;
+      case 'Escape': if (open) { e.preventDefault(); setOpen(false); } break;
+      case 'Tab': setOpen(false); break;
+      default: break;
+    }
+  };
+  return (
+    <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
+        className={triggerClassName || `h-10 flex items-center justify-between px-3 border rounded-xl cursor-pointer text-sm transition-all outline-none focus:ring-2 focus:ring-blue-500/40 border-white/10 bg-zinc-900 text-white hover:bg-white/10`}>
+        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
+      </div>
+      {open && (
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+            {options.map((opt, i) => {
+              const isSelected = String(opt.value) === String(value);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const EXAMPLE_QUERIES = [
   "Video playback crashes on startup",
@@ -176,7 +224,7 @@ export default function ResolutionSupport() {
             </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Resolution <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Support</span>
+            Resolution <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">support</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             {isMozilla
@@ -245,18 +293,16 @@ export default function ResolutionSupport() {
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1 min-w-[170px]">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Resolution type</label>
-                <select
+                <CustomSelect
                   value={resolutionFilter}
-                  onChange={e => setResolutionFilter(e.target.value)}
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-zinc-900 text-white text-sm focus:outline-none focus:border-blue-500/50"
-                >
-                  <option value="">All types</option>
-                  <option value="fixed">FIXED</option>
-                  <option value="duplicate">DUPLICATE</option>
-                  <option value="worksforme">WORKSFORME</option>
-                  <option value="invalid">INVALID</option>
-                  <option value="wontfix">WONTFIX</option>
-                </select>
+                  onChange={v => setResolutionFilter(v)}
+                  placeholder="All types"
+                  options={[
+                    { value: '', label: 'All types' }, { value: 'fixed', label: 'FIXED' },
+                    { value: 'duplicate', label: 'DUPLICATE' }, { value: 'worksforme', label: 'WORKSFORME' },
+                    { value: 'invalid', label: 'INVALID' }, { value: 'wontfix', label: 'WONTFIX' }
+                  ]}
+                />
               </div>
               <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Component</label>

@@ -17,7 +17,8 @@ import PendingApproval   from './Pages/PendingApproval';
 import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
-import { LogOut, Crown, Users, ChevronDown, ChevronLeft, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon } from 'lucide-react';
+import { LogOut, Crown, Users, ChevronDown, ChevronLeft, ChevronUp, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon, Menu, PanelLeft, PanelTop, LayoutDashboard, FlaskConical, Gauge, BarChart3, BookUser, Database, ShieldCheck, Building2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import './App.css';
 
 axios.interceptors.request.use(async (config) => {
@@ -27,14 +28,14 @@ axios.interceptors.request.use(async (config) => {
 });
 
 const NAV_TABS = [
-  { id: 'overview',    label: 'Overview' },
-  { id: 'submit',      label: 'Severity Analysis' },
-  { id: 'performance', label: 'Performance', adminOnly: true },
-  { id: 'analysis',    label: 'Analytics' },
-  { id: 'directory',   label: 'Directory' },
-  { id: 'database',    label: 'Database' },
-  { id: 'resolution',  label: 'Resolution' },
-  { id: 'company',     label: 'Company',     adminOnly: true, hideForSystemLevel: true },
+  { id: 'overview',    label: 'Overview',          icon: LayoutDashboard },
+  { id: 'submit',      label: 'Severity Analysis', icon: FlaskConical },
+  { id: 'performance', label: 'Performance',       icon: Gauge,          adminOnly: true },
+  { id: 'analysis',    label: 'Analytics',         icon: BarChart3 },
+  { id: 'directory',   label: 'Directory',         icon: BookUser },
+  { id: 'database',    label: 'Database',          icon: Database },
+  { id: 'resolution',  label: 'Resolution',        icon: ShieldCheck },
+  { id: 'company',     label: 'Company',           icon: Building2,      adminOnly: true, hideForSystemLevel: true },
 ];
 
 
@@ -117,6 +118,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [extFilters,    setExtFilters] = useState(null);
   const [trainingJob,   setTrainingJob] = useState({ key: null, step: '', pct: 0, done: false, error: null });
   const [perfRefreshKey, setPerfRefreshKey] = useState(0);
+  const [selectedCompany, setSelectedCompany] = useState(null);
   const pollRef = useRef(null);
 
   const [theme, setTheme] = useState(() => localStorage.getItem('spotfixes_theme') || 'dark');
@@ -132,11 +134,70 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     return () => document.body.removeAttribute('data-theme'); // cleanup on logout
   }, [theme]);
 
+  // Nav orientation — user-selectable horizontal (default) or vertical sidebar.
+  const [navOrientation, setNavOrientation] = useState(
+    () => localStorage.getItem('spotfixes_nav_orientation') || 'horizontal'
+  );
+  const toggleNavOrientation = () => setNavOrientation(o => {
+    const next = o === 'horizontal' ? 'vertical' : 'horizontal';
+    localStorage.setItem('spotfixes_nav_orientation', next);
+    return next;
+  });
+
+  // Click-based avatar menu (replaces hover-only). Closes on ESC / outside click.
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const avatarMenuRef = useRef(null);
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    const onDown = (e) => {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setAvatarMenuOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [avatarMenuOpen]);
+
+  // Click-based avatar menu for the Vertical Sidebar (pops up). Closes on ESC / outside click.
+  const [sidebarAvatarMenuOpen, setSidebarAvatarMenuOpen] = useState(false);
+  const sidebarAvatarMenuRef = useRef(null);
+  useEffect(() => {
+    if (!sidebarAvatarMenuOpen) return;
+    const onDown = (e) => {
+      if (sidebarAvatarMenuRef.current && !sidebarAvatarMenuRef.current.contains(e.target)) {
+        setSidebarAvatarMenuOpen(false);
+      }
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setSidebarAvatarMenuOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [sidebarAvatarMenuOpen]);
+
+  // Mobile nav drawer
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setMobileNavOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileNavOpen]);
+
   const navigate = (targetTab, query = '', prefill = null, filters = null) => {
     setTab(prev => { setPreviousTab(prev); return targetTab; });
     setExtQ(query);
     if (prefill) setPrefill(prefill);
     setExtFilters(filters || null);
+    setMobileNavOpen(false);
+    setAvatarMenuOpen(false);
   };
 
   const goBack = () => {
@@ -200,20 +261,185 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     return () => clearInterval(iv);
   }, [isAdmin, isSystemLevel]);
 
-  return (
-    <div className="app-container bg-black text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden" data-theme={theme}>
-      {/* Ambient Dashboard Background Glow */}
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/10 via-black to-black pointer-events-none" />
-      
-      <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-black/10 backdrop-blur-xl border-b border-white/10 transition-all">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="flex h-16 items-center gap-4">
+  // Supplemental bell poll — includes invite_requested users in the badge count
+  useEffect(() => {
+    if (!isAdmin || isSystemLevel) return;
+    const fetchAllPending = async () => {
+      try {
+        const res = await axios.get('/api/admin/users/pending/all');
+        const data = res.data || [];
+        setPendingCount(Array.isArray(data) ? data.length : 0);
+      } catch { /* retain existing count on failure */ }
+    };
+    fetchAllPending();
+    const iv = setInterval(fetchAllPending, 30000);
+    return () => clearInterval(iv);
+  }, [isAdmin, isSystemLevel]);
 
-          {/* Brand — left */}
+  return (
+    <div className="app-container text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-main)' }} data-theme={theme}>
+      {/* Ambient Dashboard Background Glow */}
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/8 via-transparent to-transparent pointer-events-none" />
+      
+      {/* Vertical sidebar — desktop only, when orientation === 'vertical' */}
+      {navOrientation === 'vertical' && (
+        <aside
+          className="hidden md:flex fixed top-0 left-0 bottom-0 w-56 z-40 flex-col bg-black/20 backdrop-blur-xl border-r border-white/10"
+          aria-label="Primary navigation"
+        >
+          <div className="px-5 h-16 flex items-center border-b border-white/10 flex-shrink-0">
+            <button
+              onClick={() => navigate('overview')}
+              className="text-lg font-bold tracking-tight text-white"
+              aria-label="Spotfixes home"
+            >
+              Spot<span className="text-zinc-500">fixes</span>
+            </button>
+          </div>
+          <nav className="flex-1 py-4 px-3 space-y-1.5 overflow-y-auto" aria-label="Sections">
+            {NAV_TABS.map(t => {
+              if (t.superAdminOnly && !isSuperAdmin)  return null;
+              if (t.adminOnly      && !isAdmin)       return null;
+              if (t.hideForSystemLevel && isSystemLevel) return null;
+              const Icon = t.icon;
+              const isActive = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => navigate(t.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`relative group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-left ${
+                    !isActive && 'hover:bg-white/5'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="active-vertical-nav-pill"
+                      className="absolute inset-0 bg-white/10 rounded-lg"
+                      transition={{ type: 'spring', stiffness: 380, damping: 35 }}
+                    />
+                  )}
+                  
+                  {Icon && <Icon size={16} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/50 group-hover:text-white'}`} />}
+                  <span className={`relative z-10 truncate transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white'}`}>{t.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          
+          {/* Vertical Sidebar Bottom Actions (User, Theme, Notifications) */}
+          <div className="p-3 border-t border-white/10 flex-shrink-0 flex flex-col gap-2">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">System</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-white/10 text-white/50 hover:text-white transition-all"
+                  title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                  {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')}
+                    className="relative flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-white/10 text-white/50 hover:text-white transition-all"
+                    title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
+                  >
+                    <Bell size={13} className={pendingCount > 0 ? 'text-amber-400' : ''} />
+                    {pendingCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">
+                        {pendingCount > 9 ? '9+' : pendingCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div ref={sidebarAvatarMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setSidebarAvatarMenuOpen(o => !o)}
+                className="w-full flex items-center gap-2.5 px-2 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl transition-all"
+              >
+                <div className="w-8 h-8 bg-white text-black text-xs font-bold flex items-center justify-center rounded-full flex-shrink-0">
+                  {(user?.username || 'U')[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-sm font-bold text-white truncate leading-tight">
+                    {user?.username || 'User'}
+                  </div>
+                  <div className="text-[10px] text-white/50 truncate leading-tight capitalize">
+                    {user?.role?.replace('_', ' ') || 'User'}
+                  </div>
+                </div>
+                <ChevronUp size={14} className={`text-white/50 transition-transform flex-shrink-0 ${sidebarAvatarMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Sidebar popup menu */}
+              {sidebarAvatarMenuOpen && (
+                <div className="absolute left-0 bottom-full mb-2 z-50 w-full" role="menu">
+                  <div className="w-full bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
+                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => { navigate('profile'); setSidebarAvatarMenuOpen(false); }}>
+                      <UserCog size={14} /> Profile Settings
+                    </button>
+                    {isAdmin && !isSuperAdmin && (
+                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => { navigate('users'); setSidebarAvatarMenuOpen(false); }}>
+                        <Users size={14} /> Admin Panel
+                      </button>
+                    )}
+                    {isSuperAdmin && (
+                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-amber-500 hover:bg-white/10 rounded-xl transition-colors" onClick={() => { navigate('superadmin'); setSidebarAvatarMenuOpen(false); }}>
+                        <Crown size={14} /> Super Admin Panel
+                      </button>
+                    )}
+                    <div className="h-px bg-white/10 my-1 mx-2" />
+                    <button
+                      role="menuitem"
+                      onClick={() => { toggleNavOrientation(); setSidebarAvatarMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors"
+                    >
+                      <PanelTop size={14} />
+                      <span className="flex-1 text-left">Navigation</span>
+                      <span className="text-white/40 text-xs">Top</span>
+                    </button>
+                    <div className="h-px bg-white/10 my-1 mx-2" />
+                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
+                      <LogOut size={14} /> Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* Top bar — always rendered; shifted right when sidebar is active */}
+      <nav
+        className={`fixed top-0 right-0 z-50 bg-black/10 backdrop-blur-xl border-b border-white/10 transition-all ${
+          navOrientation === 'vertical' ? 'left-0 md:hidden' : 'left-0'
+        }`}
+        aria-label="Top bar"
+      >
+        <div className={navOrientation === 'vertical' ? 'px-4 lg:px-6' : 'mx-auto max-w-7xl px-6 lg:px-8'}>
+          <div className="flex h-16 items-center gap-3">
+
+          {/* Mobile hamburger — below md */}
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={16} className="text-white/70" />
+          </button>
+
+          {/* Brand + back */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={goBack}
               disabled={!previousTab}
+              aria-label={previousTab ? `Back to ${previousTab}` : 'No previous page'}
               className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
                 previousTab
                   ? 'bg-white/5 border-white/10 hover:bg-white/15 hover:border-white/20 cursor-pointer'
@@ -223,44 +449,56 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
             >
               <ChevronLeft size={15} className="text-white/70" />
             </button>
-            <div className="flex items-center cursor-pointer" onClick={() => navigate('overview')}>
+            {/* Brand text — hidden on md+ when vertical sidebar shows it */}
+            <div
+              className={`flex items-center cursor-pointer ${navOrientation === 'vertical' ? 'md:hidden' : ''}`}
+              onClick={() => navigate('overview')}
+            >
               <span className="text-xl font-bold tracking-tight text-white">
                 Spot<span className="text-zinc-500">fixes</span>
               </span>
             </div>
           </div>
 
-          {/* Nav pills — flex-1 center column, pills themselves centered inside */}
-          <div className="flex-1 flex justify-center">
-            <div className="hidden md:flex items-center gap-0.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 p-1">
-              {NAV_TABS.map(t => {
-                if (t.superAdminOnly && !isSuperAdmin)  return null;
-                if (t.adminOnly      && !isAdmin)       return null;
-                if (t.hideForSystemLevel && isSystemLevel) return null;
-                const label = t.label;
-                return (
-                  <button
-                    key={t.id}
-                    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200 flex items-center whitespace-nowrap ${
-                      tab === t.id
-                        ? 'bg-white/15 text-white shadow-sm'
-                        : 'text-white/60 hover:bg-white/10 hover:text-white'
-                    }`}
-                    onClick={() => navigate(t.id)}
-                  >
-                    {t.superAdminOnly && <Crown size={11} className="mr-1.5 opacity-80" />}
-                    {label}
-                  </button>
-                );
-              })}
+          {/* Horizontal nav pills — only when horizontal orientation */}
+          {navOrientation === 'horizontal' ? (
+            <div className="flex-1 flex justify-center">
+              <div className="hidden md:flex items-center gap-2">
+                {NAV_TABS.map(t => {
+                  if (t.superAdminOnly && !isSuperAdmin)  return null;
+                  if (t.adminOnly      && !isAdmin)       return null;
+                  if (t.hideForSystemLevel && isSystemLevel) return null;
+                  const Icon = t.icon;
+                  const isActive = tab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => navigate(t.id)}
+                      className={`relative group rounded-full px-3.5 py-1.5 text-sm font-medium flex items-center gap-1.5 whitespace-nowrap ${
+                        !isActive && 'hover:bg-white/5'
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div layoutId="active-horizontal-nav-pill" className="absolute inset-0 bg-white/15 rounded-full shadow-sm" transition={{ type: 'spring', stiffness: 380, damping: 35 }} />
+                      )}
+                      {Icon && <Icon size={14} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/50 group-hover:text-white'}`} />}
+                      <span className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white'}`}>{t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex-1" />
+          )}
 
-          {/* User pill — right */}
-          <div className="flex-shrink-0 flex items-center gap-2">
+          {/* Right actions */}
+          <div className={`flex-shrink-0 items-center gap-2 ${navOrientation === 'vertical' ? 'flex md:hidden' : 'flex'}`}>
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               className="flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.5)' }}
@@ -272,6 +510,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
               <button
                 onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')}
                 className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+                aria-label={pendingCount > 0 ? `Notifications: ${pendingCount} pending` : 'Notifications'}
                 title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
               >
                 <Bell size={15} className={pendingCount > 0 ? 'text-amber-400' : 'text-white/50'} />
@@ -282,50 +521,117 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                 )}
               </button>
             )}
-            <div className="group relative">
-              <div className="flex items-center gap-2 px-1 pr-3 py-1 bg-white/5 border border-white/10 rounded-full cursor-pointer hover:bg-white/10 transition-all">
+            <div ref={avatarMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setAvatarMenuOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={avatarMenuOpen}
+                aria-label="User menu"
+                className="flex items-center gap-2 px-1 pr-3 py-1 bg-white/5 border border-white/10 rounded-full cursor-pointer hover:bg-white/10 transition-all"
+              >
                 <div className="w-7 h-7 bg-white text-black text-xs font-bold flex items-center justify-center rounded-full">
                   {(user?.username || 'U')[0].toUpperCase()}
                 </div>
                 <span className="text-sm font-medium text-white hidden sm:block truncate max-w-[8rem]">
                   {user?.username || 'User'}
                 </span>
-                <ChevronDown size={14} className="text-white/50" />
-              </div>
-              
-              <div className="absolute right-0 top-full pt-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                <div className="w-56 max-w-[calc(100vw-1rem)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
-                  <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('profile')}>
-                    <UserCog size={14} /> Profile Settings
-                  </button>
-                  {isAdmin && !isSuperAdmin && (
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('users')}>
-                      <Users size={14} /> Admin Panel
+                <ChevronDown size={14} className={`text-white/50 transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {avatarMenuOpen && (
+                <div className="absolute right-0 top-full pt-2 z-50" role="menu">
+                  <div className="w-60 max-w-[calc(100vw-1rem)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
+                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('profile')}>
+                      <UserCog size={14} /> Profile Settings
                     </button>
-                  )}
-                  {isSuperAdmin && (
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-amber-500 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
-                      <Crown size={14} /> Super Admin Panel
+                    {isAdmin && !isSuperAdmin && (
+                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('users')}>
+                        <Users size={14} /> Admin Panel
+                      </button>
+                    )}
+                    {isSuperAdmin && (
+                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-amber-500 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
+                        <Crown size={14} /> Super Admin Panel
+                      </button>
+                    )}
+                    {isDeveloper && (
+                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
+                        <Crown size={14} /> System Panel
+                      </button>
+                    )}
+                    <div className="h-px bg-white/10 my-1 mx-2" />
+                    <button
+                      role="menuitem"
+                      onClick={() => { toggleNavOrientation(); setAvatarMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors"
+                    >
+                      {navOrientation === 'horizontal' ? <PanelLeft size={14} /> : <PanelTop size={14} />}
+                      <span className="flex-1 text-left">Navigation</span>
+                      <span className="text-white/40 text-xs">{navOrientation === 'horizontal' ? 'Top' : 'Side'}</span>
                     </button>
-                  )}
-                  {isDeveloper && (
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
-                      <Crown size={14} /> System Panel
+                    <div className="h-px bg-white/10 my-1 mx-2" />
+                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
+                      <LogOut size={14} /> Sign out
                     </button>
-                  )}
-                  <div className="h-px bg-white/10 my-1 mx-2" />
-                  <button className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
-                    <LogOut size={14} /> Sign out
-                  </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
           </div>
         </div>
       </nav>
-      <main className="main-scroll pt-24 relative z-10">
-        {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} />}
+
+      {/* Mobile nav drawer */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-[70] md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-md transition-all"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="absolute left-0 top-0 bottom-0 w-64 max-w-[80%] bg-[#0a0a0f] border-r border-white/10 flex flex-col">
+            <div className="h-16 px-5 flex items-center justify-between border-b border-white/10 flex-shrink-0">
+              <span className="text-lg font-bold tracking-tight text-white">
+                Spot<span className="text-zinc-500">fixes</span>
+              </span>
+              <button
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close navigation menu"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+              {NAV_TABS.map(t => {
+                if (t.superAdminOnly && !isSuperAdmin)  return null;
+                if (t.adminOnly      && !isAdmin)       return null;
+                if (t.hideForSystemLevel && isSystemLevel) return null;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => navigate(t.id)}
+                    aria-current={tab === t.id ? 'page' : undefined}
+                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
+                      tab === t.id
+                        ? 'bg-white/15 text-white'
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {t.superAdminOnly && <Crown size={11} className="opacity-80" />}
+                    <span className="truncate">{t.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+        </div>
+      )}
+
+      <main className={`main-scroll relative z-10 ${navOrientation === 'vertical' ? 'pt-24 md:pt-8 md:pl-56' : 'pt-24'}`}>
+        {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
         {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
         {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
         {tab === 'analysis'    && <BugAnalysis  user={user} />}
@@ -613,10 +919,11 @@ export default function App() {
       }}
     />
   );
+  // Gate onboarding on explicit `onboarding_completed` flag only. New-company admins
+  // start with `company_id` set but `onboarding_completed=false` — must still onboard.
   const _onboardLocalKey = `sf_onboarded_${user?.uuid || user?.id}`;
   const _onboardingDone  = user.onboarding_completed
-    || !!user.company_id                             // already in a company → setup complete
-    || !!localStorage.getItem(_onboardLocalKey);     // completed in a previous session
+    || !!localStorage.getItem(_onboardLocalKey);
   if (user && user.role === 'admin' && !_onboardingDone) return (
     <Onboarding onComplete={handleOnboardingComplete} user={user} />
   );

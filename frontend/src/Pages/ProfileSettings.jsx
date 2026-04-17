@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { supabase } from '../supabaseClient';
-import { User, Lock, Save, CheckCircle, AlertTriangle, Building2, Bug, ShieldCheck } from 'lucide-react';
+import {
+  User, Lock, Save, CheckCircle, AlertTriangle, Building2, Bug, ShieldCheck,
+  BrainCircuit, Database
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const ROLE_LABELS = {
   super_admin: 'Super Admin',
@@ -49,12 +53,10 @@ export default function ProfileSettings({ user, onUpdate }) {
     if (newPassword.length < 8) { setPasswordMsg({ type: 'error', text: 'Password must be at least 8 characters.' }); return; }
     setSavingPassword(true); setPasswordMsg(null);
     try {
-      // Verify current password before allowing update
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: user?.email, password: currentPassword });
       if (signInError) { setPasswordMsg({ type: 'error', text: 'Current password is incorrect.' }); setSavingPassword(false); return; }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      // Sync bcrypt hash in users table so legacy systems stay consistent
       await axios.post('/api/users/me/sync-password-hash', { password: newPassword }).catch(() => {});
       setPasswordMsg({ type: 'success', text: 'Password updated successfully.' });
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
@@ -66,65 +68,122 @@ export default function ProfileSettings({ user, onUpdate }) {
   const statusCfg = STATUS_CFG[user?.status] || STATUS_CFG.active;
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
-      
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="w-full max-w-5xl mx-auto p-6 lg:px-8 lg:py-12 font-sans relative z-10"
+    >
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
-              <User size={12} className="text-blue-500" />
-              <span className="text-[10px] font-bold tracking-widest uppercase">Personal Config</span>
-            </div>
+        <div className="relative z-10 flex items-center gap-6">
+          <div
+            className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 ring-2 ring-white/20"
+            style={{ background: '#3b82f6' }}
+            aria-label={user?.username || 'User'}
+          >
+            {(user?.username || user?.email || 'U')[0].toUpperCase()}
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Profile <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Settings</span>
-          </h1>
-          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
-            Manage your personal identity, security credentials, and view your organizational access level.
-          </p>
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full border text-blue-400 bg-blue-500/10 border-blue-500/20">
+                <User size={10} className="inline mr-1" /> Your Profile
+              </span>
+              <span className={`text-[10px] font-bold tracking-widest uppercase ${statusCfg.color}`}>• {statusCfg.label}</span>
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-white">{user?.username || 'Profile'}</h1>
+          <p className="text-white/50 text-sm mt-1">{user?.email}</p>
+          </div>
         </div>
-        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
+        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-white/20 via-white/5 to-transparent" />
       </div>
 
-      {/* Account Info Grid */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6">
+      {/* Activity stats strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+          <div className="flex items-center gap-2 mb-3">
+            <Bug size={14} className="text-blue-500" />
+            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Bugs in DB</span>
+          </div>
+          <div className="text-2xl font-bold font-mono text-white">{profileData?.bug_count?.toLocaleString() ?? '…'}</div>
+          <div className="text-[10px] text-white/30 mt-1">Total workspace records</div>
+        </div>
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+          <div className="flex items-center gap-2 mb-3">
+            <BrainCircuit size={14} className="text-purple-400" />
+            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Active Model</span>
+          </div>
+          <div className="text-2xl font-bold font-mono text-white">
+            {profileData?.has_own_model ? 'Custom' : 'Universal'}
+          </div>
+          <div className="text-[10px] text-white/30 mt-1">
+            {profileData?.has_own_model ? 'Company-specific weights' : 'Firefox baseline dataset'}
+          </div>
+        </div>
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+          <div className="flex items-center gap-2 mb-3">
+            <Building2 size={14} className="text-emerald-400" />
+            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Tenant Space</span>
+          </div>
+          <div className="text-2xl font-bold font-mono text-white truncate">
+            {user?.role === 'super_admin' ? 'System' : (profileData?.company_name || '—')}
+          </div>
+          <div className="text-[10px] text-white/30 mt-1">
+            {user?.role === 'super_admin' ? 'Global administration' : 'Dedicated environment'}
+          </div>
+        </div>
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+          <div className="flex items-center gap-2 mb-3">
+            <Database size={14} className="text-amber-400" />
+            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Data Isolation</span>
+          </div>
+          <div className="text-2xl font-bold font-mono text-white">
+            {user?.role === 'super_admin' ? 'Global' : 'Tenant'}
+          </div>
+          <div className="text-[10px] text-white/30 mt-1">
+            {user?.role === 'super_admin' ? 'Cross-workspace visibility' : 'Row-level security active'}
+          </div>
+        </div>
+      </div>
+
+      {/* Account context */}
+      <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl relative overflow-hidden mb-6">
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-6">
-          <ShieldCheck size={14} className="text-white/40" /> Account Context
+          <ShieldCheck size={14} className="text-white/60" /> Account Context
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {(user?.role === 'super_admin' ? [
             { label: 'Email',        value: user?.email || '—' },
             { label: 'Role',         value: ROLE_LABELS[user?.role] || user?.role || '—' },
-            { label: 'Organization', value: 'System', icon: <Building2 size={14} className="mr-2 opacity-50" /> },
-            { label: 'Status',       value: statusCfg.label, color: statusCfg.color },
-            { label: 'Bugs in DB',   value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…', icon: <Bug size={14} className="mr-2 opacity-50" /> },
+            { label: 'Organization', value: 'System' },
           ] : [
-            { label: 'Email',    value: user?.email || '—' },
-            { label: 'Role',     value: ROLE_LABELS[user?.role] || user?.role || '—' },
-            { label: 'Company',  value: profileData?.company_name || (user?.company_id ? `Company ${user.company_id}` : '—'), icon: <Building2 size={14} className="mr-2 opacity-50" /> },
-            { label: 'Status',   value: statusCfg.label, color: statusCfg.color },
-            { label: 'Bugs in DB', value: profileData != null ? (profileData.bug_count ?? 0).toLocaleString() : '…', icon: <Bug size={14} className="mr-2 opacity-50" /> },
+            { label: 'Email',   value: user?.email || '—' },
+            { label: 'Role',    value: ROLE_LABELS[user?.role] || user?.role || '—' },
+            { label: 'Company', value: profileData?.company_name || '—', icon: <Building2 size={13} className="mr-1.5 opacity-50" /> },
             { label: 'Onboarding', value: profileData?.onboarding_completed ? 'Completed ✓' : 'Setup Pending', color: profileData?.onboarding_completed ? 'text-emerald-400' : 'text-amber-500' },
           ]).map(f => (
-            <div key={f.label} className="p-4 rounded-2xl bg-white/5 border border-white/5">
-              <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">{f.label}</div>
-              <div className={`text-sm font-bold flex items-center ${f.color || 'text-white'}`}>{f.icon}{f.value}</div>
+            <div key={f.label} className="p-4 rounded-xl bg-white/5 border border-white/5 min-w-0">
+              <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1.5">{f.label}</div>
+              <div className={`text-sm font-bold flex items-center ${f.color || 'text-white'}`} title={typeof f.value === 'string' ? f.value : ''}>
+                {f.icon}
+                <span className="truncate">{f.value}</span>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
+      {/* Name + Password */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Display Name */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50" />
+        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(59,130,246,0.5), transparent)' }} />
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Display Name</div>
           <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
             <div>
-              <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Name</label>
-              <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} />
+              <label className="block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">Name</label>
+              <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/50 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} />
             </div>
             <div>
               {profileMsg && (
@@ -141,15 +200,11 @@ export default function ProfileSettings({ user, onUpdate }) {
                 }`}>
                 <Save size={16} /> {savingProfile ? 'Saving…' : 'Save Name'}
               </button>
-              {!savingProfile && username.trim() === user?.username && (
-                <p className="text-[10px] text-white/25 text-center mt-2 font-medium">Change your name above to enable</p>
-              )}
             </div>
           </form>
         </div>
 
-        {/* Password */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent opacity-50" />
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Change Password</div>
           <form onSubmit={handleChangePassword} className="flex flex-col gap-6">
@@ -160,8 +215,8 @@ export default function ProfileSettings({ user, onUpdate }) {
                 { label: 'Confirm password', value: confirmPassword, setter: setConfirmPassword },
               ].map(f => (
                 <div key={f.label}>
-                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{f.label}</label>
-                  <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-purple-500/50 focus:bg-white/10 outline-none transition-all text-sm tracking-widest" type="password" value={f.value} onChange={e => f.setter(e.target.value)} placeholder="••••••••" />
+                  <label className="block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
+                  <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/50 focus:border-purple-500/50 focus:bg-white/10 outline-none transition-all text-sm tracking-widest" type="password" value={f.value} onChange={e => f.setter(e.target.value)} placeholder="••••••••" />
                 </div>
               ))}
             </div>
@@ -180,13 +235,10 @@ export default function ProfileSettings({ user, onUpdate }) {
                 }`}>
                 <Lock size={16} /> {savingPassword ? 'Updating…' : 'Update Password'}
               </button>
-              {!savingPassword && (!currentPassword || !newPassword || !confirmPassword) && (
-                <p className="text-[10px] text-white/25 text-center mt-2 font-medium">Fill all three fields above to enable</p>
-              )}
             </div>
           </form>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

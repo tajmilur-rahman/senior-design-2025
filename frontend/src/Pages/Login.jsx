@@ -1,11 +1,59 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck, CheckCircle, Mail, Lock, ArrowRight,
-  Activity, Sun, Moon, Eye, EyeOff, Building2, User
+  Activity, Eye, EyeOff, Building2, User, ChevronDown
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import axios from 'axios';
 import { Beams } from './Landing';
+
+function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const ref = useRef(null);
+  const listRef = useRef(null);
+  const listId = useRef(`sf-listbox-${Math.random().toString(36).slice(2, 9)}`).current;
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const selectedIdx = options.findIndex(o => String(o.value) === String(value));
+  const selected = selectedIdx >= 0 ? options[selectedIdx] : null;
+  useEffect(() => { if (!open) return; setActiveIdx(selectedIdx >= 0 ? selectedIdx : 0); }, [open]);
+  const openAnd = (idx) => { if (disabled) return; setOpen(true); setActiveIdx(idx); };
+  const commit = (idx) => { if (idx < 0 || idx >= options.length) return; onChange(options[idx].value); setOpen(false); };
+  const onKeyDown = (e) => {
+    if (disabled) return;
+    switch (e.key) {
+      case 'Enter': case ' ': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else commit(activeIdx); break;
+      case 'ArrowDown': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else setActiveIdx(i => Math.min(options.length - 1, i + 1)); break;
+      case 'ArrowUp': e.preventDefault(); if (!open) openAnd(Math.max(0, selectedIdx)); else setActiveIdx(i => Math.max(0, i - 1)); break;
+      case 'Escape': if (open) { e.preventDefault(); setOpen(false); } break;
+      case 'Tab': setOpen(false); break;
+      default: break;
+    }
+  };
+  return (
+    <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
+        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/40 ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
+      </div>
+      {open && (
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+            {options.map((opt, i) => {
+              const isSelected = String(opt.value) === String(value);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 
@@ -273,7 +321,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
   );
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center font-sans overflow-hidden bg-black">
+    <div className="login-root relative min-h-screen w-full flex items-center justify-center font-sans overflow-hidden bg-black" data-theme="dark">
       {/* Full Bleed Beams Background */}
       <div className="absolute inset-0 z-0">
         <Beams beamWidth={2.5} beamHeight={18} beamNumber={15} lightColor="#ffffff" speed={2.5} noiseIntensity={2} scale={0.15} rotation={43} />
@@ -288,7 +336,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
       )}
 
       {/* Centered Liquid Glass Card */}
-      <div className="relative z-10 w-full max-w-[480px] p-8 sm:p-12 mx-4 bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.5)] flex flex-col my-12 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div className="login-card relative z-10 w-full max-w-[480px] p-8 sm:p-12 mx-4 bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.5)] flex flex-col my-12 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center gap-3 mb-10 mx-auto">
           <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
              <ShieldCheck size={22} className="text-black" />
@@ -423,7 +471,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { value: 'user',  icon: <User size={20} />,        label: 'Regular User',  sub: 'Request access to join' },
+                        { value: 'user',  icon: <User size={20} />,        label: 'Company User',  sub: 'Request access to join' },
                         { value: 'admin', icon: <ShieldCheck size={20} />, label: 'Company Admin',  sub: 'Create a new company' },
                       ].map(opt => (
                         <button key={opt.value} type="button" onClick={() => {
@@ -495,17 +543,15 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
 
                     {registerRole === 'user' && (
                       <div className="animate-in fade-in duration-300 w-full flex flex-col gap-1.5">
-                        <div className="relative w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm transition-colors focus-within:border-white/30 focus-within:bg-white/10 flex items-center">
-                          <Building2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                          <select
-                            className="w-full bg-transparent px-4 py-4 pl-11 pr-4 text-white focus:outline-none text-sm appearance-none"
+                        <div className="relative w-full flex items-center">
+                          <Building2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none z-10" />
+                          <CustomSelect
                             value={reqCompanyId}
-                            onChange={e => setReqCompanyId(e.target.value)}
-                            required
-                          >
-                            <option value="" disabled className="bg-black text-white/50">{loadingCompanies ? 'Loading…' : 'Select your company'}</option>
-                            {companies.map(c => <option key={c.id} value={c.id} className="bg-background text-foreground">{c.name}</option>)}
-                          </select>
+                            onChange={v => setReqCompanyId(v)}
+                            options={companies.map(c => ({ value: c.id, label: c.name }))}
+                            placeholder={loadingCompanies ? 'Loading…' : 'Select your company'}
+                            triggerClassName={`w-full h-[54px] flex items-center justify-between pl-11 pr-4 border rounded-2xl cursor-pointer text-sm transition-all outline-none focus:ring-2 focus:ring-white/30 bg-white/5 backdrop-blur-sm ${reqCompanyId ? 'border-white/30 text-white' : 'border-white/10 text-muted-foreground hover:bg-white/10 hover:text-white hover:border-white/30'}`}
+                          />
                         </div>
                         <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                           Once your admin approves you, you'll receive an email with an invite code.

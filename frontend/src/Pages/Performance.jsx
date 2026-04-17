@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import { useEscapeKey } from '../Components/Modal';
 import {
     BrainCircuit, Target, Crosshair, Activity,
     TrendingUp, Database, Clock, ShieldCheck, Zap, History, Globe, AlertCircle, RefreshCw,
@@ -8,8 +9,14 @@ import {
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis,
-    Tooltip, ResponsiveContainer, CartesianGrid
+    Tooltip, ResponsiveContainer, CartesianGrid, LabelList
 } from 'recharts';
+
+// Two opposing hues — blue (baseline) vs amber (live). High contrast, high legibility.
+const BUILD_COLORS = {
+    Enterprise: '#3b82f6', // blue — static baseline ("Main brain")
+    Active:     '#f59e0b', // amber — live build
+};
 
 const classMetrics = [
     { subject: 'S1 Critical', precision: 95, recall: 98 },
@@ -28,11 +35,12 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
 
     const isResetting = (key) => resettingKey === key;
     const anyResetting = resettingKey !== null;
+    useEscapeKey(() => { if (!anyResetting) onClose?.(); }, true);
 
     if (!isSuperAdmin) {
         // Company admin — simple one-scope confirm
         return createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div role="dialog" aria-modal="true" aria-label="Reset your model" className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
                 <div className="bg-[#0d0d14] border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
                     <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
                         <Trash2 size={24} className="text-red-400" />
@@ -69,7 +77,7 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
     ];
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div role="dialog" aria-modal="true" aria-label="Reset model artifacts" className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
             <div className="bg-[#0d0d14] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
@@ -81,7 +89,7 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
                             <div className="text-white/30 text-xs">Select which scope to wipe</div>
                         </div>
                     </div>
-                    <button onClick={onClose} disabled={anyResetting} className="text-white/30 hover:text-white transition-colors disabled:opacity-30"><X size={16} /></button>
+                    <button onClick={onClose} disabled={anyResetting} aria-label="Close dialog" className="text-white/30 hover:text-white transition-colors disabled:opacity-30"><X size={16} /></button>
                 </div>
 
                 <p className="text-white/40 text-xs leading-relaxed mb-4 px-1">
@@ -131,6 +139,7 @@ function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadName, setUploadName] = useState('');
     const [uploading, setUploading]   = useState(false);
+    useEscapeKey(() => { if (!uploading) onClose?.(); }, true);
 
     const startTrain = async () => {
         setPhase('background');
@@ -166,9 +175,9 @@ function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div role="dialog" aria-modal="true" aria-label="Train model" className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
             <div className="bg-[#0d0d14] border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl relative">
-                <button onClick={onClose} className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors"><X size={18} /></button>
+                <button onClick={onClose} aria-label="Close dialog" className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors"><X size={18} /></button>
                 <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
                         <Cpu size={18} className="text-blue-400" />
@@ -282,6 +291,7 @@ export default function Performance({ user, onTrainStart }) {
   const [showTrainModal, setShowTrainModal]     = useState(false);
   const [showResetModal, setShowResetModal]     = useState(false);
   const [resettingKey, setResettingKey]         = useState(null); // null | 'global' | company_id int
+  const [refreshing, setRefreshing]             = useState(false);
   const [companies, setCompanies]               = useState([]);
 
   const isSuperAdmin = user?.role === 'super_admin';
@@ -326,6 +336,7 @@ export default function Performance({ user, onTrainStart }) {
 
   const fetchMetrics = async () => {
       setLoading(true); setError(null);
+      if (!refreshing) setRefreshing(true);
       try {
           const token = localStorage.getItem('token');
           const res = await axios.get('/api/hub/ml_metrics', {
@@ -349,7 +360,10 @@ export default function Performance({ user, onTrainStart }) {
       } catch (e) {
           if (e.response?.status === 403) setError('Admin access required to view model performance.');
           else setModelData({ baseline: fallbackCurrent, current: fallbackCurrent, previous: fallbackCurrent, confusion_matrix: null, feedback_stats: null });
-      } finally { setLoading(false); }
+          } finally { 
+              setLoading(false); 
+              setTimeout(() => setRefreshing(false), 500); 
+          }
   };
 
   useEffect(() => { fetchMetrics(); }, []);
@@ -501,14 +515,14 @@ export default function Performance({ user, onTrainStart }) {
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
-      {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} onTrainStart={onTrainStart} />}
+      {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={isSuperAdmin} onTrainStart={onTrainStart} />}
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
 
       {/* Global model banner — shown when company hasn't yet trained their own model */}
       {!isSuperAdmin && meta.model_source === 'global' && <GlobalModelBanner />}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 relative">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-4">
             <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
@@ -516,20 +530,22 @@ export default function Performance({ user, onTrainStart }) {
               <span className="text-[10px] font-bold tracking-widest uppercase">ML Evaluation</span>
             </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Model <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Performance</span>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2 text-white">
+            Model <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">performance</span>
           </h1>
-          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
+          <p className="text-white/50 text-base max-w-xl leading-relaxed">
             Live evaluation metrics and telemetry for the Random Forest classifier.
           </p>
         </div>
 
-        <div className="relative z-10 flex flex-col items-start md:items-end gap-3">
+        <div className="relative z-10 flex flex-col items-start md:items-end gap-4">
           <div className="flex gap-1 bg-white/5 border border-white/10 p-1 rounded-2xl backdrop-blur-md">
             {[
               {
                 id: 'enterprise', icon: <Globe size={13} />, label: 'Main brain',
-                tip: 'Static baseline — trained on your full company bug database. Only updates when you run "Train on Company Data".',
+                tip: isSuperAdmin
+                  ? 'Static baseline — trained on the full universal dataset (all companies + Firefox). Only updates when you run "Train on Universal Data".'
+                  : 'Static baseline — trained on your full company bug database. Only updates when you run "Train on Company Data".',
                 meta: baseMetrics,
               },
               {
@@ -583,7 +599,7 @@ export default function Performance({ user, onTrainStart }) {
             {viewVersion === 'current'
               ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
               : viewVersion === 'enterprise' ? <Globe size={9} /> : <History size={9} />}
-            {metricsToUse.status}
+            {metricsToUse.status || 'Not Trained'}
           </div>
         </div>
         <div className="absolute -bottom-4 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
@@ -609,8 +625,8 @@ export default function Performance({ user, onTrainStart }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchMetrics} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white/50 hover:text-white text-xs font-bold rounded-xl transition-all hover:bg-white/10">
-            <RefreshCw size={12} /> Refresh
+          <button onClick={fetchMetrics} disabled={refreshing} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white/50 hover:text-white text-xs font-bold rounded-xl transition-all hover:bg-white/10 disabled:opacity-50">
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
           </button>
           <button onClick={() => setShowTrainModal(true)}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 text-xs font-bold rounded-xl transition-all">
@@ -626,25 +642,23 @@ export default function Performance({ user, onTrainStart }) {
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 lg:gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mb-8">
         {[
-          { key: 'accuracy',   label: 'Accuracy',       icon: <Target size={14} />,      val: formatPct(metricsToUse.accuracy),  accent: 'text-blue-400' },
-          { key: 'f1_score',   label: 'F1 Score',        icon: <Activity size={14} />,    val: formatPct(metricsToUse.f1_score),  accent: '#6366f1' },
-          { key: 'precision',  label: 'Precision',       icon: <Crosshair size={14} />,   val: formatPct(metricsToUse.precision), accent: '#38bdf8' },
-          { key: 'recall',     label: 'Recall',          icon: <TrendingUp size={14} />,  val: formatPct(metricsToUse.recall),    accent: 'text-emerald-400' },
-          { key: 'correction', label: 'Correction Rate', icon: <AlertCircle size={14} />, val: `${(feedbackStats.correction_rate * 100).toFixed(1)}%`, accent: 'text-amber-500', sub: `${feedbackStats.total_corrections} engineer corrections` },
+          { key: 'accuracy',   label: 'Accuracy',  icon: <Target size={14} />,     val: formatPct(metricsToUse.accuracy),  accent: 'text-blue-400' },
+          { key: 'f1_score',   label: 'F1 Score',  icon: <Activity size={14} />,   val: formatPct(metricsToUse.f1_score),  accent: 'text-indigo-400' },
+          { key: 'precision',  label: 'Precision', icon: <Crosshair size={14} />,  val: formatPct(metricsToUse.precision), accent: 'text-sky-400' },
+          { key: 'recall',     label: 'Recall',    icon: <TrendingUp size={14} />, val: formatPct(metricsToUse.recall),    accent: 'text-amber-400' },
         ].map(s => (
-          <div key={s.key} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group hover:bg-white/[0.04] transition-colors">
+          <div key={s.key} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group hover:bg-white/[0.04] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
             <div className="flex items-center gap-2 mb-4 relative z-10">
-              <span className={s.accent.startsWith('text-') ? s.accent : `text-[${s.accent}]`}>{s.icon}</span>
+              <span className={s.accent}>{s.icon}</span>
               <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span>
             </div>
             <div className="flex items-baseline gap-2 relative z-10">
-              <span className="text-3xl font-bold text-white font-mono tracking-tight">{s.val}</span>
-              {s.key !== 'correction' && getDelta(s.key)}
+              <span className="text-4xl font-bold text-white font-mono tracking-tighter">{s.val}</span>
+              {getDelta(s.key)}
             </div>
-            {s.sub && <div className="text-[10px] text-white/40 mt-3 font-medium relative z-10">{s.sub}</div>}
           </div>
         ))}
       </div>
@@ -657,22 +671,42 @@ export default function Performance({ user, onTrainStart }) {
             <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
               <Globe size={14} className="text-white/40" /> Cross-Build Performance
             </div>
-            <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-white/50">
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded bg-[#38bdf8] shadow-[0_0_8px_rgba(56,189,248,0.8)] inline-block" /> Main brain</span>
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded bg-white/20 inline-block" /> Previous</span>
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] inline-block" /> Active</span>
+            <div className="flex flex-wrap gap-5 text-[11px] font-bold uppercase tracking-widest text-white/70">
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(59,130,246,0.7)]" style={{ background: BUILD_COLORS.Enterprise }} /> Main brain</span>
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(245,158,11,0.7)]" style={{ background: BUILD_COLORS.Active }} /> Active build</span>
             </div>
           </div>
-          <div className="h-[280px] w-full">
+          <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={comparisonData} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
+            <BarChart data={comparisonData} margin={{ top: 28, right: 16, bottom: 32, left: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-              <XAxis dataKey="name" stroke={axisStroke} fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis domain={[0, 100]} stroke={axisStroke} fontSize={11} tickLine={false} axisLine={false} tickFormatter={t => `${t}%`} />
+              <XAxis
+                dataKey="name"
+                stroke={axisStroke}
+                fontSize={12}
+                fontWeight={700}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: axisTickBright }}
+                label={{ value: 'Metric', position: 'insideBottom', offset: -18, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+              />
+              <YAxis
+                domain={[0, 100]}
+                stroke={axisStroke}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: axisTickBright }}
+                tickFormatter={t => `${t}%`}
+                label={{ value: 'Score (%)', angle: -90, position: 'insideLeft', offset: 4, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+              />
               <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v.toFixed(1)}%`, '']} cursor={{ fill: chartCursorFill }} />
-              <Bar dataKey="Enterprise" fill="#38bdf8" radius={[4,4,0,0]} barSize={14} opacity={0.85} />
-              <Bar dataKey="Previous"   fill={isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'} radius={[4,4,0,0]} barSize={14} />
-              <Bar dataKey="Active"     fill="#3b82f6" radius={[4,4,0,0]} barSize={14} />
+              <Bar dataKey="Enterprise" name="Main brain" fill={BUILD_COLORS.Enterprise} radius={[8,8,0,0]} barSize={34}>
+                <LabelList dataKey="Enterprise" position="top" formatter={v => `${v.toFixed(1)}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+              </Bar>
+              <Bar dataKey="Active" name="Active build" fill={BUILD_COLORS.Active} radius={[8,8,0,0]} barSize={34}>
+                <LabelList dataKey="Active" position="top" formatter={v => `${v.toFixed(1)}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -682,21 +716,42 @@ export default function Performance({ user, onTrainStart }) {
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           <div className="mb-8">
             <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-3">
-              <Target size={14} className="text-white/40" /> Class Accuracy
+              <Target size={14} className="text-white/40" /> Per-Class Accuracy
             </div>
-            <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-white/50">
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] inline-block" /> Precision</span>
-              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] inline-block" /> Recall</span>
+            <div className="flex gap-5 text-[11px] font-bold uppercase tracking-widest text-white/70">
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(59,130,246,0.7)]" style={{ background: BUILD_COLORS.Enterprise }} /> Precision</span>
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(245,158,11,0.7)]" style={{ background: BUILD_COLORS.Active }} /> Recall</span>
             </div>
           </div>
-          <div className="h-[250px] w-full">
+          <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={classMetrics} layout="vertical" margin={{ left: -10, right: 20, top: 0, bottom: 0 }}>
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: axisTickDim }} tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} />
-              <YAxis dataKey="subject" type="category" width={90} tick={{ fontSize: 11, fontWeight: 600, fill: axisTickBright }} tickLine={false} axisLine={false} />
+            <BarChart data={classMetrics} layout="vertical" margin={{ left: 8, right: 56, top: 8, bottom: 28 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tick={{ fontSize: 11, fill: axisTickBright }}
+                tickFormatter={v => `${v}%`}
+                tickLine={false}
+                axisLine={false}
+                label={{ value: 'Score (%)', position: 'insideBottom', offset: -16, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+              />
+              <YAxis
+                dataKey="subject"
+                type="category"
+                width={96}
+                tick={{ fontSize: 12, fontWeight: 700, fill: axisTickBright }}
+                tickLine={false}
+                axisLine={false}
+                label={{ value: 'Severity', angle: -90, position: 'insideLeft', offset: 14, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+              />
               <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v}%`, '']} cursor={{ fill: chartCursorFill }} />
-              <Bar dataKey="precision" name="Precision" fill="#3b82f6" radius={[0,4,4,0]} barSize={10} />
-              <Bar dataKey="recall"    name="Recall"    fill="#10b981" radius={[0,4,4,0]} barSize={10} />
+              <Bar dataKey="precision" name="Precision" fill={BUILD_COLORS.Enterprise} radius={[0,6,6,0]} barSize={18}>
+                <LabelList dataKey="precision" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+              </Bar>
+              <Bar dataKey="recall" name="Recall" fill={BUILD_COLORS.Active} radius={[0,6,6,0]} barSize={18}>
+                <LabelList dataKey="recall" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -721,7 +776,7 @@ export default function Performance({ user, onTrainStart }) {
           </div>
           <div className="flex items-center mt-4">
             <div className="transform -rotate-90 text-[10px] font-bold text-white/30 uppercase tracking-widest w-6 whitespace-nowrap mr-6 text-center">Actual</div>
-            <div className="flex-1">
+            <div className="flex-1 group/matrix">
               <div className="grid grid-cols-[36px_repeat(4,1fr)] gap-2 lg:gap-3">
                 <div />
                 {['S1','S2','S3','S4'].map(l => (
@@ -732,8 +787,9 @@ export default function Performance({ user, onTrainStart }) {
                     <div className="flex items-center justify-end pr-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: SEV_COLORS[row.actual] }}>{row.actual}</div>
                     {['S1','S2','S3','S4'].map(col => {
                       const val = row[col]; const ratio = val / MAX_MATRIX_VAL;
+                      const isDiagonal = row.actual === col;
                       return (
-                        <div key={col} className="aspect-square flex items-center justify-center text-sm font-bold rounded-xl transition-all hover:scale-105"
+                        <div key={col} className={`aspect-square flex items-center justify-center text-sm font-bold rounded-xl transition-all duration-200 group-hover/matrix:opacity-60 hover:!opacity-100 hover:scale-105 ${isDiagonal ? 'ring-2 ring-white/30' : ''}`}
                           style={{ background: getHeatmapColor(val, MAX_MATRIX_VAL), color: ratio > 0.4 ? '#000' : '#fff', boxShadow: ratio > 0.6 ? '0 4px 15px rgba(37,99,235,0.4)' : 'none' }}>
                           {val.toLocaleString()}
                         </div>

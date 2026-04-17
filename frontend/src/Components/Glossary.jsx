@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { useEscapeKey } from './Modal';
 
 // ── Severity definitions ─────────────────────────────────────────────────────
 export const SEVERITY_DEFS = [
@@ -65,6 +66,7 @@ export function SeverityLegend({ style = {} }) {
 // ── Full glossary drawer ──────────────────────────────────────────────────────
 export function GlossaryDrawer({ onClose }) {
   const [openSection, setOpenSection] = useState('severity');
+  useEscapeKey(onClose, true);
 
   const Section = ({ id, title, children }) => {
     const isOpen = openSection === id;
@@ -81,8 +83,8 @@ export function GlossaryDrawer({ onClose }) {
 
   return createPortal(
     <>
-      <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300" />
-      <div className="fixed top-0 right-0 bottom-0 w-full sm:w-[460px] bg-black/80 backdrop-blur-2xl border-l border-white/10 shadow-[-10px_0_50px_rgba(0,0,0,0.5)] z-[9999] flex flex-col animate-in slide-in-from-right duration-300 font-sans">
+      <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300" aria-hidden="true" />
+      <div role="dialog" aria-modal="true" aria-label="Reference guide" className="fixed top-0 right-0 bottom-0 w-full sm:w-[460px] bg-black/80 backdrop-blur-2xl border-l border-white/10 shadow-[-10px_0_50px_rgba(0,0,0,0.5)] z-[9999] flex flex-col animate-in slide-in-from-right duration-300 font-sans">
         
         {/* Header */}
         <div className="p-6 lg:p-8 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
@@ -92,7 +94,7 @@ export function GlossaryDrawer({ onClose }) {
             </div>
             <span className="font-bold text-lg text-white tracking-tight">Reference Guide</span>
           </div>
-          <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/50 hover:text-white transition-colors"><X size={16} /></button>
+          <button onClick={onClose} aria-label="Close reference guide" className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/50 hover:text-white transition-colors"><X size={16} /></button>
         </div>
 
         {/* Content */}

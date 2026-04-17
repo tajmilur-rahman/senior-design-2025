@@ -2363,7 +2363,7 @@ def approve_invite_request(
                     "invite_code":  company_code,
                     "company_name": company_name,
                     "username":     name,
-                }},
+                }, "redirect_to": FRONTEND_URL},
             )
             email_sent = True
             if auth_res and auth_res.user:
@@ -2510,7 +2510,7 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
         invite_code  = co_res.data.get("invite_code", "") if co_res.data else ""
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "company_name": company_name, "role": req.role}},
+            options={"data": {"username": req.username, "company_name": company_name, "role": req.role}, "redirect_to": FRONTEND_URL},
         )
         email_sent = True
         if auth_res and auth_res.user:

@@ -5,6 +5,7 @@ import {
   RefreshCw, Users, Bug, MessageSquare, ShieldCheck, Crown, TrendingUp,
   BrainCircuit, Database, Layers, Activity, Zap, Clock, BarChart2, Lock, Key
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 // ── Super Admin view: reworked system intelligence panel ─────────────────────
 function SystemPanel() {
@@ -64,7 +65,7 @@ function SystemPanel() {
             <span className="text-[10px] font-bold tracking-widest uppercase">System Intelligence</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Platform <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Overview</span>
+            Platform <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">overview</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             Live system health, database telemetry, and ML intelligence across all {companies.length} registered organizations.
@@ -221,7 +222,6 @@ export default function CompanyProfile({ user }) {
   const [website,     setWebsite]     = useState('');
   const [saving,      setSaving]      = useState(false);
   const [msg,         setMsg]         = useState(null);
-  const [sevBreakdown, setSevBreakdown] = useState(null);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -235,14 +235,7 @@ export default function CompanyProfile({ user }) {
     } finally { setLoading(false); }
   };
 
-  const fetchSevBreakdown = async () => {
-    try {
-      const res = await axios.get('/api/hub/component_counts');
-      setSevBreakdown(res.data || {});
-    } catch { /* optional */ }
-  };
-
-  useEffect(() => { fetchProfile(); fetchSevBreakdown(); }, []);
+  useEffect(() => { fetchProfile(); }, []);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -266,10 +259,6 @@ export default function CompanyProfile({ user }) {
     </div>
   );
 
-  const topComponents = sevBreakdown
-    ? Object.entries(sevBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    : [];
-
   const totalBugs     = profile?.stats?.total_bugs     || 0;
   const totalUsers    = profile?.stats?.total_users    || 0;
   const totalFeedback = profile?.stats?.total_feedback || 0;
@@ -277,7 +266,12 @@ export default function CompanyProfile({ user }) {
   const inviteCode    = profile?.invite_code;
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
+    <motion.div 
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="w-full max-w-5xl mx-auto p-6 lg:px-8 lg:py-12 font-sans relative z-10"
+    >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
         <div className="relative z-10">
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400 w-max mb-4">
@@ -285,7 +279,7 @@ export default function CompanyProfile({ user }) {
             <span className="text-[10px] font-bold tracking-widest uppercase">Workspace Info</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Company <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Profile</span>
+            Company <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">profile</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             {profile?.name} — Manage your organizational details and review all company intelligence.
@@ -301,8 +295,8 @@ export default function CompanyProfile({ user }) {
           { label: 'Team Members',   value: totalUsers,    icon: <Users size={16} className="text-indigo-400" /> },
           { label: 'Feedback Items', value: totalFeedback, icon: <MessageSquare size={16} className="text-emerald-400" /> },
         ].map(s => (
-          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group hover:bg-white/[0.04] transition-colors">
-            <div className="flex items-center gap-2 mb-4 relative z-10">{s.icon}<span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span></div>
+          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+            <div className="flex items-center gap-2 mb-4 relative z-10">{s.icon}<span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">{s.label}</span></div>
             <div className="text-3xl font-bold text-white font-mono tracking-tight relative z-10">{s.value.toLocaleString()}</div>
           </div>
         ))}
@@ -330,66 +324,36 @@ export default function CompanyProfile({ user }) {
         </div>
       </div>
 
-      {/* Micro-level: top components + access info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Top components from live data */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 shadow-2xl backdrop-blur-md">
-          <div className="text-xs font-bold text-white uppercase tracking-widest mb-5 flex items-center gap-2">
-            <Layers size={14} className="text-indigo-400" /> Top Bug Components
-          </div>
-          {topComponents.length === 0 ? (
-            <div className="text-white/30 text-sm py-6 text-center">No component data yet</div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {topComponents.map(([name, count], i) => (
-                <div key={name} className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-white/30 w-4">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-white/80 truncate capitalize">{name}</div>
-                  </div>
-                  <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500/60 rounded-full" style={{ width: `${(count / (topComponents[0]?.[1] || 1)) * 100}%` }} />
-                  </div>
-                  <span className="text-xs font-bold text-white/50 font-mono w-10 text-right">{Number(count).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Access & Configuration */}
+      <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6">
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent" />
+        <div className="text-xs font-bold text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+          <Key size={14} className="text-amber-400" /> Access & Configuration
         </div>
-
-        {/* Company access + settings info */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 shadow-2xl backdrop-blur-md">
-          <div className="text-xs font-bold text-white uppercase tracking-widest mb-5 flex items-center gap-2">
-            <Key size={14} className="text-amber-400" /> Access & Configuration
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1.5">Invite Code</div>
+            <div className="font-mono text-sm font-bold text-white tracking-widest">{inviteCode || '—'}</div>
           </div>
-          <div className="flex flex-col gap-4">
-            <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Invite Code</div>
-              <div className="font-mono text-sm font-bold text-white bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 tracking-widest">
-                {inviteCode || '—'}
-              </div>
-              <div className="text-[10px] text-white/30 mt-1">Share with team members to join this workspace</div>
+          <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1.5">Company Status</div>
+            <div className={`inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-widest ${profile?.status === 'active' ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${profile?.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              {profile?.status || 'active'}
             </div>
-            <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Company Status</div>
-              <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border uppercase tracking-widest ${profile?.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${profile?.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                {profile?.status || 'active'}
-              </div>
+          </div>
+          <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1.5">Data Isolation</div>
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              <Lock size={13} className="text-indigo-400" />
+              {profile?.data_table && profile.data_table !== 'bugs' ? 'Dedicated table' : 'Shared table'}
             </div>
-            <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Data Isolation</div>
-              <div className="text-sm text-white/60 flex items-center gap-2">
-                <Lock size={12} className="text-indigo-400" />
-                {profile?.data_table && profile.data_table !== 'bugs' ? `Dedicated table: ${profile.data_table}` : 'Shared table (company_id filtered)'}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Registered Since</div>
-              <div className="text-sm text-white/60 flex items-center gap-2">
-                <Clock size={12} className="text-white/30" />
-                {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
-              </div>
+          </div>
+          <div className="p-4 rounded-xl bg-white/5 border border-white/5">
+            <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-1.5">Registered Since</div>
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              <Clock size={13} className="text-white/40" />
+              {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
             </div>
           </div>
         </div>
@@ -397,30 +361,35 @@ export default function CompanyProfile({ user }) {
 
       {/* Edit Profile */}
       <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
-        <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Edit Profile</div>
-        <form onSubmit={handleSave}>
-          <div className="mb-6">
-            <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Company Description</label>
-            <textarea className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm resize-y min-h-[100px]" value={description} onChange={e => setDescription(e.target.value)} placeholder="A brief description of your organisation…" maxLength={300} />
-            <div className="text-[10px] text-white/40 mt-2 text-right font-mono">{description.length}/300</div>
-          </div>
-          <div className="mb-8">
-            <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Website</label>
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+        <div className="text-xs font-bold text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+          <Save size={14} className="text-blue-400" /> Edit Profile
+        </div>
+        <form onSubmit={handleSave} className="flex flex-col gap-6 max-w-2xl">
+          <div>
+            <label className="block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">Website</label>
             <div className="relative">
               <Globe size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
               <input className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yourcompany.com" type="url" />
             </div>
           </div>
-          {msg && (
-            <div className={`flex items-center gap-2 mb-6 text-xs font-bold ${msg.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
-              {msg.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />} {msg.text}
-            </div>
-          )}
-          <button type="submit" disabled={saving} className="bg-white text-black hover:bg-zinc-200 font-bold px-6 py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-            <Save size={16} /> {saving ? 'Saving…' : 'Save Changes'}
-          </button>
+          <div>
+            <label className="block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">Company Description</label>
+            <textarea className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm resize-y min-h-[100px]" value={description} onChange={e => setDescription(e.target.value)} placeholder="A brief description of your organisation…" maxLength={300} />
+            <div className="text-[10px] text-white/40 mt-1 text-right font-mono">{description.length}/300</div>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
+            {msg ? (
+              <div className={`flex items-center gap-2 text-xs font-bold ${msg.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                {msg.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle size={14} />} {msg.text}
+              </div>
+            ) : <div />}
+            <button type="submit" disabled={saving} className="bg-white text-black hover:bg-zinc-200 font-bold px-8 py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 w-full sm:w-auto">
+              <Save size={16} /> {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
         </form>
       </div>
-    </div>
+    </motion.div>
   );
 }

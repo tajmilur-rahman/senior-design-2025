@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import { useEscapeKey } from '../Components/Modal';
 import {
   Users, Trash2, RefreshCw, UserX, Building2,
   AlertTriangle, CheckCircle, X, Crown, Globe,
   KeyRound, Copy, RotateCcw, Eye, EyeOff, Search,
   UserMinus, UserCheck, ArrowUpCircle, ArrowDownCircle,
-  Mail, Send, UserPlus
+  Mail, Send, UserPlus, ShieldCheck
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 function RoleBadge({ role }) {
   const map = {
@@ -32,6 +34,7 @@ function CompanyCell({ user }) {
 }
 
 function DeleteConfirmModal({ user, isSuperAdmin, onConfirm, onCancel, loading }) {
+  useEscapeKey(() => { if (!loading) onCancel?.(); }, true);
   const [deleteCompany, setDeleteCompany] = useState(false);
   const [companyInfo, setCompanyInfo]     = useState(null);
   const [loadingInfo, setLoadingInfo]     = useState(false);
@@ -50,8 +53,8 @@ function DeleteConfirmModal({ user, isSuperAdmin, onConfirm, onCancel, loading }
 
   return createPortal(
     <>
-      <div onClick={onCancel} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]" />
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+      <div onClick={onCancel} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9998] transition-all" aria-hidden="true" />
+      <div role="dialog" aria-modal="true" aria-label="Delete user" className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
       <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 w-full max-w-md pointer-events-auto shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
         <div className="w-14 h-14 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
           <UserX size={24} className="text-red-500" />
@@ -165,7 +168,7 @@ function InviteCodePanel() {
   if (loading || !inviteData) return null;
 
   return (
-    <div className="bg-blue-500/[0.03] border border-blue-500/20 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group">
+    <div className="bg-blue-500/[0.03] border border-blue-500/20 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
       <div className="flex items-center gap-2 mb-4 relative z-10">
         <KeyRound size={16} className="text-blue-400" />
@@ -238,7 +241,7 @@ function AccessRequestsPanel({ showToast }) {
   if (loading) return null;
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6">
+    <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent opacity-50" />
       <div className="flex items-center gap-2 mb-6 relative z-10">
         <UserPlus size={16} className="text-indigo-400" />
@@ -392,7 +395,12 @@ export default function UserManagement({ currentUser }) {
     .sort((a, b) => (ROLE_ORDER[a.role] ?? 2) - (ROLE_ORDER[b.role] ?? 2));
 
   return (
-    <div className="page-content fade-in">
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 font-sans relative z-10"
+    >
       <Toast msg={toast} onClose={() => setToast({ text: '', type: '' })} />
       {toDelete && (
         <DeleteConfirmModal
@@ -402,19 +410,29 @@ export default function UserManagement({ currentUser }) {
         />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: 'var(--text-main)', letterSpacing: -0.5, display: 'flex', alignItems: 'center', gap: 9 }}>
-            <Users size={22} color="var(--accent)" /> User Management
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400 w-max mb-4">
+            <Users size={12} className="text-indigo-500" />
+            <span className="text-[10px] font-bold tracking-widest uppercase">Admin Panel</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
+            User <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">management</span>
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-sec)', margin: '4px 0 0' }}>
+          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             {isSuperAdmin ? 'All users across every organisation.' : 'Users in your organisation.'}
-            {' '}Deleting removes from both the database and authentication system.
+            {' '}Manage roles, status, and access requests.
           </p>
         </div>
-        <button onClick={fetchUsers} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--hover-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text-sec)', fontFamily: 'var(--font-head)' }}>
-          <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={fetchUsers} className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+            <UserPlus size={16} /> Create User
+          </button>
+        </div>
+        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/20 via-white/5 to-transparent" />
       </div>
 
       {isAdmin && !isSuperAdmin && <InviteCodePanel />}
@@ -487,25 +505,23 @@ export default function UserManagement({ currentUser }) {
                     {isSuperAdmin && <td className="px-6 py-4"><CompanyCell user={u} /></td>}
                     <td className="px-6 py-4">{StatusBadge(u.status || 'active')}</td>
                     <td className="px-6 py-4">
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-1.5 flex-wrap">
                         {!isSelf && u.role !== 'super_admin' && (
                           <button onClick={() => handlePromote(u)} disabled={actioning === u.uuid} title={u.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${u.role === 'admin' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20'}`}>
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${u.role === 'admin' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20'}`}>
                             {u.role === 'admin' ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}
-                            {u.role === 'admin' ? 'Demote' : 'Promote'}
                           </button>
                         )}
                         {!isSelf && u.role !== 'super_admin' && (
                           <button onClick={() => handleToggleStatus(u)} disabled={actioning === u.uuid} title={(u.status || 'active') === 'active' ? 'Deactivate user' : 'Reactivate user'}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${(u.status || 'active') === 'active' ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${(u.status || 'active') === 'active' ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'}`}>
                             {(u.status || 'active') === 'active' ? <UserMinus size={12} /> : <UserCheck size={12} />}
-                            {(u.status || 'active') === 'active' ? 'Deactivate' : 'Reactivate'}
                           </button>
                         )}
                         {!isSelf && (
                           <button onClick={() => setToDelete(u)} title={`Delete ${displayName}`}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all">
-                            <Trash2 size={12} /> Delete
+                            className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-xs font-bold uppercase tracking-widest transition-all">
+                            <Trash2 size={12} />
                           </button>
                         )}
                         {isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
@@ -524,6 +540,6 @@ export default function UserManagement({ currentUser }) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -3,7 +3,7 @@ import * as THREE from "three"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { PerspectiveCamera } from "@react-three/drei"
 import { degToRad } from "three/src/math/MathUtils.js"
-import { ArrowRight, ShieldCheck, Brain, CheckCircle, Star, GitFork, ExternalLink } from "lucide-react"
+import { ArrowRight, ShieldCheck, Brain, BrainCircuit, CheckCircle, Star, GitFork, ExternalLink, Database, Layers } from "lucide-react"
 
 const GITHUB_REPO = "https://github.com/tajmilur-rahman/senior-design-2025"
 
@@ -403,56 +403,39 @@ function ArchitectureModal({ onClose }) {
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const layers = [
+  const pillars = [
     {
-      label: 'Client Layer',
-      color: 'from-blue-500/20 to-blue-500/5',
-      border: 'border-blue-500/30',
-      dot: 'bg-blue-400',
-      items: [
-        { name: 'React 18 SPA', sub: 'Vite + Tailwind CSS' },
-        { name: 'Supabase Auth SDK', sub: 'JWT session management' },
-      ],
+      label: 'Intelligence',
+      value: 'Random Forest',
+      sub: '222k+ training records',
+      icon: BrainCircuit,
+      cls: 'border-emerald-500/30 from-emerald-500/20 to-emerald-500/5',
+      accent: 'text-emerald-400',
     },
     {
-      label: 'API Layer',
-      color: 'from-violet-500/20 to-violet-500/5',
-      border: 'border-violet-500/30',
-      dot: 'bg-violet-400',
-      items: [
-        { name: 'FastAPI', sub: 'Python — REST endpoints' },
-        { name: 'JWT Middleware', sub: 'Role-based auth (user / admin / super_admin)' },
-      ],
+      label: 'API',
+      value: 'FastAPI + JWT',
+      sub: 'Role-based access control',
+      icon: ShieldCheck,
+      cls: 'border-violet-500/30 from-violet-500/20 to-violet-500/5',
+      accent: 'text-violet-400',
     },
     {
-      label: 'Intelligence Layer',
-      color: 'from-emerald-500/20 to-emerald-500/5',
-      border: 'border-emerald-500/30',
-      dot: 'bg-emerald-400',
-      items: [
-        { name: 'Random Forest Classifier', sub: 'sklearn — S1–S4 severity prediction' },
-        { name: 'TF-IDF Vectorizer', sub: 'NLP feature extraction from bug text' },
-        { name: 'Vector RAG', sub: 'Semantic duplicate detection via embeddings' },
-      ],
+      label: 'Data',
+      value: 'Postgres + RLS',
+      sub: 'Per-tenant isolation',
+      icon: Database,
+      cls: 'border-blue-500/30 from-blue-500/20 to-blue-500/5',
+      accent: 'text-blue-400',
     },
     {
-      label: 'Data Layer',
-      color: 'from-amber-500/20 to-amber-500/5',
-      border: 'border-amber-500/30',
-      dot: 'bg-amber-400',
-      items: [
-        { name: 'Supabase (PostgreSQL)', sub: 'Per-company tables with Row-Level Security' },
-        { name: 'Supabase Auth', sub: 'Identity provider & session storage' },
-        { name: 'ML Artifact Store', sub: 'Versioned .pkl models per company' },
-      ],
+      label: 'Client',
+      value: 'React + Vite',
+      sub: 'Real-time SPA',
+      icon: Layers,
+      cls: 'border-amber-500/30 from-amber-500/20 to-amber-500/5',
+      accent: 'text-amber-400',
     },
-  ];
-
-  const flows = [
-    { from: 'User submits bug report', to: 'FastAPI validates + routes', color: 'text-blue-400' },
-    { from: 'RF Classifier predicts S1–S4', to: 'Result logged to feedback table', color: 'text-emerald-400' },
-    { from: 'Human correction received', to: 'Model retrained incrementally', color: 'text-violet-400' },
-    { from: 'Vector search finds duplicates', to: 'RAG returns top-K similar bugs', color: 'text-amber-400' },
   ];
 
   return (
@@ -460,7 +443,7 @@ function ArchitectureModal({ onClose }) {
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#080808] border border-white/10 rounded-[2rem] shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#080808] border border-white/10 rounded-[2rem] shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-8 pt-8 pb-6 bg-[#080808] border-b border-white/5">
           <div>
@@ -478,63 +461,29 @@ function ArchitectureModal({ onClose }) {
           </button>
         </div>
 
-        <div className="px-8 py-8 space-y-8">
-          {/* Stack layers */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-4">System Stack</p>
-            {layers.map((layer, i) => (
-              <div key={i} className={`relative rounded-2xl border bg-gradient-to-r ${layer.color} ${layer.border} p-5`}>
-                <div className="flex items-start gap-4">
-                  <div className="flex flex-col items-center gap-1 pt-0.5 flex-shrink-0">
-                    <div className={`w-2 h-2 rounded-full ${layer.dot}`} />
-                    {i < layers.length - 1 && <div className="w-px flex-1 bg-white/10 min-h-[12px]" />}
+        <div className="px-8 py-8 space-y-6">
+          {/* Four pillars — confident, high-scannability */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {pillars.map((p) => {
+              const Icon = p.icon;
+              return (
+                <div key={p.label} className={`relative rounded-2xl border bg-gradient-to-br ${p.cls} p-6 overflow-hidden`}>
+                  <div className={`flex items-center gap-2 mb-5 ${p.accent}`}>
+                    <Icon size={16} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">{p.label}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2">{layer.label}</div>
-                    <div className="flex flex-wrap gap-3">
-                      {layer.items.map((item, j) => (
-                        <div key={j} className="bg-black/30 border border-white/10 rounded-xl px-4 py-2.5">
-                          <div className="text-sm font-bold text-white">{item.name}</div>
-                          <div className="text-[11px] text-white/40 mt-0.5">{item.sub}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <div className="text-2xl font-bold text-white tracking-tight">{p.value}</div>
+                  <div className="text-sm text-white/55 mt-1">{p.sub}</div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* Data flows */}
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-4">Key Data Flows</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {flows.map((flow, i) => (
-                <div key={i} className="bg-white/[0.02] border border-white/8 rounded-2xl p-4">
-                  <div className={`text-xs font-bold mb-1 ${flow.color}`}>{flow.from}</div>
-                  <div className="flex items-center gap-2 text-white/30 text-[10px]">
-                    <span>→</span>
-                    <span>{flow.to}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Multi-tenancy callout */}
+          {/* Multi-tenancy — one tight callout */}
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Multi-Tenancy Model</p>
-            <div className="flex flex-wrap gap-2 text-sm">
-              {[
-                'Company A → company_5_bugs table',
-                'Company B → company_12_bugs table',
-                'Firefox → firefox_table (shared)',
-              ].map((t, i) => (
-                <span key={i} className="font-mono bg-black/40 border border-white/10 text-white/60 px-3 py-1.5 rounded-lg text-[11px]">{t}</span>
-              ))}
-            </div>
-            <p className="text-xs text-white/30 mt-3 leading-relaxed">
-              Each company receives an isolated PostgreSQL table with Row-Level Security. The universal ML model trains globally; company-specific models fine-tune on proprietary data.
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Multi-Tenant by Default</p>
+            <p className="text-sm text-white/65 leading-relaxed">
+              Every company runs on its own isolated Postgres table with Row-Level Security. The universal model trains on aggregate data; per-company models fine-tune on proprietary bugs.
             </p>
           </div>
         </div>
@@ -682,7 +631,7 @@ export default function Landing({ onEnterWorkspace }) {
 
             {/* Subtitle */}
             <p className="mb-10 text-xl leading-relaxed text-white/70 sm:text-2xl max-w-2xl mx-auto">
-              ML-powered severity prediction that sharpens with every correction your team makes.
+              Automated severity classification and duplicate detection — so your team ships fixes faster.
             </p>
 
             {/* CTA Buttons */}
@@ -722,19 +671,19 @@ export default function Landing({ onEnterWorkspace }) {
               <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-blue-400 font-bold uppercase tracking-widest">
                 Platform
               </div>
-              <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">One platform.<br/>Every stage of the bug lifecycle.</h2>
+              <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">The bug triage workspace<br/>for product teams.</h2>
               <p className="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto">
-                Submit, classify, and resolve — in a single unified workspace.
+                Submit, classify, and resolve — in one place.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { badge: 'Severity Analysis', title: 'Instant ML Classification', desc: 'S1–S4 prediction in under a second. Trained on 222k+ real Mozilla Firefox reports.', color: 'text-blue-400', border: 'hover:border-blue-500/30' },
-                { badge: 'Duplicate Detection', title: 'Semantic Vector Search', desc: 'Cross-references your full bug history using vector embeddings. No redundant submissions.', color: 'text-purple-400', border: 'hover:border-purple-500/30' },
-                { badge: 'Multi-Tenancy', title: 'Isolated Tenant Architecture', desc: 'Dedicated PostgreSQL tables per company, enforced with Row-Level Security.', color: 'text-emerald-400', border: 'hover:border-emerald-500/30' },
-                { badge: 'Role-Based Access', title: 'Granular Permission Tiers', desc: 'User, Admin, and Super Admin roles with invite flows and approval queues.', color: 'text-amber-400', border: 'hover:border-amber-500/30' },
-                { badge: 'Bulk Ingestion', title: 'CSV & JSON Import Pipeline', desc: 'Ingest thousands of records at once. Each entry auto-classified on arrival.', color: 'text-pink-400', border: 'hover:border-pink-500/30' },
-                { badge: 'Resolution Intelligence', title: 'AI-Assisted Fix Surfacing', desc: 'Retrieve resolved duplicates and their applied solutions to accelerate triage.', color: 'text-cyan-400', border: 'hover:border-cyan-500/30' },
+                { badge: 'Severity Analysis', title: 'ML Classification', desc: 'S1–S4 predictions in under a second. Trained on 222k+ real Firefox reports.', color: 'text-blue-400', border: 'hover:border-blue-500/30' },
+                { badge: 'Duplicate Detection', title: 'Semantic Search', desc: 'Vector embeddings check every new report against your full bug history.', color: 'text-purple-400', border: 'hover:border-purple-500/30' },
+                { badge: 'Multi-Tenancy', title: 'Tenant Isolation', desc: 'Each company runs on its own Postgres table with Row-Level Security.', color: 'text-emerald-400', border: 'hover:border-emerald-500/30' },
+                { badge: 'Access Control', title: 'Role-Based Permissions', desc: 'User, Admin, and Super Admin tiers with invite flows and approval queues.', color: 'text-amber-400', border: 'hover:border-amber-500/30' },
+                { badge: 'Bulk Ingestion', title: 'CSV & JSON Import', desc: 'Upload thousands of records at once. Each entry classified on arrival.', color: 'text-pink-400', border: 'hover:border-pink-500/30' },
+                { badge: 'Resolution', title: 'Fix Surfacing', desc: 'Retrieve resolved duplicates and the fixes that shipped with them.', color: 'text-cyan-400', border: 'hover:border-cyan-500/30' },
               ].map((f, i) => (
                 <div key={i} className={`bg-white/[0.02] border border-white/8 rounded-2xl p-6 transition-all duration-200 hover:bg-white/[0.04] ${f.border}`}>
                   <div className={`text-xs font-bold uppercase tracking-widest mb-3 ${f.color}`}>{f.badge}</div>
@@ -754,9 +703,9 @@ export default function Landing({ onEnterWorkspace }) {
                  <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-purple-400 font-bold uppercase tracking-widest">
                    Capabilities
                  </div>
-                 <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Intelligence that compounds over time.</h2>
+                 <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">A model that learns from your team.</h2>
                  <p className="text-xl text-white/60 leading-relaxed mb-8">
-                   Every human correction becomes a training signal. Your model grows more precise with every review cycle.
+                   Corrections feed back into training. Accuracy improves every review cycle.
                  </p>
                  <ul className="space-y-4">
                    <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> TF-IDF n-gram feature extraction</li>
@@ -778,9 +727,9 @@ export default function Landing({ onEnterWorkspace }) {
              <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-emerald-400 font-bold uppercase tracking-widest">
                Architecture
              </div>
-             <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Secure by design.<br/>Multi-tenant by default.</h2>
+             <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Multi-tenant by default.<br/>Secure by design.</h2>
              <p className="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto mb-10">
-               Built on FastAPI and Supabase PostgreSQL. Row-Level Security enforced per tenant. Production-ready from day one.
+               FastAPI and Supabase Postgres. Row-Level Security enforced per tenant.
              </p>
              <Button size="lg" className="shadow-2xl shadow-white/10 font-semibold" onClick={() => scrollTo('documentation')}>
                View on GitHub <ArrowRight className="ml-2 h-5 w-5" />
@@ -796,9 +745,9 @@ export default function Landing({ onEnterWorkspace }) {
                <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/50 font-bold uppercase tracking-widest">
                  Open Source
                </div>
-               <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Explore the full codebase.</h2>
+               <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Read the source.</h2>
                <p className="text-xl text-white/60 leading-relaxed max-w-xl mx-auto">
-                 ML pipeline, FastAPI backend, and React frontend — all in one open-source repository.
+                 ML pipeline, backend, and frontend — all in one repository.
                </p>
              </div>
 
@@ -824,7 +773,7 @@ export default function Landing({ onEnterWorkspace }) {
                        </div>
                        <h3 className="text-xl font-bold text-white tracking-tight mb-2">Built in the open.</h3>
                        <p className="text-sm text-white/50 leading-relaxed max-w-lg">
-                         Explore the ML pipeline, backend, and frontend. Fork it. Contribute.
+                         Full source — ML pipeline, backend, frontend. Fork and contribute.
                        </p>
                        <div className="flex items-center gap-4 mt-4">
                          <div className="flex items-center gap-1.5 text-white/40 text-xs font-medium">

@@ -3,17 +3,66 @@ import axios from 'axios';
 import {
   AlertTriangle, Search, Bug,
   ThumbsUp, ThumbsDown, Sparkles, ArrowRight,
-  RefreshCw, CheckCircle, RotateCcw, Database, Zap, Globe, Building2, X, ChevronRight
+  RefreshCw, CheckCircle, RotateCcw, Database, Zap, Globe, Building2, X, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
+import { motion } from 'framer-motion';
+
+function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const ref = useRef(null);
+  const listRef = useRef(null);
+  const listId = useRef(`sf-listbox-${Math.random().toString(36).slice(2, 9)}`).current;
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const selectedIdx = options.findIndex(o => String(o.value) === String(value));
+  const selected = selectedIdx >= 0 ? options[selectedIdx] : null;
+  useEffect(() => { if (!open) return; setActiveIdx(selectedIdx >= 0 ? selectedIdx : 0); }, [open]);
+  const openAnd = (idx) => { if (disabled) return; setOpen(true); setActiveIdx(idx); };
+  const commit = (idx) => { if (idx < 0 || idx >= options.length) return; onChange(options[idx].value); setOpen(false); };
+  const onKeyDown = (e) => {
+    if (disabled) return;
+    switch (e.key) {
+      case 'Enter': case ' ': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else commit(activeIdx); break;
+      case 'ArrowDown': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else setActiveIdx(i => Math.min(options.length - 1, i + 1)); break;
+      case 'ArrowUp': e.preventDefault(); if (!open) openAnd(Math.max(0, selectedIdx)); else setActiveIdx(i => Math.max(0, i - 1)); break;
+      case 'Escape': if (open) { e.preventDefault(); setOpen(false); } break;
+      case 'Tab': setOpen(false); break;
+      default: break;
+    }
+  };
+  return (
+    <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
+        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/40 ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
+      </div>
+      {open && (
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+            {options.map((opt, i) => {
+              const isSelected = String(opt.value) === String(value);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const SAMPLE_BUGS = [
-  'Application crashes when submitting a form with empty required fields',
-  'Dark mode colors are inconsistent across settings panel',
-  'UI freezes for 5+ seconds when loading large data tables',
-  'Login button unresponsive after failed authentication attempt',
-  'Export to CSV produces incorrect column ordering',
-  'Search results don\'t update when filters are changed',
+  'Database connection timeout causing complete system crash',
+  'Severe memory leak in the login component causes UI to freeze',
+  'API exception thrown when authentication fails',
+  'Performance is extremely slow when loading the dashboard',
+  'Security vulnerability allows unauthorized database access',
+  'Button color and alignment is broken on the settings page',
 ];
 
 // Mini floating database search panel
@@ -212,7 +261,7 @@ export default function BugAnalysis({ user }) {
             </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            AI <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Analytics</span>
+            AI <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">analytics</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             Describe an anomaly in natural language. Our ML engine predicts severity and leverages Vector RAG to instantly surface historical duplicates.
@@ -236,7 +285,7 @@ export default function BugAnalysis({ user }) {
               </button>
               <button onClick={() => setModelSource('company')} disabled={!hasOwnModel}
                 title={!hasOwnModel ? 'Train a company model first on the Performance tab' : ''}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${modelSource === 'company' ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:text-white/70'}`}>
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed ${modelSource === 'company' ? 'bg-emerald-500/20 text-emerald-400' : 'text-white/40 hover:text-white/70'}`}>
                 <Building2 size={11} /> Company
               </button>
             </div>
@@ -274,12 +323,12 @@ export default function BugAnalysis({ user }) {
           </div>
           <div className="flex gap-2">
             <button onClick={() => handleAnalyze()} disabled={analyzing || !query.trim()}
-              className="h-14 px-8 bg-white text-black hover:bg-zinc-200 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] whitespace-nowrap">
+              className="h-14 px-8 bg-white text-black hover:bg-zinc-200 font-bold rounded-2xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_8px_30px_rgba(255,255,255,0.2)] hover:-translate-y-0.5 whitespace-nowrap">
               {analyzing ? <><RefreshCw size={16} className="animate-spin" /> Analyzing</> : <><Zap size={16} /> Analyze</>}
             </button>
           {(prediction || query) && (
             <button onClick={handleReset} title="Reset"
-              className="h-14 w-14 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-white/50 hover:text-red-400 rounded-2xl flex items-center justify-center transition-all flex-shrink-0">
+              className="h-14 w-14 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-white/50 hover:text-red-400 rounded-2xl flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg flex-shrink-0">
               <RotateCcw size={18} />
             </button>
           )}
@@ -298,7 +347,7 @@ export default function BugAnalysis({ user }) {
           </p>
           <div className="flex flex-wrap gap-3 justify-center max-w-3xl mx-auto">
             {SAMPLE_BUGS.map((sample, i) => (
-              <button key={i} onClick={() => handleAnalyze(sample)} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-full text-xs px-5 py-2.5 font-medium transition-colors flex items-center gap-2 group">
+              <button key={i} onClick={() => handleAnalyze(sample)} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-full text-xs px-5 py-2.5 font-medium transition-all duration-300 flex items-center gap-2 group hover:-translate-y-0.5 hover:shadow-md">
                 {sample} <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
               </button>
             ))}
@@ -314,7 +363,12 @@ export default function BugAnalysis({ user }) {
       )}
 
       {prediction && (
-        <div className="animate-in fade-in duration-500 mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6"
+        >
           {/* Left Column: Prediction */}
           <div className="lg:col-span-5 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl flex flex-col relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
@@ -322,7 +376,7 @@ export default function BugAnalysis({ user }) {
               <AlertTriangle size={14} className="text-white/30" /> Severity prediction
             </div>
             <div className="flex items-center gap-5 mb-8">
-              <span className={`px-5 py-2.5 rounded-xl text-3xl font-bold font-mono border-2 ${
+              <span className={`px-6 py-3 rounded-2xl text-4xl font-bold font-mono border-2 shadow-xl ${
                  prediction.prediction === 'S1' ? 'bg-red-500/10 text-red-500 border-red-500/30' :
                  prediction.prediction === 'S2' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30' :
                  prediction.prediction === 'S3' ? 'bg-blue-500/10 text-blue-500 border-blue-500/30' :
@@ -338,9 +392,20 @@ export default function BugAnalysis({ user }) {
               </div>
             </div>
             <p className="text-sm text-white/50 leading-relaxed mb-6">{sevDef?.desc}</p>
-            <div className="p-4 bg-white/5 rounded-2xl border border-white/10 mb-6">
+            <div className="p-5 bg-gradient-to-br from-white/5 to-transparent rounded-2xl border border-white/10 mb-6 shadow-inner">
               <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Recommended action</div>
-              <div className="text-sm font-semibold text-white">{sevDef?.action || prediction.diagnosis}</div>
+              <div className="text-sm font-semibold text-white">{sevDef?.action || 'Assign to triage queue for engineering review.'}</div>
+
+              {prediction.keywords?.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-white/10">
+                  <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Key Predictive Features</div>
+                  <div className="flex flex-wrap gap-2">
+                    {prediction.keywords.map(k => (
+                      <span key={k} className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 uppercase tracking-widest">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Feedback */}
@@ -353,11 +418,11 @@ export default function BugAnalysis({ user }) {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={submitPositiveFeedback}
-                      className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
+                      className="px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all duration-300 flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md">
                       <ThumbsUp size={13} /> Yes — correct
                     </button>
                     <button onClick={() => setShowCorrection(true)}
-                      className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
+                      className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold transition-all duration-300 flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md">
                       <ThumbsDown size={13} /> Fix it
                     </button>
                   </div>
@@ -368,12 +433,14 @@ export default function BugAnalysis({ user }) {
               <div className="animate-in fade-in pt-6 border-t border-white/10 mt-auto">
                 <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">What should it be?</p>
                 <p className="text-[10px] text-white/30 mb-3">This correction will retrain the model to improve future predictions.</p>
-                <select value={correctedSev} onChange={e => setCorrectedSev(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white mb-3 text-sm focus:outline-none focus:border-white/30 appearance-none">
-                  <option value="S1">S1 — Critical</option>
-                  <option value="S2">S2 — High</option>
-                  <option value="S3">S3 — Medium</option>
-                  <option value="S4">S4 — Low</option>
-                </select>
+                <div className="mb-4">
+                  <CustomSelect
+                    value={correctedSev}
+                    onChange={v => setCorrectedSev(v)}
+                    options={[{ value: 'S1', label: 'S1 — Critical' }, { value: 'S2', label: 'S2 — High' }, { value: 'S3', label: 'S3 — Medium' }, { value: 'S4', label: 'S4 — Low' }]}
+                    placeholder="Select severity"
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => setShowCorrection(false)} className="flex-1 px-4 py-2.5 bg-transparent border border-white/20 text-white/60 hover:text-white rounded-xl text-xs font-bold transition-all">Cancel</button>
                   <button onClick={submitCorrection} disabled={submittingFeedback} className="flex-1 px-4 py-2.5 bg-white text-black hover:bg-zinc-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2">
@@ -407,7 +474,7 @@ export default function BugAnalysis({ user }) {
             ) : (
               <div className="flex flex-col gap-3">
                 {duplicates.slice(0, 6).map((dup, i) => (
-                  <div key={i} className="p-4 bg-white/5 border border-white/5 hover:border-white/10 rounded-2xl flex items-start gap-4 transition-colors">
+                  <div key={i} className="p-5 bg-white/[0.03] border border-white/5 hover:border-white/15 rounded-2xl flex items-start gap-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg group cursor-default">
                     <div className="flex-shrink-0 mt-0.5">
                       {dup.severity && (
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded border font-mono ${
@@ -419,7 +486,7 @@ export default function BugAnalysis({ user }) {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white/90 m-0 mb-1.5 leading-snug line-clamp-2">{dup.summary || dup.text || '—'}</p>
+                      <p className="text-sm text-white/90 group-hover:text-white transition-colors m-0 mb-1.5 leading-snug line-clamp-2">{dup.summary || dup.text || '—'}</p>
                       <div className="flex gap-4 items-center">
                         {dup.id && <span className="text-[10px] font-mono text-white/40">#{dup.id}</span>}
                         {dup.score !== undefined && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">{Math.round(dup.score * 100)}% match</span>}
@@ -430,7 +497,7 @@ export default function BugAnalysis({ user }) {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );

@@ -108,6 +108,14 @@ def require_active(current_user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="account_inactive")
     if status == "invite_requested":
         raise HTTPException(status_code=403, detail="account_pending")
+    # Auto-activate users who completed the Supabase invite flow.
+    # A valid JWT (already verified) proves the invite link was clicked and password set.
+    if status == "pending_code":
+        user_uuid = current_user.get("uuid")
+        if user_uuid:
+            supabase.table("users").update({"status": "active"}).eq("uuid", user_uuid).execute()
+            current_user["status"] = "active"
+            status = "active"
     if status == "pending_code":
         raise HTTPException(status_code=403, detail="account_pending_code")
     return current_user
