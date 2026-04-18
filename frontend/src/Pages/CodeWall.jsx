@@ -27,8 +27,8 @@ export default function CodeWall({ user, onLogout, onVerified }) {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-black to-black pointer-events-none" />
       
       <div className="relative z-10 w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
-        <div className="w-16 h-16 rounded-3xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-6">
-          <KeyRound size={28} className="text-blue-400" />
+        <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-6">
+          <KeyRound size={28} className="text-indigo-400" />
         </div>
 
         <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
@@ -48,7 +48,7 @@ export default function CodeWall({ user, onLogout, onVerified }) {
             value={code}
             onChange={e => setCode(e.target.value)}
             autoFocus
-            className={`w-full bg-black/50 border rounded-2xl px-4 py-4 text-white text-center text-xl font-bold tracking-[0.3em] uppercase outline-none transition-all ${error ? 'border-red-500/50 focus:border-red-500 focus:bg-red-500/10' : 'border-white/10 focus:border-blue-500/50 focus:bg-white/5'}`}
+            className={`w-full bg-black/50 border rounded-2xl px-4 py-4 text-white text-center text-xl font-bold tracking-[0.3em] uppercase outline-none transition-all ${error ? 'border-red-500/50 focus:border-red-500 focus:bg-red-500/10' : 'border-white/10 focus:border-indigo-500/50 focus:bg-white/5'}`}
           />
 
           {error && (

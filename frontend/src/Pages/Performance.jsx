@@ -41,7 +41,7 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
         // Company admin — simple one-scope confirm
         return createPortal(
             <div role="dialog" aria-modal="true" aria-label="Reset your model" className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-                <div className="bg-[#0d0d14] border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
+                <div className="border border-white/10 rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center" style={{ background: 'var(--card-bg)' }}>
                     <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
                         <Trash2 size={24} className="text-red-400" />
                     </div>
@@ -66,7 +66,7 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
 
     // Super admin — choose which scope to reset
     const scopes = [
-        { key: 'global', label: 'Universal Model', sub: 'Global artifacts in ml_training/', icon: <Globe size={14} className="text-blue-400" />, targetId: null },
+        { key: 'global', label: 'Universal Model', sub: 'Global artifacts in ml_training/', icon: <Globe size={14} className="text-indigo-400" />, targetId: null },
         ...companies.map(co => ({
             key: String(co.id),
             label: co.name || `Company ${co.id}`,
@@ -78,7 +78,7 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
 
     return createPortal(
         <div role="dialog" aria-modal="true" aria-label="Reset model artifacts" className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-            <div className="bg-[#0d0d14] border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <div className="border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" style={{ background: 'var(--card-bg)' }}>
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
@@ -103,7 +103,7 @@ function ResetModal({ isSuperAdmin, companies, onClose, onReset, resettingKey })
                                 <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">{scope.icon}</div>
                                 <div className="min-w-0">
                                     <div className="text-white text-sm font-semibold truncate">{scope.label}</div>
-                                    <div className="text-white/30 text-[10px]">{scope.sub}</div>
+                                    <div className="text-white/30 text-[11px]">{scope.sub}</div>
                                 </div>
                             </div>
                             {confirmed === scope.key ? (
@@ -176,11 +176,11 @@ function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
 
     return createPortal(
         <div role="dialog" aria-modal="true" aria-label="Train model" className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-            <div className="bg-[#0d0d14] border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl relative">
+            <div className="border border-white/10 rounded-2xl p-8 w-full max-w-md shadow-2xl relative" style={{ background: 'var(--card-bg)' }}>
                 <button onClick={onClose} aria-label="Close dialog" className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors"><X size={18} /></button>
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                        <Cpu size={18} className="text-blue-400" />
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                        <Cpu size={18} className="text-indigo-400" />
                     </div>
                     <div>
                         <div className="text-white font-bold text-sm">
@@ -197,8 +197,8 @@ function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
                         {/* Option A: Train on existing data */}
                         <button onClick={startTrain}
                             className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-left group">
-                            <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/20 transition-colors">
-                                <Play size={16} className="text-blue-400" />
+                            <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-500/20 transition-colors">
+                                <Play size={16} className="text-indigo-400" />
                             </div>
                             <div>
                                 <div className="text-white font-bold text-sm">
@@ -244,8 +244,8 @@ function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
 
                 {phase === 'background' && (
                     <div className="flex flex-col items-center gap-3 py-6 text-center">
-                        <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                            <BrainCircuit size={22} className="text-blue-400 animate-pulse" />
+                        <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                            <BrainCircuit size={22} className="text-indigo-400 animate-pulse" />
                         </div>
                         <div className="text-white font-bold">Training started</div>
                         <div className="text-white/40 text-xs max-w-xs leading-relaxed">
@@ -259,7 +259,7 @@ function TrainModal({ onClose, onDone, isSuperAdmin, onTrainStart }) {
 
                 {phase === 'error' && (
                     <div className="flex flex-col items-center gap-4 py-4 text-center">
-                        <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
                             <AlertCircle size={28} className="text-red-400" />
                         </div>
                         <div className="text-white font-bold">Training Failed</div>
@@ -360,9 +360,9 @@ export default function Performance({ user, onTrainStart }) {
       } catch (e) {
           if (e.response?.status === 403) setError('Admin access required to view model performance.');
           else setModelData({ baseline: fallbackCurrent, current: fallbackCurrent, previous: fallbackCurrent, confusion_matrix: null, feedback_stats: null });
-          } finally { 
-              setLoading(false); 
-              setTimeout(() => setRefreshing(false), 500); 
+          } finally {
+              setLoading(false);
+              setTimeout(() => setRefreshing(false), 500);
           }
   };
 
@@ -426,20 +426,20 @@ export default function Performance({ user, onTrainStart }) {
       if (diff === 0) return null;
       const sign = diff > 0 ? '+' : '';
       const cls = diff > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20';
-      return <span className={`text-[10px] font-bold ml-3 px-2 py-0.5 rounded-md border ${cls}`}>{sign}{diff.toFixed(1)}%</span>;
+      return <span className={`text-[11px] font-bold ml-3 px-2 py-0.5 rounded-md border ${cls}`}>{sign}{diff.toFixed(1)}%</span>;
   };
 
   const modelSourceBadge = () => {
       if (meta.model_source === 'company') return { label: `${meta.company_name} Model`, cls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', icon: <Building2 size={11} /> };
-      if (meta.model_source === 'global')  return { label: 'Global Model', cls: 'bg-blue-500/10 border-blue-500/20 text-blue-400', icon: <Globe size={11} /> };
+      if (meta.model_source === 'global')  return { label: 'Global Model', cls: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400', icon: <Globe size={11} /> };
       return { label: 'No Model Trained', cls: 'bg-white/5 border-white/10 text-white/40', icon: <AlertCircle size={11} /> };
   };
   const badge = modelSourceBadge();
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 animate-in fade-in duration-500">
-      <div className="w-16 h-16 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mb-2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-blue-500/20 to-transparent animate-pulse" />
+      <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-2 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/20 to-transparent animate-pulse" />
         <RefreshCw size={24} className="animate-spin text-white/50 relative z-10" />
       </div>
       <div className="text-white font-bold text-xl tracking-tight">Evaluating Telemetry</div>
@@ -449,7 +449,7 @@ export default function Performance({ user, onTrainStart }) {
 
   if (error) return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 animate-in fade-in duration-500">
-      <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2">
+      <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2">
         <AlertCircle size={24} className="text-red-500" />
       </div>
       <div className="text-white font-bold text-xl tracking-tight">Access Denied</div>
@@ -459,16 +459,16 @@ export default function Performance({ user, onTrainStart }) {
 
   // ── Global model banner (shown when company hasn't trained yet) ──────────────
   const GlobalModelBanner = () => (
-    <div className="mb-8 p-6 lg:p-8 rounded-[2rem] border-2 border-blue-500/30 bg-blue-500/5 backdrop-blur-md relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
+    <div className="mb-8 p-6 lg:p-8 rounded-2xl border-2 border-indigo-500/30 bg-indigo-500/5 backdrop-blur-md relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent pointer-events-none" />
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 relative z-10">
-        <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-          <Globe size={24} className="text-blue-400" />
+        <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+          <Globe size={24} className="text-indigo-400" />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg font-bold text-white">Global Model (Shared)</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 uppercase tracking-widest">Active</span>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 uppercase tracking-widest">Active</span>
           </div>
           <p className="text-sm text-white/60 leading-relaxed max-w-2xl">
             Your company is currently using the <strong className="text-white">universal Random Forest model</strong> trained on 220,000+ real-world bugs.
@@ -476,7 +476,7 @@ export default function Performance({ user, onTrainStart }) {
           </p>
         </div>
         <button onClick={() => setShowTrainModal(true)}
-          className="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-300 font-bold rounded-2xl transition-all text-sm whitespace-nowrap">
+          className="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-indigo-500/20 hover:bg-blue-500/30 border border-indigo-500/30 text-blue-300 font-bold rounded-2xl transition-all text-sm whitespace-nowrap">
           <Play size={15} /> Train Company Model
         </button>
       </div>
@@ -490,7 +490,7 @@ export default function Performance({ user, onTrainStart }) {
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
       {!isSuperAdmin && <GlobalModelBanner />}
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-6 text-center">
-        <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
+        <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-t from-white/5 to-transparent" />
           <BrainCircuit size={32} className="text-white/20 relative z-10" />
         </div>
@@ -501,7 +501,7 @@ export default function Performance({ user, onTrainStart }) {
           </p>
         </div>
         <button onClick={() => setShowTrainModal(true)}
-          className="flex items-center gap-3 px-8 py-3.5 bg-white text-black font-bold rounded-2xl hover:bg-zinc-200 transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+          className="flex items-center gap-3 px-8 py-3.5 bg-white text-black font-bold rounded-2xl hover:bg-zinc-200 transition-all ">
           <Play size={18} /> Train Your Model
         </button>
         <p className="text-white/20 text-xs">You can also bulk upload a CSV to train on your data</p>
@@ -514,259 +514,196 @@ export default function Performance({ user, onTrainStart }) {
 
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
+    <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-10 animate-in fade-in duration-700 font-sans" style={{ background: 'var(--bg)' }}>
       {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={isSuperAdmin} onTrainStart={onTrainStart} />}
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
 
       {/* Global model banner — shown when company hasn't yet trained their own model */}
       {!isSuperAdmin && meta.model_source === 'global' && <GlobalModelBanner />}
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
-              <BrainCircuit size={12} className="text-blue-500" />
-              <span className="text-[10px] font-bold tracking-widest uppercase">ML Evaluation</span>
-            </div>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2 text-white">
-            Model <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">performance</span>
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
+        <div>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight leading-tight" style={{ color: 'var(--text-main)' }}>
+            Model performance
           </h1>
-          <p className="text-white/50 text-base max-w-xl leading-relaxed">
-            Live evaluation metrics and telemetry for the Random Forest classifier.
+          <p className="text-sm mt-1.5 max-w-xl" style={{ color: 'var(--text-sec)' }}>
+            Evaluation metrics for the active severity classification model.
           </p>
         </div>
-
-        <div className="relative z-10 flex flex-col items-start md:items-end gap-4">
-          <div className="flex gap-1 bg-white/5 border border-white/10 p-1 rounded-2xl backdrop-blur-md">
-            {[
-              {
-                id: 'enterprise', icon: <Globe size={13} />, label: 'Main brain',
-                tip: isSuperAdmin
-                  ? 'Static baseline — trained on the full universal dataset (all companies + Firefox). Only updates when you run "Train on Universal Data".'
-                  : 'Static baseline — trained on your full company bug database. Only updates when you run "Train on Company Data".',
-                meta: baseMetrics,
-              },
-              {
-                id: 'current', icon: <Zap size={13} />, label: 'Active build',
-                tip: 'Your most recently trained model (bulk upload or feedback retrain).',
-                meta: currMetrics,
-              },
-              {
-                id: 'previous', icon: <History size={13} />, label: 'Previous',
-                tip: 'The build that was active before the latest training run.',
-                meta: prevMetrics,
-              },
-            ].map(v => (
-              <div key={v.id} className="relative group/tab">
-                <button onClick={() => setViewVersion(v.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                    viewVersion === v.id ? 'bg-white/10 text-white shadow-sm' : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
-                  }`}>
-                  {v.icon} {v.label}
-                </button>
-                {/* Hover tooltip */}
-                <div className="absolute right-0 top-full mt-2 z-50 w-64 opacity-0 pointer-events-none group-hover/tab:opacity-100 transition-opacity duration-150">
-                  <div className="bg-black/90 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left">
-                    <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{v.label}</div>
-                    <p className="text-xs text-white/70 leading-relaxed mb-3">{v.tip}</p>
-                    {v.meta?.dataset_label && v.meta.dataset_label !== '—' && (
-                      <div className="flex items-start gap-2 text-xs text-white/50 mb-1">
-                        <Tag size={10} className="mt-0.5 flex-shrink-0 text-purple-400" />
-                        <span><span className="text-white/30">Dataset:</span> <strong className="text-white/70">{v.meta.dataset_label}</strong></span>
-                      </div>
-                    )}
-                    {v.meta?.last_trained && v.meta.last_trained !== '—' && (
-                      <div className="flex items-start gap-2 text-xs text-white/50">
-                        <Clock size={10} className="mt-0.5 flex-shrink-0" />
-                        <span>{v.meta.last_trained}</span>
-                      </div>
-                    )}
-                    {(!v.meta?.dataset_label || v.meta.dataset_label === '—') && (
-                      <div className="text-xs text-white/30 italic">No data yet for this build</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${
-            viewVersion === 'current' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-            viewVersion === 'previous' ? 'bg-white/5 border-white/10 text-white/50' :
-            'bg-blue-500/10 border-blue-500/20 text-blue-400'
-          }`}>
-            {viewVersion === 'current'
-              ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
-              : viewVersion === 'enterprise' ? <Globe size={9} /> : <History size={9} />}
-            {metricsToUse.status || 'Not Trained'}
-          </div>
-        </div>
-        <div className="absolute -bottom-4 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
-      </div>
-
-      {/* Dataset source banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-8 p-4 bg-white/[0.02] border border-white/10 rounded-2xl">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${badge.cls}`}>
-            {badge.icon} {badge.label}
-          </div>
-          {meta.dataset_label && (
-            <div className="flex items-center gap-1.5 text-white/40 text-xs">
-              <Tag size={11} />
-              <span>Trained on: <strong className="text-white/60">{meta.dataset_label}</strong></span>
-            </div>
-          )}
-          {currMetrics.last_trained && currMetrics.last_trained !== '—' && (
-            <div className="flex items-center gap-1.5 text-white/30 text-xs">
-              <Clock size={11} />
-              <span>{currMetrics.last_trained}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={fetchMetrics} disabled={refreshing} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white/50 hover:text-white text-xs font-bold rounded-xl transition-all hover:bg-white/10 disabled:opacity-50">
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowResetModal(true)}
+            className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest text-red-400 border border-red-500/20 hover:bg-red-500/5 transition-colors flex items-center gap-2"
+          >
+            <Trash2 size={15} />
+            Reset Model
           </button>
-          <button onClick={() => setShowTrainModal(true)}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 text-xs font-bold rounded-xl transition-all">
-            <Play size={12} /> Retrain
-          </button>
-          <button onClick={() => setShowResetModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-xs font-bold rounded-xl transition-all">
-            <Trash2 size={12} /> Reset
+          <button
+            onClick={() => setShowTrainModal(true)}
+            className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest text-black flex items-center gap-2 transition-colors"
+            style={{ background: 'var(--accent)' }}
+          >
+            <BrainCircuit size={15} />
+            Train Model
           </button>
         </div>
       </div>
 
-      {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mb-8">
+      {/* Version Selector */}
+      <div className="flex items-center gap-2 p-1 w-max rounded-full border border-white/10 mb-8" style={{ background: 'var(--bg-elevated)' }}>
         {[
-          { key: 'accuracy',   label: 'Accuracy',  icon: <Target size={14} />,     val: formatPct(metricsToUse.accuracy),  accent: 'text-blue-400' },
-          { key: 'f1_score',   label: 'F1 Score',  icon: <Activity size={14} />,   val: formatPct(metricsToUse.f1_score),  accent: 'text-indigo-400' },
-          { key: 'precision',  label: 'Precision', icon: <Crosshair size={14} />,  val: formatPct(metricsToUse.precision), accent: 'text-sky-400' },
-          { key: 'recall',     label: 'Recall',    icon: <TrendingUp size={14} />, val: formatPct(metricsToUse.recall),    accent: 'text-amber-400' },
-        ].map(s => (
-          <div key={s.key} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group hover:bg-white/[0.04] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-2 mb-4 relative z-10">
-              <span className={s.accent}>{s.icon}</span>
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span>
-            </div>
-            <div className="flex items-baseline gap-2 relative z-10">
-              <span className="text-4xl font-bold text-white font-mono tracking-tighter">{s.val}</span>
-              {getDelta(s.key)}
+          {
+            id: 'enterprise',
+            label: 'Enterprise Build',
+            tip: isSuperAdmin
+              ? 'Static baseline — trained on the full universal dataset (all companies + Firefox). Only updates when you run "Train on Universal Data".'
+              : 'Static baseline — trained on your full company bug database. Only updates when you run "Train on Company Data".',
+            meta: baseMetrics,
+          },
+          {
+            id: 'current',
+            label: 'Active Build',
+            tip: 'Your most recently trained model (bulk upload or feedback retrain).',
+            meta: currMetrics,
+          },
+        ].map(v => (
+          <div key={v.id} className="relative group/tab">
+            <button
+              onClick={() => setViewVersion(v.id)}
+              className={`px-5 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 ${
+                viewVersion === v.id
+                  ? 'text-[var(--accent)] shadow-sm border border-white/10'
+                  : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+              }`}
+              style={viewVersion === v.id ? { background: 'var(--card-bg)' } : {}}
+            >
+              {viewVersion === v.id && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+              )}
+              {v.label}
+            </button>
+            {/* Hover tooltip */}
+            <div className="absolute left-0 top-full mt-2 z-50 w-64 opacity-0 pointer-events-none group-hover/tab:opacity-100 transition-opacity duration-150">
+              <div className="border border-white/10 rounded-2xl p-4 shadow-2xl text-left" style={{ background: 'var(--card-bg)', backdropFilter: 'blur(16px)' }}>
+                <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">{v.label}</div>
+                <p className="text-xs text-white/70 leading-relaxed mb-3">{v.tip}</p>
+                {v.meta?.dataset_label && v.meta.dataset_label !== '—' && (
+                  <div className="flex items-start gap-2 text-xs text-white/50 mb-1">
+                    <Tag size={10} className="mt-0.5 flex-shrink-0 text-purple-400" />
+                    <span><span className="text-white/30">Dataset:</span> <strong className="text-white/70">{v.meta.dataset_label}</strong></span>
+                  </div>
+                )}
+                {v.meta?.last_trained && v.meta.last_trained !== '—' && (
+                  <div className="flex items-start gap-2 text-xs text-white/50">
+                    <Clock size={10} className="mt-0.5 flex-shrink-0" />
+                    <span>{v.meta.last_trained}</span>
+                  </div>
+                )}
+                {(!v.meta?.dataset_label || v.meta.dataset_label === '—') && (
+                  <div className="text-xs text-white/30 italic">No data yet for this build</div>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Cross-build bar chart + Class Accuracy */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
-        <div className="lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 backdrop-blur-md shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
-            <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <Globe size={14} className="text-white/40" /> Cross-Build Performance
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {[
+          { key: 'accuracy',  label: 'Accuracy',  icon: <Target size={14} />,     val: formatPct(metricsToUse.accuracy),  accentBar: 'var(--accent)' },
+          { key: 'f1_score',  label: 'F1 Score',  icon: <Activity size={14} />,   val: formatPct(metricsToUse.f1_score),  accentBar: '#51df9c' },
+          { key: 'precision', label: 'Precision', icon: <Crosshair size={14} />,  val: formatPct(metricsToUse.precision), accentBar: 'var(--accent)' },
+          { key: 'recall',    label: 'Recall',    icon: <TrendingUp size={14} />, val: formatPct(metricsToUse.recall),    accentBar: '#f59e0b' },
+        ].map(s => (
+          <div
+            key={s.key}
+            className="border border-white/10 rounded-2xl p-5 relative overflow-hidden group hover:brightness-105 transition-all"
+            style={{ background: 'var(--card-bg)' }}
+          >
+            {/* Left accent bar */}
+            <div className="absolute top-0 left-0 w-1 h-full rounded-l-2xl" style={{ background: s.accentBar }} />
+            <div className="flex justify-between items-start mb-2">
+              <h3 className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                {s.label}
+              </h3>
+              {getDelta(s.key)}
             </div>
-            <div className="flex flex-wrap gap-5 text-[11px] font-bold uppercase tracking-widest text-white/70">
-              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(59,130,246,0.7)]" style={{ background: BUILD_COLORS.Enterprise }} /> Main brain</span>
-              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(245,158,11,0.7)]" style={{ background: BUILD_COLORS.Active }} /> Active build</span>
-            </div>
-          </div>
-          <div className="h-[320px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={comparisonData} margin={{ top: 28, right: 16, bottom: 32, left: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-              <XAxis
-                dataKey="name"
-                stroke={axisStroke}
-                fontSize={12}
-                fontWeight={700}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: axisTickBright }}
-                label={{ value: 'Metric', position: 'insideBottom', offset: -18, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
-              />
-              <YAxis
-                domain={[0, 100]}
-                stroke={axisStroke}
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: axisTickBright }}
-                tickFormatter={t => `${t}%`}
-                label={{ value: 'Score (%)', angle: -90, position: 'insideLeft', offset: 4, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
-              />
-              <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v.toFixed(1)}%`, '']} cursor={{ fill: chartCursorFill }} />
-              <Bar dataKey="Enterprise" name="Main brain" fill={BUILD_COLORS.Enterprise} radius={[8,8,0,0]} barSize={34}>
-                <LabelList dataKey="Enterprise" position="top" formatter={v => `${v.toFixed(1)}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
-              </Bar>
-              <Bar dataKey="Active" name="Active build" fill={BUILD_COLORS.Active} radius={[8,8,0,0]} barSize={34}>
-                <LabelList dataKey="Active" position="top" formatter={v => `${v.toFixed(1)}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="lg:col-span-5 bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 backdrop-blur-md shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-          <div className="mb-8">
-            <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-3">
-              <Target size={14} className="text-white/40" /> Per-Class Accuracy
-            </div>
-            <div className="flex gap-5 text-[11px] font-bold uppercase tracking-widest text-white/70">
-              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(59,130,246,0.7)]" style={{ background: BUILD_COLORS.Enterprise }} /> Precision</span>
-              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block shadow-[0_0_8px_rgba(245,158,11,0.7)]" style={{ background: BUILD_COLORS.Active }} /> Recall</span>
+            <div className="text-4xl font-bold tracking-tighter mt-1" style={{ color: 'var(--text)' }}>
+              {s.val}
             </div>
           </div>
-          <div className="h-[320px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={classMetrics} layout="vertical" margin={{ left: 8, right: 56, top: 8, bottom: 28 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tick={{ fontSize: 11, fill: axisTickBright }}
-                tickFormatter={v => `${v}%`}
-                tickLine={false}
-                axisLine={false}
-                label={{ value: 'Score (%)', position: 'insideBottom', offset: -16, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
-              />
-              <YAxis
-                dataKey="subject"
-                type="category"
-                width={96}
-                tick={{ fontSize: 12, fontWeight: 700, fill: axisTickBright }}
-                tickLine={false}
-                axisLine={false}
-                label={{ value: 'Severity', angle: -90, position: 'insideLeft', offset: 14, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
-              />
-              <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v}%`, '']} cursor={{ fill: chartCursorFill }} />
-              <Bar dataKey="precision" name="Precision" fill={BUILD_COLORS.Enterprise} radius={[0,6,6,0]} barSize={18}>
-                <LabelList dataKey="precision" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
-              </Bar>
-              <Bar dataKey="recall" name="Recall" fill={BUILD_COLORS.Active} radius={[0,6,6,0]} barSize={18}>
-                <LabelList dataKey="recall" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Confusion matrix + Training metadata */}
+      {/* Two-column Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 backdrop-blur-md shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-          <div className="flex justify-between items-center mb-8">
-            <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <Crosshair size={14} className="text-white/40" /> Confusion Matrix
+
+        {/* Left: Precision / Recall by Class */}
+        <div
+          className="border border-white/10 rounded-2xl p-6 flex flex-col"
+          style={{ background: 'var(--card-bg)' }}
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-sm font-semibold tracking-wide" style={{ color: 'var(--text)' }}>
+              Precision / Recall by Class
+            </h2>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BUILD_COLORS.Enterprise }} />
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Precision</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BUILD_COLORS.Active }} />
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Recall</span>
+              </div>
             </div>
-            <span className="text-[10px] font-bold bg-white/5 border border-white/10 text-white/50 px-2.5 py-1 rounded-md tracking-widest uppercase">
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={classMetrics} layout="vertical" margin={{ left: 8, right: 56, top: 8, bottom: 28 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+                <XAxis
+                  type="number"
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: axisTickBright }}
+                  tickFormatter={v => `${v}%`}
+                  tickLine={false}
+                  axisLine={false}
+                  label={{ value: 'Score (%)', position: 'insideBottom', offset: -16, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+                />
+                <YAxis
+                  dataKey="subject"
+                  type="category"
+                  width={96}
+                  tick={{ fontSize: 12, fontWeight: 700, fill: axisTickBright }}
+                  tickLine={false}
+                  axisLine={false}
+                  label={{ value: 'Severity', angle: -90, position: 'insideLeft', offset: 14, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+                />
+                <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v}%`, '']} cursor={{ fill: chartCursorFill }} />
+                <Bar dataKey="precision" name="Precision" fill={BUILD_COLORS.Enterprise} radius={[0,6,6,0]} barSize={18}>
+                  <LabelList dataKey="precision" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+                </Bar>
+                <Bar dataKey="recall" name="Recall" fill={BUILD_COLORS.Active} radius={[0,6,6,0]} barSize={18}>
+                  <LabelList dataKey="recall" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Right: Confusion Matrix */}
+        <div
+          className="border border-white/10 rounded-2xl p-6 flex flex-col"
+          style={{ background: 'var(--card-bg)' }}
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-sm font-semibold tracking-wide" style={{ color: 'var(--text)' }}>
+              Confusion Matrix
+            </h2>
+            <span className="text-[11px] font-bold border border-white/10 text-white/50 px-2.5 py-1 rounded-md tracking-widest uppercase" style={{ background: 'var(--bg-elevated)' }}>
               {modelData.confusion_matrix
                 ? `${MAX_MATRIX_VAL.toLocaleString()} peak cell — training data`
                 : feedbackStats.total_corrections > 0
@@ -774,17 +711,17 @@ export default function Performance({ user, onTrainStart }) {
                   : 'Train model to populate'}
             </span>
           </div>
-          <div className="flex items-center mt-4">
-            <div className="transform -rotate-90 text-[10px] font-bold text-white/30 uppercase tracking-widest w-6 whitespace-nowrap mr-6 text-center">Actual</div>
+          <div className="flex items-center flex-1">
+            <div className="transform -rotate-90 text-[11px] font-bold text-white/30 uppercase tracking-widest w-6 whitespace-nowrap mr-6 text-center">Actual</div>
             <div className="flex-1 group/matrix">
               <div className="grid grid-cols-[36px_repeat(4,1fr)] gap-2 lg:gap-3">
                 <div />
                 {['S1','S2','S3','S4'].map(l => (
-                  <div key={l} className="text-center text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: SEV_COLORS[l] }}>{l}</div>
+                  <div key={l} className="text-center text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: SEV_COLORS[l] }}>{l}</div>
                 ))}
                 {realConfusionMatrix.map(row => (
                   <React.Fragment key={row.actual}>
-                    <div className="flex items-center justify-end pr-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: SEV_COLORS[row.actual] }}>{row.actual}</div>
+                    <div className="flex items-center justify-end pr-2 text-[11px] font-bold uppercase tracking-widest" style={{ color: SEV_COLORS[row.actual] }}>{row.actual}</div>
                     {['S1','S2','S3','S4'].map(col => {
                       const val = row[col]; const ratio = val / MAX_MATRIX_VAL;
                       const isDiagonal = row.actual === col;
@@ -798,33 +735,41 @@ export default function Performance({ user, onTrainStart }) {
                   </React.Fragment>
                 ))}
               </div>
-              <div className="text-center text-[10px] font-bold text-white/30 uppercase tracking-widest mt-6 pl-9">Predicted</div>
+              <div className="text-center text-[11px] font-bold text-white/30 uppercase tracking-widest mt-6 pl-9">Predicted</div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Training metadata */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 backdrop-blur-md shadow-2xl relative overflow-hidden flex flex-col justify-center">
-          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-          <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-8">
-            <Database size={14} className="text-white/40" /> Training Metadata
-          </div>
-          <div className="flex flex-col gap-4">
-            {[
-              { icon: <Database size={18} className="text-blue-400" />, label: 'Training Volume', value: `${metricsToUse.dataset_size?.toLocaleString() || 0} verified bug reports` },
-              { icon: <Tag size={18} className="text-purple-400" />,    label: 'Dataset',         value: meta.dataset_label || '—' },
-              { icon: <ShieldCheck size={18} className="text-emerald-400" />, label: 'Algorithm',  value: `Random Forest — ${metricsToUse.total_trees || 0} estimators` },
-              { icon: <Clock size={18} className="text-white/40" />,   label: 'Last Trained',     value: metricsToUse.last_trained || '—' },
-            ].map(({ icon, label, value }) => (
-              <div key={label} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div className="w-10 h-10 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center flex-shrink-0 shadow-inner">{icon}</div>
-                <div>
-                  <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-0.5">{label}</div>
-                  <div className="text-sm font-bold text-white">{value}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Training Metadata Card */}
+      <div
+        className="border border-white/10 rounded-2xl p-6 lg:p-8 mb-8"
+        style={{ background: 'var(--card-bg)' }}
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <Database size={18} className="text-[var(--accent)]" />
+          <h2 className="text-sm font-bold tracking-wide uppercase" style={{ color: 'var(--text)' }}>
+            Training Metadata
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+          {[
+            { label: 'Last Trained',     value: metricsToUse.last_trained || '—' },
+            { label: 'Algorithm',        value: `Random Forest — ${metricsToUse.total_trees || 0} estimators` },
+            { label: 'Dataset Size',     value: `${metricsToUse.dataset_size?.toLocaleString() || 0} verified bug reports` },
+            { label: 'Dataset',          value: meta.dataset_label || '—' },
+            { label: 'Model Source',     value: badge.label },
+            { label: 'Status',           value: metricsToUse.status || 'Not Trained' },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex justify-between items-end border-b border-white/[0.06] pb-2">
+              <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                {label}
+              </span>
+              <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                {value}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

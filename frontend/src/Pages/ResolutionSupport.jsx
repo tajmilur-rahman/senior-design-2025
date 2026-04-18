@@ -36,16 +36,16 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   return (
     <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
-        className={triggerClassName || `h-10 flex items-center justify-between px-3 border rounded-xl cursor-pointer text-sm transition-all outline-none focus:ring-2 focus:ring-blue-500/40 border-white/10 bg-zinc-900 text-white hover:bg-white/10`}>
+        className={triggerClassName || `h-10 flex items-center justify-between px-3 border rounded-xl cursor-pointer text-sm transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 border-white/10 bg-zinc-900 text-white hover:bg-white/10`}>
         <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
           <div className="max-h-52 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
-              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
             })}
           </div>
         </div>
@@ -63,7 +63,7 @@ const EXAMPLE_QUERIES = [
 
 const SCORE_CONFIG = [
   { min: 10, label: "Strong match",  accent: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
-  { min: 6,  label: "Good match",    accent: "text-blue-400",    bg: "bg-blue-500/10",    border: "border-blue-500/20" },
+  { min: 6,  label: "Good match",    accent: "text-indigo-400",    bg: "bg-indigo-500/10",    border: "border-indigo-500/20" },
   { min: 3,  label: "Partial match", accent: "text-amber-400",   bg: "bg-amber-500/10",   border: "border-amber-500/20" },
   { min: 0,  label: "Weak match",    accent: "text-white/40",    bg: "bg-white/5",         border: "border-white/10" },
 ];
@@ -74,7 +74,7 @@ function getScoreConfig(score) {
 
 function SkeletonCard() {
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 flex flex-col gap-4 animate-pulse">
+    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 flex flex-col gap-4 animate-pulse">
       <div className="flex justify-between">
         <div className="bg-white/10 rounded-md w-24 h-6" />
         <div className="bg-white/10 rounded-md w-20 h-6" />
@@ -205,12 +205,12 @@ export default function ResolutionSupport() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
-              <BookOpen size={12} className="text-blue-500" />
-              <span className="text-[10px] font-bold tracking-widest uppercase">Resolution KB</span>
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
+              <BookOpen size={12} className="text-indigo-500" />
+              <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Resolution KB</span>
             </div>
             {source && (
-              <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border text-[10px] font-bold tracking-widest uppercase ${
+              <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-medium tracking-[0.06em] uppercase ${
                 isMozilla
                   ? "bg-violet-500/10 border-violet-500/20 text-violet-400"
                   : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
@@ -219,11 +219,11 @@ export default function ResolutionSupport() {
               </div>
             )}
             <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
-              <span className="text-[10px] font-bold tracking-widest uppercase">Live Search</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Live Search</span>
             </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
+          <h1 className="text-[1.75rem] font-semibold tracking-tight mb-3 text-white">
             Resolution <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">support</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
@@ -233,13 +233,12 @@ export default function ResolutionSupport() {
             }
           </p>
         </div>
-        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
       </div>
 
       {/* Search bar */}
       <div className="mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 relative flex items-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-colors focus-within:border-blue-500/50 focus-within:bg-white/10 shadow-lg">
+          <div className="flex-1 relative flex items-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-colors focus-within:border-indigo-500/50 focus-within:bg-white/10 shadow-lg">
             <Search size={18} className="absolute left-5 text-white/40 pointer-events-none" />
             <input
               type="text"
@@ -256,7 +255,7 @@ export default function ResolutionSupport() {
               onClick={() => setShowFilters(f => !f)}
               className={`h-14 px-4 rounded-2xl border font-semibold text-sm flex items-center gap-2 transition-all ${
                 showFilters || hasActiveFilters
-                  ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                  ? "bg-indigo-500/20 border-blue-500/40 text-blue-300"
                   : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white"
               }`}
             >
@@ -270,7 +269,7 @@ export default function ResolutionSupport() {
               type="button"
               onClick={() => handleSearch()}
               disabled={loading || !query.trim()}
-              className="h-14 px-8 bg-white text-black hover:bg-zinc-200 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] whitespace-nowrap"
+              className="h-14 px-8 bg-white text-black hover:bg-zinc-200 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed  whitespace-nowrap"
             >
               {loading ? <><RefreshCw size={16} className="animate-spin" /> Searching</> : <><Search size={16} /> Search KB</>}
             </button>
@@ -292,7 +291,7 @@ export default function ResolutionSupport() {
           <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md animate-in fade-in duration-200">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1 min-w-[170px]">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Resolution type</label>
+                <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Resolution type</label>
                 <CustomSelect
                   value={resolutionFilter}
                   onChange={v => setResolutionFilter(v)}
@@ -305,35 +304,35 @@ export default function ResolutionSupport() {
                 />
               </div>
               <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Component</label>
+                <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Component</label>
                 <input
                   type="text"
                   value={componentFilter}
                   onChange={e => setComponentFilter(e.target.value)}
                   placeholder="e.g. Networking"
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50"
                 />
               </div>
               <div className="flex flex-col gap-1 w-28">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Min days</label>
+                <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Min days</label>
                 <input
                   type="number"
                   value={minDays}
                   onChange={e => setMinDays(e.target.value)}
                   placeholder="0"
                   min="0"
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50"
                 />
               </div>
               <div className="flex flex-col gap-1 w-28">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Max days</label>
+                <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Max days</label>
                 <input
                   type="number"
                   value={maxDays}
                   onChange={e => setMaxDays(e.target.value)}
                   placeholder="∞"
                   min="0"
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50"
                 />
               </div>
               {hasActiveFilters && (
@@ -373,8 +372,8 @@ export default function ResolutionSupport() {
         <div className="animate-in fade-in duration-500">
           {/* Example queries */}
           <div className="mt-8 text-center">
-            <p className="text-[10px] font-bold text-white/40 mb-6 flex items-center justify-center gap-2 tracking-widest uppercase">
-              <Lightbulb size={12} className="text-blue-400" /> Quick examples
+            <p className="text-[11px] font-bold text-white/40 mb-6 flex items-center justify-center gap-2 tracking-widest uppercase">
+              <Lightbulb size={12} className="text-indigo-400" /> Quick examples
             </p>
             <div className="flex flex-wrap gap-3 justify-center max-w-3xl mx-auto mb-12">
               {EXAMPLE_QUERIES.map((sample, i) => (
@@ -393,9 +392,9 @@ export default function ResolutionSupport() {
           {/* Analytics panels */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Component Trends */}
-            <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8">
+            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8">
               <div className="flex items-center gap-2 mb-1">
-                <BarChart2 size={14} className="text-blue-400" />
+                <BarChart2 size={14} className="text-indigo-400" />
                 <h2 className="text-sm font-bold text-white tracking-tight">Top Bug Components</h2>
               </div>
               <p className="text-xs text-white/40 mb-6">
@@ -426,7 +425,7 @@ export default function ResolutionSupport() {
             </div>
 
             {/* Component vs Avg Resolution Time */}
-            <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8">
+            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8">
               <div className="flex items-center gap-2 mb-1">
                 <Clock3 size={14} className="text-indigo-400" />
                 <h2 className="text-sm font-bold text-white tracking-tight">Component vs Avg Resolution Time</h2>
@@ -470,7 +469,7 @@ export default function ResolutionSupport() {
 
       {/* No results */}
       {searched && !loading && results.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center py-16 bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl mt-8">
+        <div className="flex flex-col items-center justify-center py-16 bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl mt-8">
           <Search size={32} className="text-white/20 mb-4" />
           <p className="text-white text-lg font-bold mb-2">No matching resolved bugs found</p>
           <p className="text-white/50 text-sm text-center max-w-md">
@@ -485,7 +484,7 @@ export default function ResolutionSupport() {
           <span className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
             <BarChart2 size={14} className="text-white/40" /> {results.length} similar resolved anomalies
           </span>
-          <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Sorted by relevance</span>
+          <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest">Sorted by relevance</span>
         </div>
       )}
 
@@ -502,17 +501,17 @@ export default function ResolutionSupport() {
             return (
               <div
                 key={item.id ?? idx}
-                className="group bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden transition-all hover:bg-white/[0.04] hover:border-white/20 flex flex-col gap-5"
+                className="group bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden transition-all hover:bg-white/[0.04] hover:border-white/20 flex flex-col gap-5"
               >
                 {/* Color accent bar */}
                 <div className={`absolute top-0 left-0 w-full h-[2px] ${sc.bg.replace("/10", "/50")}`} />
 
                 {/* Top row: status + score */}
                 <div className="flex justify-between items-center gap-4 flex-wrap">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-bold text-emerald-400 uppercase tracking-widest">
                     <CheckCircle2 size={12} /> {item.status || "RESOLVED"}
                   </div>
-                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${sc.bg} ${sc.border} ${sc.accent}`}>
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest ${sc.bg} ${sc.border} ${sc.accent}`}>
                     {sc.label} · {item.match_score ?? 0}
                   </div>
                 </div>
@@ -534,7 +533,7 @@ export default function ResolutionSupport() {
 
                 {/* Resolution box */}
                 <div className={`bg-white/5 rounded-xl p-5 border-l-2 ${sc.border.replace("border-", "border-l-")}`}>
-                  <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">
+                  <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">
                     Resolution · {item.resolution || "FIXED"}
                   </div>
                   <p className="m-0 text-sm text-white/80 leading-relaxed break-words">
@@ -545,7 +544,7 @@ export default function ResolutionSupport() {
                   {isTruncated && (
                     <button
                       onClick={() => setExpandedItems(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                      className="mt-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                      className="mt-2 text-xs font-bold text-indigo-400 hover:text-blue-300 transition-colors"
                     >
                       {isExpanded ? "Show less" : "Read more"}
                     </button>
@@ -558,7 +557,7 @@ export default function ResolutionSupport() {
                     href={item.bug_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 text-xs font-bold text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-blue-300 hover:underline transition-colors"
                   >
                     <ExternalLink size={12} /> Open in Bugzilla
                   </a>
@@ -570,9 +569,9 @@ export default function ResolutionSupport() {
                     <button
                       type="button"
                       onClick={() => setExpandedWhy(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                      className="flex items-center gap-2 text-[10px] font-bold text-white/40 hover:text-white/70 uppercase tracking-widest transition-colors w-full text-left"
+                      className="flex items-center gap-2 text-[11px] font-bold text-white/40 hover:text-white/70 uppercase tracking-widest transition-colors w-full text-left"
                     >
-                      <Lightbulb size={11} className="text-blue-400 flex-shrink-0" />
+                      <Lightbulb size={11} className="text-indigo-400 flex-shrink-0" />
                       Why this matched
                       {isWhyExpanded ? <ChevronUp size={12} className="ml-auto" /> : <ChevronDown size={12} className="ml-auto" />}
                     </button>
@@ -584,7 +583,7 @@ export default function ResolutionSupport() {
                           <ul className="text-xs text-white/60 leading-relaxed space-y-1 pl-1">
                             {item.match_reasons.map((r, i) => (
                               <li key={i} className="flex items-start gap-1.5">
-                                <span className="text-blue-400 mt-0.5">•</span> {r}
+                                <span className="text-indigo-400 mt-0.5">•</span> {r}
                               </li>
                             ))}
                           </ul>
@@ -601,7 +600,7 @@ export default function ResolutionSupport() {
                             ].map(([label, val]) => (
                               <div key={label} className="flex justify-between bg-white/5 rounded-lg px-3 py-2 border border-white/10">
                                 <span className="text-white/40">{label}</span>
-                                <span className={`font-bold ${val > 0 ? "text-blue-400" : "text-white/20"}`}>{val}</span>
+                                <span className={`font-bold ${val > 0 ? "text-indigo-400" : "text-white/20"}`}>{val}</span>
                               </div>
                             ))}
                           </div>
@@ -619,7 +618,7 @@ export default function ResolutionSupport() {
                                 <span className="text-white/30 w-20 flex-shrink-0">{label}:</span>
                                 {words?.length > 0
                                   ? words.map(w => (
-                                      <span key={w} className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px] font-medium">{w}</span>
+                                      <span key={w} className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-blue-300 text-[11px] font-medium">{w}</span>
                                     ))
                                   : <span className="text-white/20">—</span>
                                 }

@@ -9,21 +9,43 @@
 
 @layer base {
 :root {
-  /* Premium SaaS Dark Mode */
-  --background: 0 0% 0%;
-  --foreground: 0 0% 98%;
-  --muted: 0 0% 15%;
-  --muted-foreground: 0 0% 60%;
-  --border: 0 0% 15%;
-  --radius: 1rem;
+  /* Indigo accent, warm neutral dark */
+  --background: 0 0% 11%;            /* #1C1C1C */
+  --foreground: 0 0% 93%;            /* #EDEDED */
+  --card: 0 0% 14%;                  /* #242424 */
+  --card-foreground: 0 0% 93%;
+  --muted: 0 0% 16%;                 /* #2A2A2A */
+  --muted-foreground: 0 0% 62%;      /* ~#9E9E9E */
+  --border: 0 0% 100% / 0.07;       /* rgba(255,255,255,0.07) */
+  --input: 0 0% 12%;
+  --primary: 239 84% 67%;            /* #6366F1 indigo */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 93%;
+  --accent: 239 84% 67%;             /* #6366F1 indigo */
+  --accent-foreground: 0 0% 100%;
+  --radius: 0.5rem;
+  --destructive: 0 84% 70%;          /* #F87171 */
+  --destructive-foreground: 0 0% 100%;
 }
 
 [data-theme="light"] {
-  --background: 210 40% 96%;
-  --foreground: 222 47% 11%;
-  --muted: 210 40% 93%;
-  --muted-foreground: 215 16% 47%;
-  --border: 214 32% 88%;
+  --background: 0 0% 94.5%;          /* #F1F1F2 */
+  --foreground: 0 0% 4%;             /* #0A0A0A */
+  --card: 0 0% 100%;                 /* #FFFFFF */
+  --card-foreground: 0 0% 4%;
+  --muted: 0 0% 92%;                 /* #EBEBEC */
+  --muted-foreground: 0 0% 32%;      /* #525252 */
+  --border: 0 0% 0% / 0.11;         /* rgba(10,10,10,0.11) */
+  --input: 0 0% 100%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 4%;
+  --accent: 239 84% 67%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;          /* #DC2626 */
+  --destructive-foreground: 0 0% 100%;
 }
 
 body {
@@ -34,22 +56,23 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-}
+  letter-spacing: -0.006em;
 }
 
-@layer utilities {
-  .liquid-glass {
-    background: rgba(255, 255, 255, 0.02);
-    background-blend-mode: luminosity;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
-    position: relative;
-    overflow: hidden;
-  }
+h1 {
+  letter-spacing: -0.028em;
+  font-weight: 600;
+}
+h2, h3 {
+  letter-spacing: -0.02em;
+}
+h4 {
+  letter-spacing: -0.015em;
+}
 }
 
 #root {

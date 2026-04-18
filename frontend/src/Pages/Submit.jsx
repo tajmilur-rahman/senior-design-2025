@@ -6,6 +6,7 @@ import {
   Cpu, CheckCircle, Send, Trash2, X,
   FolderTree, Database, RefreshCw, ArrowRight, Info,
   Globe, Building2, Zap, Lock, ChevronDown,
+  BrainCircuit, ClipboardCheck, Archive,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
@@ -88,9 +89,9 @@ function SubmitSelect({ value, onChange, options, placeholder, disabled = false,
         aria-label={ariaLabel || placeholder}
         onClick={() => { if (!disabled) setOpen(o => !o); }}
         onKeyDown={onKeyDown}
-        className={`sf-select-trigger h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/40
+        className={`sf-select-trigger h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30
           ${open
-            ? 'sf-select-trigger--open border-blue-500/50 bg-white/10 text-white'
+            ? 'sf-select-trigger--open border-indigo-500/40 bg-white/[0.08] text-white'
             : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'
           }`}
       >
@@ -103,7 +104,7 @@ function SubmitSelect({ value, onChange, options, placeholder, disabled = false,
           role="listbox"
           ref={listRef}
           aria-label={ariaLabel || placeholder}
-          className="sf-select-panel absolute z-[9999] w-full mt-1.5 bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5"
+          className="sf-select-panel absolute z-[9999] w-full mt-1.5 border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5" style={{ background: 'var(--card-bg)' }}
         >
           <div className="max-h-52 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
@@ -118,7 +119,7 @@ function SubmitSelect({ value, onChange, options, placeholder, disabled = false,
                   onMouseEnter={() => setActiveIdx(i)}
                   className={`sf-select-option px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl
                     ${isSelected
-                      ? 'sf-select-option--active bg-blue-500/20 text-blue-400'
+                      ? 'sf-select-option--active bg-indigo-500/15 text-indigo-400'
                       : isActive
                         ? 'bg-white/10 text-white'
                         : 'text-white/60 hover:bg-white/10 hover:text-white'
@@ -149,85 +150,46 @@ function Toast({ msg, onClose }) {
 
 const PIPELINE_STEPS = [
   { label: 'Submitted',   sub: 'Bug logged',          color: '#6366f1' },
-  { label: 'NEW',         sub: 'Awaiting triage',     color: '#3b82f6' },
+  { label: 'NEW',         sub: 'Awaiting triage',     color: '#6366f1' },
   { label: 'UNCONFIRMED', sub: 'Needs reproduction',  color: '#f59e0b' },
   { label: 'CONFIRMED',   sub: 'Verified & assigned', color: '#10b981' },
   { label: 'RESOLVED',    sub: 'Fix implemented',     color: '#10b981' },
   { label: 'VERIFIED',    sub: 'QA sign-off',         color: '#6366f1' },
 ];
 
-function PipelineStrip() {
-  return (
-    <div className="mb-8 p-6 lg:p-8 bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md">
-      <div className="flex items-center gap-2 mb-2">
-        <Info size={18} className="text-blue-400" />
-        <span className="text-base font-bold text-white uppercase tracking-widest">Bug Lifecycle</span>
-      </div>
-      <p className="text-base text-white/50 mb-8">Every bug moves through six stages — from first report to QA sign-off.</p>
-          <div className="flex items-start justify-between gap-2 overflow-x-auto pb-4 custom-scrollbar">
-        {PIPELINE_STEPS.map((step, i) => (
-              <div key={step.label} className="flex items-center flex-shrink-0 group cursor-default">
-                <div className="flex flex-col items-center w-28 lg:w-32 transition-transform duration-300 group-hover:-translate-y-1">
-                  <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl flex items-center justify-center mb-4 border bg-black/40 transition-all duration-300 group-hover:shadow-lg" style={{ borderColor: `${step.color}50`, color: step.color, boxShadow: `inset 0 0 12px ${step.color}20` }}>
-                    <span className="text-lg lg:text-xl font-bold">{i + 1}</span>
-              </div>
-              <span className="text-sm font-bold text-white text-center uppercase tracking-wider leading-tight">{step.label}</span>
-              <span className="text-xs text-white/50 text-center mt-1.5 leading-snug">{step.sub}</span>
-            </div>
-            {i < PIPELINE_STEPS.length - 1 && (
-                  <ArrowRight size={18} className="text-white/20 mx-1 lg:mx-3 flex-shrink-0 mb-11 transition-colors group-hover:text-white/40" />
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const SEVERITY_QUICK = {
-  S1: { tone: 'red',    pill: 'border-red-500/30 bg-red-500/5 text-red-400',       dotShadow: '0 0 12px rgba(239,68,68,0.4)',  hex: '#ef4444', summary: 'Crash or data loss. Fix immediately.' },
-  S2: { tone: 'amber',  pill: 'border-amber-500/30 bg-amber-500/5 text-amber-400', dotShadow: '0 0 12px rgba(245,158,11,0.4)', hex: '#f59e0b', summary: 'Major feature broken. Fix this sprint.' },
-  S3: { tone: 'blue',   pill: 'border-blue-500/30 bg-blue-500/5 text-blue-400',    dotShadow: '0 0 12px rgba(59,130,246,0.4)', hex: '#3b82f6', summary: 'Works but unexpected. Schedule next sprint.' },
-  S4: { tone: 'slate',  pill: 'border-white/15 bg-white/5 text-white/60',           dotShadow: '0 0 12px rgba(148,163,184,0.2)', hex: '#94a3b8', summary: 'Cosmetic or minor. Add to backlog.' },
+  S1: { tone: 'red',    pill: 'border-red-500/30 bg-red-500/5 text-red-400',       dotShadow: '0 0 12px rgba(239,68,68,0.4)',  hex: '#ef4444', summary: 'Crash or data loss. Fix immediately.',      sla: '4h SLA',  icon: 'error' },
+  S2: { tone: 'amber',  pill: 'border-amber-500/30 bg-amber-500/5 text-amber-400', dotShadow: '0 0 12px rgba(245,158,11,0.4)', hex: '#f59e0b', summary: 'Major feature broken. Fix this sprint.',     sla: '24h SLA', icon: 'warning' },
+  S3: { tone: 'blue',   pill: 'border-blue-500/30 bg-indigo-500/5 text-indigo-400',    dotShadow: '0 0 12px rgba(99,102,241,0.4)', hex: '#6366f1', summary: 'Works but unexpected. Schedule next sprint.', sla: '7d SLA',  icon: 'report' },
+  S4: { tone: 'slate',  pill: 'border-white/15 bg-white/5 text-white/60',           dotShadow: '0 0 12px rgba(148,163,184,0.2)', hex: '#94a3b8', summary: 'Cosmetic or minor. Add to backlog.',         sla: '30d SLA', icon: 'info' },
 };
-
-function SeverityQuickRef() {
-  return (
-    <div className="mb-8 p-6 lg:p-8 bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
-        <div>
-          <div className="text-base font-bold text-white uppercase tracking-widest mb-2">Severity at a glance</div>
-          <p className="text-sm text-white/50">How serious is the bug? Pick one — the AI predicts, you confirm.</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        {SEVERITY_DEFS.map(def => {
-          const q = SEVERITY_QUICK[def.code];
-          return (
-            <div key={def.code} className={`group p-6 rounded-2xl border ${q.pill} flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:bg-opacity-20 cursor-default`}>
-              <div className="flex items-center gap-3">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-transform duration-300 group-hover:scale-125" style={{ background: q.hex, boxShadow: q.dotShadow }} />
-                <span className="font-bold text-lg font-mono">{def.code}</span>
-                <span className="font-bold text-base text-white">{def.label}</span>
-              </div>
-              <p className="text-sm text-white/70 leading-relaxed group-hover:text-white/90 transition-colors">{q.summary}</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function SevBadge({ sev }) {
   const badgeStyle = {
     S1: 'text-red-400 bg-red-500/10 border-red-500/20',
     S2: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-    S3: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    S3: 'text-indigo-400 bg-indigo-500/10 border-blue-500/20',
     S4: 'text-white/50 bg-white/5 border-white/10'
   }[sev] || 'text-white/50 bg-white/5 border-white/10';
   return (
-    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border font-mono whitespace-nowrap ${badgeStyle}`}>
+    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-widest border font-mono whitespace-nowrap ${badgeStyle}`}>
+      {sev || '—'}
+    </span>
+  );
+}
+
+/* Severity badge for the recent bugs table — pill style matching Stitch layout */
+function SevPillBadge({ sev }) {
+  const styles = {
+    S1: { pill: 'text-red-400 bg-red-500/10 border-red-500/20',   dot: '#ef4444' },
+    S2: { pill: 'text-amber-400 bg-amber-500/10 border-amber-500/20', dot: '#f59e0b' },
+    S3: { pill: 'text-indigo-400 bg-indigo-500/10 border-blue-500/20',  dot: '#6366f1' },
+    S4: { pill: 'text-white/50 bg-white/5 border-white/10',         dot: '#94a3b8' },
+  }[sev] || { pill: 'text-white/50 bg-white/5 border-white/10', dot: '#94a3b8' };
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${styles.pill}`}>
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: styles.dot }} />
       {sev || '—'}
     </span>
   );
@@ -266,11 +228,8 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const switchMode = (newMode) => {
     setMode(newMode);
     setMsg({ text: '', type: '' });
-    // Reset manual form fields
     setTeam(''); setCategory(''); setComponent(''); setSummary(''); setSeverity('S3');
-    // Reset bulk fields
     setFile(null);
-    // Reset analysis fields
     setAnalyzeResult(null); setAnalyzing(false);
   };
 
@@ -439,48 +398,90 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
   const selectedSevDef = SEVERITY_DEFS.find(d => d.code === severity);
 
+  const PIPELINE = [
+    { icon: <PenTool size={16} />, step: 'Describe the bug', detail: 'Title, component, and a clear reproduction path' },
+    { icon: <BrainCircuit size={16} />, step: 'AI classifies', detail: 'Model predicts severity in under a second' },
+    { icon: <ClipboardCheck size={16} />, step: 'Review & confirm', detail: 'Accept the result or correct it to retrain' },
+    { icon: <Archive size={16} />, step: 'Logged to backlog', detail: "Tracked in your team's live database" },
+  ];
+
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
+    <div
+      className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10"
+      style={{ background: 'var(--bg)' }}
+    >
       <Toast msg={msg} onClose={() => setMsg({ text: '', type: '' })} />
       {showGlossary && <GlossaryDrawer onClose={() => setShowGlossary(false)} />}
 
-      {/* Header matching Liquid Glass aesthetic */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400 w-max mb-4">
-            <Cpu size={12} className="text-blue-500" />
-            <span className="text-[10px] font-bold tracking-widest uppercase">Severity Analysis</span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Submit <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">issue</span>
+      {/* ── Page Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-[1.75rem] font-semibold text-white tracking-tight mb-1">
+            Submit <span style={{ color: 'var(--accent)' }}>issue</span>
           </h1>
-          <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
-            Log a new anomaly manually for AI severity prediction, or bulk import a batch of bugs into your company database.
+          <p className="text-white/50 text-sm">
+            Describe the bug and get instant AI severity classification.
           </p>
         </div>
-        <div className="relative z-10">
-           <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Severity & Status Guide" />
-        </div>
-        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-blue-500/20 via-white/5 to-transparent" />
+        <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Severity & Status Guide" />
       </div>
 
-      <PipelineStrip />
-      <SeverityQuickRef />
+      {/* ── Bug lifecycle pipeline ───────────────────────────────────────────── */}
+      <div className="flex items-stretch mb-8 overflow-x-auto rounded-xl border border-white/[0.07]" style={{ background: 'var(--card-bg)' }}>
+        {PIPELINE.map((s, i) => (
+          <div key={s.step} className="flex items-center flex-1 min-w-[160px]">
+            <div className="flex items-start gap-3.5 px-6 py-4 flex-1">
+              <div className="mt-0.5 text-white/30 flex-shrink-0">{s.icon}</div>
+              <div>
+                <div className="text-[15px] font-semibold text-white leading-snug">{s.step}</div>
+                <div className="text-[13px] text-white/40 leading-snug mt-0.5">{s.detail}</div>
+              </div>
+            </div>
+            {i < PIPELINE.length - 1 && (
+              <div className="w-px self-stretch bg-white/[0.06] flex-shrink-0" />
+            )}
+          </div>
+        ))}
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-start mt-8">
+      {/* ── Main Two-Column Grid ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-        {/* Left Column: Bug Report Form */}
-        <div className="sf-triage-card lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl overflow-visible flex flex-col relative">
-          <div className="sf-triage-accent absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50 rounded-t-[2rem]" />
-          <div className="sf-triage-header p-6 lg:p-8 border-b border-white/5 bg-white/[0.03] flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-t-[2rem]">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-widest"><Cpu size={16} className="text-blue-400" /> Triage Entry</h2>
+        {/* ── LEFT col-span-8: Triage Form Card ───────────────────────────────── */}
+        <motion.div
+          className="lg:col-span-8 border border-white/10 rounded-2xl overflow-visible flex flex-col"
+          style={{ background: 'var(--card-bg)' }}
+          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 16 }}
+          viewport={{ once: true, amount: 0.1 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+        >
+          {/* Card header with mode toggle */}
+          <div
+            className="p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-t-2xl"
+            style={{ background: 'var(--bg-elevated)' }}
+          >
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2 uppercase tracking-widest">
+              <Cpu size={16} style={{ color: 'var(--accent)' }} />
+              Issue Details
+            </h2>
             <div className="flex items-center bg-white/5 p-1 rounded-xl border border-white/10">
-              <button className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${mode === 'manual' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white hover:bg-white/5'}`} onClick={() => switchMode('manual')}><PenTool size={14} /> Manual</button>
-              <button className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${mode === 'bulk' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white hover:bg-white/5'}`} onClick={() => switchMode('bulk')}><UploadCloud size={14} /> Bulk import</button>
+              <button
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${mode === 'manual' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                onClick={() => switchMode('manual')}
+              >
+                <PenTool size={14} /> Manual
+              </button>
+              <button
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${mode === 'bulk' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                onClick={() => switchMode('bulk')}
+              >
+                <UploadCloud size={14} /> Bulk Import
+              </button>
             </div>
           </div>
 
-          <div className="p-6 lg:p-8 flex-1 overflow-hidden">
+          <div className="p-6 lg:p-8 flex-1">
             <AnimatePresence mode="wait">
               {mode === 'manual' ? (
                 <motion.div
@@ -490,169 +491,226 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                 >
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FolderTree size={14} className="text-blue-400" />
+                  {/* Component selects: Team / Category / Component stacked */}
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FolderTree size={14} style={{ color: 'var(--accent)' }} />
                       <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Component</span>
-                      <span className="text-[10px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Team</label>
-                      <SubmitSelect
-                        value={team}
-                        onChange={handleTeamChange}
-                        placeholder="Select a team…"
-                        options={teams.map(t => ({ value: t, label: t }))}
-                      />
+                      <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Category</label>
-                      <SubmitSelect
-                        value={category}
-                        onChange={handleCategoryChange}
-                        placeholder={team ? 'Select a category…' : 'Select a team first'}
-                        options={categories.map(c => ({ value: c, label: c }))}
-                        disabled={!team}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Team</label>
+                        <SubmitSelect
+                          value={team}
+                          onChange={handleTeamChange}
+                          placeholder="Select a team…"
+                          options={teams.map(t => ({ value: t, label: t }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Category</label>
+                        <SubmitSelect
+                          value={category}
+                          onChange={handleCategoryChange}
+                          placeholder={team ? 'Select a category…' : 'Select a team first'}
+                          options={categories.map(c => ({ value: c, label: c }))}
+                          disabled={!team}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Component</label>
+                        <SubmitSelect
+                          value={component}
+                          onChange={v => setComponent(v)}
+                          placeholder={category ? 'Select a component…' : 'Select a category first'}
+                          options={components.map(c => ({ value: c, label: c }))}
+                          disabled={!category}
+                        />
+                      </div>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Component</label>
-                      <SubmitSelect
-                        value={component}
-                        onChange={v => setComponent(v)}
-                        placeholder={category ? 'Select a component…' : 'Select a category first'}
-                        options={components.map(c => ({ value: c, label: c }))}
-                        disabled={!category}
-                      />
-                    </div>
                   </div>
-                </div>
 
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Summary</span>
-                    <span className="text-[10px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
-                    <span className="ml-auto text-[10px] font-bold text-white/30 uppercase tracking-widest">Demo samples →</span>
-                  </div>
-                  {/* Quick sample bug chips for demo purposes */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {[
-                      'Database connection timeout causing complete system crash',
-                      'Severe memory leak in the login component causes UI to freeze',
-                      'API exception thrown when authentication fails',
-                      'Security vulnerability allows unauthorized database access',
-                    ].map(s => (
-                      <button key={s} type="button" onClick={() => setSummary(s)}
-                        className="text-xs px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/50 hover:text-white rounded-lg transition-all font-medium truncate max-w-[280px]">
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm min-h-[120px] resize-y"
-                    placeholder="Describe the bug — what happened, what was expected, and how to reproduce it."
-                    value={summary} onChange={e => setSummary(e.target.value)} />
-                </div>
-
-                <div className="mb-8">
-                  <div className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">Severity Selection</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {SEVERITY_DEFS.map(def => {
-                      const isSelected = severity === def.code;
-                      const activeColors = {
-                        S1: 'border-red-500/50 bg-red-500/10 text-red-400',
-                        S2: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
-                        S3: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
-                        S4: 'border-white/30 bg-white/10 text-white'
-                      }[def.code];
-                      
-                      return (
-                        <button key={def.code} onClick={() => setSeverity(def.code)} 
-                          className={`p-4 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 ${isSelected ? activeColors : 'border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}>
-                          <div className={`text-base font-bold font-mono ${isSelected ? '' : 'text-white/60'}`}>{def.code}</div>
-                          <div className="text-xs font-bold uppercase tracking-widest">{def.label}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {selectedSevDef && (
-                    <p className="text-sm text-white/70 mt-4 leading-relaxed p-4 bg-white/5 rounded-xl border-l-2 border-white/20">
-                      {selectedSevDef.desc}
-                    </p>
-                  )}
-                </div>
-
-                {isSuperAdmin && (
+                  {/* Description textarea */}
                   <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3">
-                      <Building2 size={14} className="text-amber-500" />
-                      <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Company</span>
-                      <span className="text-[10px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                      <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Describe the Issue</label>
+                      <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                      <span className="ml-auto text-[11px] font-bold text-white/30 uppercase tracking-widest">Demo samples →</span>
                     </div>
-                    <SubmitSelect
-                      value={selectedCompanyId}
-                      onChange={v => setSelectedCompanyId(v)}
-                      placeholder="Select a company…"
-                      options={companies.map(c => ({ value: c.id, label: c.name }))}
+                    {/* Quick sample chips */}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {[
+                        'Database connection timeout causing complete system crash',
+                        'Severe memory leak in the login component causes UI to freeze',
+                        'API exception thrown when authentication fails',
+                        'Security vulnerability allows unauthorized database access',
+                      ].map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSummary(s)}
+                          className="text-xs px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/50 hover:text-white rounded-lg transition-all font-medium truncate max-w-[280px]"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none transition-all text-sm min-h-[120px] resize-y font-mono"
+                      style={{ '--tw-ring-color': 'var(--accent)' }}
+                      placeholder="Expected behavior vs actual behavior… Stack traces…"
+                      value={summary}
+                      onChange={e => setSummary(e.target.value)}
+                      onFocus={e => { e.target.style.borderColor = 'var(--accent)40'; }}
+                      onBlur={e => { e.target.style.borderColor = ''; }}
                     />
                   </div>
-                )}
 
-                <div className="mb-8 p-6 bg-white/[0.03] rounded-2xl border border-white/10">
-                  <div className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap size={14} /> AI Severity Analysis</div>
-                  <div className={`flex flex-col sm:flex-row gap-3 ${analyzeResult ? 'mb-4' : ''}`}>
-                    <button onClick={() => handleAnalyze('universal')} disabled={analyzing || !summary}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-                      <Globe size={14} /> Universal Model
-                    </button>
-                    <button onClick={() => hasOwnModel && handleAnalyze('company')} disabled={analyzing || !summary || !hasOwnModel}
-                      title={!hasOwnModel ? 'Train your company model first via the Retrain button' : undefined}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${hasOwnModel ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500' : 'bg-transparent border-white/10 text-white/40 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
-                      {hasOwnModel ? <Zap size={14} /> : <Lock size={14} />} Company Model
-                    </button>
+                  {/* Severity selection */}
+                  <div className="mb-6">
+                    <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-4">Severity Selection</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {SEVERITY_DEFS.map(def => {
+                        const isSelected = severity === def.code;
+                        const activeColors = {
+                          S1: 'border-red-500/50 bg-red-500/10 text-red-400',
+                          S2: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
+                          S3: 'border-blue-500/50 bg-indigo-500/10 text-indigo-400',
+                          S4: 'border-white/30 bg-white/10 text-white'
+                        }[def.code];
+                        return (
+                          <button
+                            key={def.code}
+                            onClick={() => setSeverity(def.code)}
+                            className={`p-4 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 ${isSelected ? activeColors : 'border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
+                          >
+                            <div className={`text-base font-bold font-mono ${isSelected ? '' : 'text-white/60'}`}>{def.code}</div>
+                            <div className="text-xs font-bold uppercase tracking-widest">{def.label}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedSevDef && (
+                      <p className="text-sm text-white/70 mt-4 leading-relaxed p-4 bg-white/5 rounded-xl border-l-2 border-white/20">
+                        {selectedSevDef.desc}
+                      </p>
+                    )}
                   </div>
-                  {analyzeResult && (
-                    <div className="animate-in fade-in duration-300 p-5 bg-black/40 rounded-xl border border-white/10 text-sm shadow-inner mt-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <SevBadge sev={analyzeResult.prediction} />
-                        <span className="font-bold text-white">{Math.round((analyzeResult.confidence || 0) * 100)}% confidence</span>
-                        <span className="ml-auto text-xs font-bold text-white/40 uppercase tracking-widest">
-                          via {analyzeResult.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}
-                          {analyzeResult.fallback ? ' (fallback)' : ''}
-                        </span>
+
+                  {/* Super admin company picker */}
+                  {isSuperAdmin && (
+                    <div className="mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Building2 size={14} className="text-amber-500" />
+                        <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Company</span>
+                        <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
                       </div>
-                      {analyzeResult.keywords?.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-white/10">
-                          <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">
-                            Key Predictive Features
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                          {analyzeResult.keywords.map(k => (
-                              <span key={k} className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 uppercase tracking-widest">{k}</span>
-                          ))}
-                          </div>
-                        </div>
-                      )}
+                      <SubmitSelect
+                        value={selectedCompanyId}
+                        onChange={v => setSelectedCompanyId(v)}
+                        placeholder="Select a company…"
+                        options={companies.map(c => ({ value: c.id, label: c.name }))}
+                      />
                     </div>
                   )}
-                </div>
 
-                <label className="flex items-start gap-3 mb-6 cursor-pointer group">
-                  <input type="checkbox" checked={consentGlobal} onChange={e => setConsentGlobal(e.target.checked)} className="mt-1 w-4 h-4 rounded border-white/20 text-blue-500 focus:ring-blue-500/50 bg-black/50 cursor-pointer" />
-                  <div>
-                    <span className="text-xs text-white/60 font-semibold group-hover:text-white/90 transition-colors">
-                      Contribute to the <strong className="text-white">Universal Model</strong>
-                    </span>
-                    <p className="text-xs text-white/40 mt-0.5 leading-relaxed">
-                      When checked, this bug report is anonymously added to the shared training dataset — improving severity predictions across all companies. Uncheck to keep it private to your company only.
-                    </p>
-                  </div>
-                </label>
+                  {/* Analyze button — green solid, full-width */}
+                  <button
+                    onClick={() => handleAnalyze('universal')}
+                    disabled={analyzing || !summary}
+                    className="w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 mb-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                    style={{ background: 'var(--accent)', color: '#003822' }}
+                  >
+                    {analyzing
+                      ? <><RefreshCw size={16} className="animate-spin" /> Analyzing…</>
+                      : <><Zap size={16} /> Analyze Issue</>
+                    }
+                  </button>
 
-                <button onClick={handleManualSubmit} disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}
-                  className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
-                  {loading ? <><RefreshCw size={16} className="animate-spin" /> Submitting…</> : <><Send size={16} /> Submit bug</>}
-                </button>
+                  {/* Company model button (secondary) */}
+                  <button
+                    onClick={() => hasOwnModel && handleAnalyze('company')}
+                    disabled={analyzing || !summary || !hasOwnModel}
+                    title={!hasOwnModel ? 'Train your company model first via the Retrain button' : undefined}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border mb-6 ${hasOwnModel ? 'border-white/20 text-white/70 hover:bg-white/5 hover:text-white' : 'border-white/10 text-white/30 disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                    style={{ background: 'transparent' }}
+                  >
+                    {hasOwnModel ? <Zap size={13} /> : <Lock size={13} />}
+                    Company Model
+                  </button>
+
+                  {/* AI analysis result panel */}
+                  <AnimatePresence>
+                    {analyzeResult && (
+                      <motion.div
+                        key="analyze-result"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.25 }}
+                        className="mb-6 p-5 rounded-xl border border-white/10 text-sm relative overflow-hidden"
+                        style={{ background: 'var(--bg-elevated)' }}
+                      >
+                        <div
+                          className="absolute top-0 left-0 w-1 h-full rounded-l-xl"
+                          style={{ background: 'var(--accent)' }}
+                        />
+                        <div className="flex items-center gap-3 mb-3 pl-2">
+                          <SevBadge sev={analyzeResult.prediction} />
+                          <span className="font-bold text-white">{Math.round((analyzeResult.confidence || 0) * 100)}% confidence</span>
+                          <span className="ml-auto text-xs font-bold text-white/40 uppercase tracking-widest">
+                            via {analyzeResult.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}
+                            {analyzeResult.fallback ? ' (fallback)' : ''}
+                          </span>
+                        </div>
+                        {analyzeResult.keywords?.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-white/10 pl-2">
+                            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">
+                              Key Predictive Features
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {analyzeResult.keywords.map(k => (
+                                <span key={k} className="text-[11px] font-bold px-2 py-1 rounded-md border uppercase tracking-widest" style={{ background: 'var(--accent)10', borderColor: 'var(--accent)30', color: 'var(--accent)' }}>{k}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Consent checkbox */}
+                  <label className="flex items-start gap-3 mb-6 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={consentGlobal}
+                      onChange={e => setConsentGlobal(e.target.checked)}
+                      className="mt-1 w-4 h-4 rounded border-white/20 focus:ring-offset-0 bg-black/50 cursor-pointer"
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    <div>
+                      <span className="text-xs text-white/60 font-semibold group-hover:text-white/90 transition-colors">
+                        Contribute to the <strong className="text-white">Universal Model</strong>
+                      </span>
+                      <p className="text-xs text-white/40 mt-0.5 leading-relaxed">
+                        When checked, this bug report is anonymously added to the shared training dataset — improving severity predictions across all companies. Uncheck to keep it private to your company only.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Submit button */}
+                  <button
+                    onClick={handleManualSubmit}
+                    disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}
+                    className="w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                    style={{ background: 'var(--accent)', color: '#003822' }}
+                  >
+                    {loading
+                      ? <><RefreshCw size={16} className="animate-spin" /> Submitting…</>
+                      : <><Send size={16} /> Submit Bug</>
+                    }
+                  </button>
                 </motion.div>
               ) : (
                 <motion.div
@@ -662,119 +720,234 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                 >
-                <div className={`border-2 border-dashed rounded-[2rem] p-12 text-center mb-8 cursor-pointer transition-all ${file ? 'border-blue-500/50 bg-blue-500/10' : 'border-white/20 hover:border-white/40 hover:bg-white/5'}`}
-                  onClick={() => document.getElementById('file-upload-input').click()}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}>
-                  <UploadCloud size={40} className="mx-auto mb-4 text-blue-400 opacity-80" />
-                  <p className="text-base font-bold text-white mb-2 truncate max-w-xs mx-auto">{file ? file.name : 'Drop a file or click to browse'}</p>
-                  <p className="text-xs text-white/40 font-medium">JSON or CSV · Max 50 MB</p>
-                  <input id="file-upload-input" type="file" accept=".json,.csv" className="hidden" onChange={e => setFile(e.target.files[0])} />
-                </div>
-                <button onClick={handleBulkUpload} disabled={loading || !file}
-                  className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mb-8">
-                  {loading ? <><RefreshCw size={16} className="animate-spin" /> Importing…</> : <><UploadCloud size={16} /> Import Bugs</>}
-                </button>
-                {batches.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Previous batches</div>
-                      <button onClick={handleDeleteAllBatches}
-                        className="text-xs font-bold text-red-400/70 hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1">
-                        <Trash2 size={10} /> Clear all
-                      </button>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      {batches.slice(0, 5).map(b => (
-                        <div key={b.id} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
-                          <FileText size={18} className="text-blue-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white truncate">{b.batch_name || `Batch #${b.id}`}</div>
-                            <div className="text-xs text-white/50 uppercase tracking-widest mt-1">{b.records_processed?.toLocaleString() || '?'} records</div>
+                  <div
+                    className={`border-2 border-dashed rounded-2xl p-12 text-center mb-8 cursor-pointer transition-all ${file ? 'bg-white/5' : 'border-white/20 hover:border-white/40 hover:bg-white/5'}`}
+                    style={file ? { borderColor: 'var(--accent)50', background: 'var(--accent)08' } : {}}
+                    onClick={() => document.getElementById('file-upload-input').click()}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
+                  >
+                    <UploadCloud size={40} className="mx-auto mb-4 opacity-80" style={{ color: 'var(--accent)' }} />
+                    <p className="text-base font-bold text-white mb-2 truncate max-w-xs mx-auto">{file ? file.name : 'Drop a file or click to browse'}</p>
+                    <p className="text-xs text-white/40 font-medium">JSON or CSV · Max 50 MB</p>
+                    <input id="file-upload-input" type="file" accept=".json,.csv" className="hidden" onChange={e => setFile(e.target.files[0])} />
+                  </div>
+                  <button
+                    onClick={handleBulkUpload}
+                    disabled={loading || !file}
+                    className="w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mb-8"
+                    style={{ background: 'var(--accent)', color: '#003822' }}
+                  >
+                    {loading ? <><RefreshCw size={16} className="animate-spin" /> Importing…</> : <><UploadCloud size={16} /> Import Bugs</>}
+                  </button>
+
+                  {batches.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Previous batches</div>
+                        <button
+                          onClick={handleDeleteAllBatches}
+                          className="text-xs font-bold text-red-400/70 hover:text-red-400 uppercase tracking-widest transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 size={10} /> Clear all
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {batches.slice(0, 5).map(b => (
+                          <div key={b.id} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+                            <FileText size={18} className="text-white/50 flex-shrink-0" style={{ color: 'var(--accent)' }} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-bold text-white truncate">{b.batch_name || `Batch #${b.id}`}</div>
+                              <div className="text-xs text-white/50 uppercase tracking-widest mt-1">{b.records_processed?.toLocaleString() || '?'} records</div>
+                            </div>
+                            <button onClick={() => handleDeleteBatch(b.id)} className="p-2.5 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
+                              <Trash2 size={16} />
+                            </button>
                           </div>
-                          <button onClick={() => handleDeleteBatch(b.id)} className="p-2.5 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
-                            <Trash2 size={16} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Danger zone */}
+                  <div className="mt-6 pt-6 border-t border-white/5">
+                    <div className="text-xs font-bold text-white/30 uppercase tracking-widest mb-3">Danger zone</div>
+                    {confirmingReset ? (
+                      <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
+                        <p className="text-xs text-white/70 mb-4 leading-relaxed">
+                          This will permanently delete all bulk-imported bugs for your company. The Firefox baseline dataset will not be affected.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleResetTable}
+                            disabled={resetting}
+                            className="flex-1 py-2 bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs rounded-xl hover:bg-red-500/30 transition-all disabled:opacity-50"
+                          >
+                            {resetting ? 'Resetting…' : 'Yes, delete imported bugs'}
+                          </button>
+                          <button
+                            onClick={() => setConfirmingReset(false)}
+                            className="flex-1 py-2 bg-white/5 border border-white/10 text-white/50 font-bold text-xs rounded-xl hover:bg-white/10 transition-all"
+                          >
+                            Cancel
                           </button>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmingReset(true)}
+                        disabled={resetting}
+                        className="w-full flex items-center gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl hover:bg-red-500/10 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/20 transition-colors">
+                          {resetting ? <RefreshCw size={15} className="text-red-400 animate-spin" /> : <Trash2 size={15} className="text-red-400" />}
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-bold text-red-400">{resetting ? 'Resetting…' : 'Reset to Original Database'}</div>
+                          <div className="text-xs text-white/40 mt-0.5">Removes all bulk-imported bugs — Firefox baseline data stays intact</div>
+                        </div>
+                      </button>
+                    )}
                   </div>
-                )}
-
-                {/* Reset database to original seeded state */}
-                <div className="mt-6 pt-6 border-t border-white/5">
-                  <div className="text-xs font-bold text-white/30 uppercase tracking-widest mb-3">Danger zone</div>
-                  {confirmingReset ? (
-                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
-                      <p className="text-xs text-white/70 mb-4 leading-relaxed">
-                        This will permanently delete all bulk-imported bugs for your company. The Firefox baseline dataset will not be affected.
-                      </p>
-                      <div className="flex gap-2">
-                        <button onClick={handleResetTable} disabled={resetting}
-                          className="flex-1 py-2 bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs rounded-xl hover:bg-red-500/30 transition-all disabled:opacity-50">
-                          {resetting ? 'Resetting…' : 'Yes, delete imported bugs'}
-                        </button>
-                        <button onClick={() => setConfirmingReset(false)}
-                          className="flex-1 py-2 bg-white/5 border border-white/10 text-white/50 font-bold text-xs rounded-xl hover:bg-white/10 transition-all">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button onClick={() => setConfirmingReset(true)} disabled={resetting}
-                      className="w-full flex items-center gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl hover:bg-red-500/10 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
-                      <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/20 transition-colors">
-                        {resetting ? <RefreshCw size={15} className="text-red-400 animate-spin" /> : <Trash2 size={15} className="text-red-400" />}
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-bold text-red-400">{resetting ? 'Resetting…' : 'Reset to Original Database'}</div>
-                        <div className="text-xs text-white/40 mt-0.5">Removes all bulk-imported bugs — Firefox baseline data stays intact</div>
-                      </div>
-                    </button>
-                  )}
-                </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Right Column: Recent Bugs & Guide */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
-          
-          <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl backdrop-blur-md overflow-hidden flex flex-col min-h-[400px] max-h-[500px]">
-            <div className="p-6 border-b border-white/10 bg-black/20 flex justify-between items-center">
-              <h2 className="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-widest">
-                <Database size={14} className="text-blue-400" /> Recent bugs
-              </h2>
-              <div className="flex items-center gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" />
-                <button onClick={() => fetchBugs()} className="p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
-                  <RefreshCw size={14} className={refreshingBugs ? 'animate-spin' : ''} />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-              {bugs.length === 0 ? (
-                <div className="p-10 text-center text-white/40 text-sm font-medium">No bugs yet — submit your first one.</div>
-              ) : bugs.slice(0, 30).map(b => (
-                <div key={b.id} className={`flex items-center gap-3 p-3 rounded-2xl mx-2 my-1 transition-all border border-transparent ${b._isNew ? 'border-blue-500/30 bg-blue-500/10' : 'hover:border-white/10 hover:bg-white/5'}`}>
-                  <SevBadge sev={b.severity} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-white truncate">{b.summary}</div>
-                    <div className="text-xs text-white/50 mt-1 uppercase tracking-widest">{b.component || 'General'} · {b.status || 'NEW'}</div>
+        {/* ── RIGHT col-span-4: Severity Quick Reference ──────────────────────── */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <motion.div
+            className="border border-white/10 rounded-2xl p-6"
+            style={{ background: 'var(--card-bg)' }}
+            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 16 }}
+            viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.4, ease: 'easeOut', delay: 0.1 }}
+          >
+            <h2 className="text-sm font-semibold text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Info size={16} className="text-white/40" />
+              Severity Quick Reference
+            </h2>
+            <div className="space-y-3">
+              {SEVERITY_DEFS.map(def => {
+                const q = SEVERITY_QUICK[def.code];
+                return (
+                  <div
+                    key={def.code}
+                    className="flex items-center gap-4 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors cursor-default"
+                    style={{ background: 'var(--bg-elevated)' }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 border"
+                      style={{ background: `${q.hex}18`, borderColor: `${q.hex}30`, color: q.hex }}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ background: q.hex, boxShadow: q.dotShadow }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className="text-sm font-bold text-white">{def.code} {def.label}</span>
+                        <span
+                          className="text-[11px] font-mono px-1.5 py-0.5 rounded border ml-2 flex-shrink-0"
+                          style={{ color: q.hex, borderColor: `${q.hex}30` }}
+                        >
+                          {q.sla}
+                        </span>
+                      </div>
+                      <p className="text-xs text-white/50 truncate">{q.summary}</p>
+                    </div>
                   </div>
-                  <button onClick={() => handleDeleteBug(b.id)} className="p-1.5 text-white/40 hover:text-red-400 opacity-50 hover:opacity-100 transition-opacity">
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
+          </motion.div>
+        </div>
+      </div>
 
+      {/* ── Below-the-fold: Recent Bugs panel (full width under left column) ──── */}
+      <motion.div
+        className="mt-8 border border-white/10 rounded-2xl overflow-hidden"
+        style={{ background: 'var(--card-bg)' }}
+        whileInView={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 16 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.4, ease: 'easeOut', delay: 0.15 }}
+      >
+        {/* Panel header */}
+        <div
+          className="p-5 border-b border-white/5 flex items-center justify-between"
+          style={{ background: 'var(--bg-elevated)' }}
+        >
+          <h2 className="text-sm font-semibold text-white flex items-center gap-2 uppercase tracking-widest">
+            <Database size={15} className="text-white/40" />
+            Recent Bugs
+          </h2>
+          <div className="flex items-center gap-3">
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)80' }} />
+            <button
+              onClick={() => fetchBugs()}
+              className="p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+            >
+              <RefreshCw size={14} className={refreshingBugs ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </div>
 
-      </div>
+        {/* Table */}
+        <div className="overflow-x-auto">
+          {bugs.length === 0 ? (
+            <div className="p-12 text-center text-white/40 text-sm font-medium">
+              No bugs yet — submit your first one.
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium pl-6">Severity</th>
+                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium">Summary</th>
+                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium hidden sm:table-cell">Component</th>
+                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium text-right pr-6 hidden md:table-cell">Status</th>
+                  <th className="pb-3 pt-4 pr-4"></th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {bugs.slice(0, 30).map(b => (
+                  <tr
+                    key={b.id}
+                    className={`border-b border-white/[0.03] transition-colors group ${b._isNew ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'}`}
+                  >
+                    <td className="py-3 pl-6">
+                      <SevPillBadge sev={b.severity} />
+                    </td>
+                    <td className="py-3 pr-4 max-w-xs">
+                      <span className={`text-sm font-medium truncate block ${b._isNew ? 'text-white' : 'text-white/80'}`}>
+                        {b.summary}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 hidden sm:table-cell">
+                      <span className="text-xs text-white/50 font-mono">{b.component || 'General'}</span>
+                    </td>
+                    <td className="py-3 pr-6 text-right hidden md:table-cell">
+                      <span className="text-[11px] text-white/40 uppercase tracking-widest font-mono">{b.status || 'NEW'}</span>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <button
+                        onClick={() => handleDeleteBug(b.id)}
+                        className="p-1.5 text-white/30 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-red-500/10"
+                      >
+                        <X size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }

@@ -88,17 +88,16 @@ export default function Directory({ onNavigate, user }) {
             <div className="flex items-center gap-2 mb-4">
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
                 <Building2 size={12} className="text-indigo-500" />
-                <span className="text-[10px] font-bold tracking-widest uppercase">Platform Overview</span>
+                <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Platform Overview</span>
               </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-              Companies <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Directory</span>
+            <h1 className="text-[1.75rem] font-semibold tracking-tight mb-3 text-white">
+              Companies <span className="text-indigo-400">Directory</span>
             </h1>
             <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
               All registered tenant companies on the platform, with model and usage status.
             </p>
           </div>
-          <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/20 via-white/5 to-transparent" />
         </div>
 
         {loadingCompanies ? (
@@ -117,7 +116,7 @@ export default function Directory({ onNavigate, user }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
             {companies.map(co => (
-              <div key={co.id} className="group bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-white/[0.04] rounded-[2rem] p-6 lg:p-8 transition-all relative overflow-hidden">
+              <div key={co.id} className="group bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-white/[0.04] rounded-2xl p-6 lg:p-8 transition-all relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
                 <div className="flex items-start justify-between gap-3 mb-4 relative z-10">
@@ -127,7 +126,7 @@ export default function Directory({ onNavigate, user }) {
                     </div>
                     <div className="text-base font-bold text-white truncate">{co.name || `Company ${co.id}`}</div>
                   </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest flex-shrink-0 ${
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest flex-shrink-0 ${
                     co.has_own_model
                       ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                       : 'bg-white/5 border-white/10 text-white/30'
@@ -147,14 +146,14 @@ export default function Directory({ onNavigate, user }) {
                     <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 text-center">
                       <div className="flex items-center justify-center text-white/30 mb-1">{icon}</div>
                       <div className="text-white font-bold text-sm">{typeof val === 'number' ? val.toLocaleString() : val}</div>
-                      <div className="text-white/30 text-[10px] uppercase tracking-widest">{label}</div>
+                      <div className="text-white/30 text-[11px] uppercase tracking-widest">{label}</div>
                     </div>
                   ))}
                 </div>
 
                 <div className="mt-4 flex items-center justify-between relative z-10">
                   {co.status && (
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${
+                    <span className={`text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${
                       co.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
                     }`}>{co.status}</span>
                   )}
@@ -162,17 +161,17 @@ export default function Directory({ onNavigate, user }) {
                   {confirmReset === co.id ? (
                     <div className="flex items-center gap-1.5 ml-auto">
                       <button onClick={() => setConfirmReset(null)}
-                        className="px-2.5 py-1 bg-white/5 border border-white/10 text-white/40 text-[10px] font-bold rounded-lg hover:bg-white/10 transition-all">
+                        className="px-2.5 py-1 bg-white/5 border border-white/10 text-white/40 text-[11px] font-bold rounded-lg hover:bg-white/10 transition-all">
                         No
                       </button>
                       <button onClick={() => handleResetCompany(co.id)} disabled={resettingId === co.id}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded-lg hover:bg-red-500/30 transition-all disabled:opacity-50">
+                        className="flex items-center gap-1 px-2.5 py-1 bg-red-500/20 border border-red-500/30 text-red-400 text-[11px] font-bold rounded-lg hover:bg-red-500/30 transition-all disabled:opacity-50">
                         {resettingId === co.id ? <RefreshCw size={9} className="animate-spin" /> : <Trash2 size={9} />} Reset
                       </button>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmReset(co.id)} disabled={resettingId !== null}
-                      className="ml-auto flex items-center gap-1 px-2.5 py-1 bg-white/[0.03] border border-white/[0.08] text-white/30 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 text-[10px] font-bold rounded-lg transition-all disabled:opacity-30">
+                      className="ml-auto flex items-center gap-1 px-2.5 py-1 bg-white/[0.03] border border-white/[0.08] text-white/30 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 text-[11px] font-bold rounded-lg transition-all disabled:opacity-30">
                       <Trash2 size={9} /> Reset model
                     </button>
                   )}
@@ -193,11 +192,11 @@ export default function Directory({ onNavigate, user }) {
           <div className="flex items-center gap-2 mb-4">
             <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
               <FolderTree size={12} className="text-indigo-500" />
-              <span className="text-[10px] font-bold tracking-widest uppercase">System Taxonomy</span>
+              <span className="text-[11px] font-medium tracking-[0.06em] uppercase">System Taxonomy</span>
             </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Component <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Directory</span>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight mb-3 text-white">
+            Component <span className="text-indigo-400">Directory</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             {showDynamic
@@ -214,7 +213,6 @@ export default function Directory({ onNavigate, user }) {
             </button>
           </div>
         )}
-        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/20 via-white/5 to-transparent" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
@@ -222,14 +220,14 @@ export default function Directory({ onNavigate, user }) {
           dynamicComponents.map((item) => (
             <div
               key={item.name}
-              className="group bg-white/[0.02] border border-white/10 hover:border-indigo-500/40 hover:bg-white/[0.04] rounded-[2rem] p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden"
+              className="group bg-white/[0.02] border border-white/10 hover:border-indigo-500/40 hover:bg-white/[0.04] rounded-2xl p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden"
               onClick={() => onNavigate('submit', '', { component: item.name })}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
               <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                 <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{item.name}</div>
-                <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">{item.count.toLocaleString()} records</div>
+                <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">{item.count.toLocaleString()} records</div>
               </div>
 
               <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10">
@@ -269,14 +267,14 @@ export default function Directory({ onNavigate, user }) {
             return (
               <div
                 key={team}
-                className={`group bg-white/[0.02] border rounded-[2rem] p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden ${isExpanded ? 'border-white/30 bg-white/[0.04] shadow-[0_0_30px_rgba(255,255,255,0.05)]' : 'border-white/10 hover:border-white/20 hover:bg-white/[0.04]'}`}
+                className={`group bg-white/[0.02] border rounded-2xl p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden ${isExpanded ? 'border-white/30 bg-white/[0.04] ' : 'border-white/10 hover:border-white/20 hover:bg-white/[0.04]'}`}
                 onClick={() => setExpandedTeam(isExpanded ? null : team)}
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                 
                 <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                   <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{team}</div>
-                  <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">
+                  <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">
                     {tCount > 0 ? `${tCount.toLocaleString()} records` : `${Object.keys(mozillaTaxonomy[team]).length} categories`}
                   </div>
                 </div>
@@ -295,7 +293,7 @@ export default function Directory({ onNavigate, user }) {
                   <div className="animate-in fade-in slide-in-from-top-4 mt-6 pt-6 border-t border-white/10 relative z-10">
                     {Object.keys(mozillaTaxonomy[team]).map(category => (
                       <div key={category} className="mb-4">
-                        <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <div className="text-[11px] font-bold text-white/30 uppercase tracking-widest mb-3 flex items-center gap-2">
                           <Layers size={12} /> {category}
                         </div>
                         <div className="flex flex-wrap gap-2">

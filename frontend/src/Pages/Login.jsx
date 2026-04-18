@@ -37,16 +37,16 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   return (
     <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
-        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/40 ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
         <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
           <div className="max-h-52 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
-              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
             })}
           </div>
         </div>
@@ -336,12 +336,12 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
       )}
 
       {/* Centered Liquid Glass Card */}
-      <div className="login-card relative z-10 w-full max-w-[480px] p-8 sm:p-12 mx-4 bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.5)] flex flex-col my-12 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div className="login-card relative z-10 w-full max-w-[480px] p-8 sm:p-12 mx-4 bg-black/50 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl flex flex-col my-12 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center gap-3 mb-10 mx-auto">
-          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
-             <ShieldCheck size={22} className="text-black" />
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-bold text-base" style={{ background: 'var(--accent)' }}>
+            S
           </div>
-          <span className="font-bold text-2xl tracking-tight text-white">Spot<span className="text-white/50 font-medium">fixes</span></span>
+          <span className="font-semibold text-xl tracking-tight text-white" style={{ letterSpacing: '-0.02em' }}>Spotfixes</span>
         </div>
 
         {/* ── Invite set-password flow ── */}
@@ -358,7 +358,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
             ) : (
               <>
                 <div className="text-center mb-8">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-widest mb-5">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400 text-[11px] font-bold uppercase tracking-widest mb-5">
                     <ShieldCheck size={12} /> Workspace Invite
                   </div>
                   <h2 className="text-3xl font-bold tracking-tight text-white mb-2">Set your password</h2>
@@ -485,7 +485,7 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
                           }`}>
                           <span className={registerRole === opt.value ? 'text-white' : 'text-white/40'}>{opt.icon}</span>
                           <span className={`text-sm font-bold ${registerRole === opt.value ? 'text-white' : 'text-white/60'}`}>{opt.label}</span>
-                          <span className="text-[10px] text-muted-foreground leading-tight">{opt.sub}</span>
+                          <span className="text-[11px] text-muted-foreground leading-tight">{opt.sub}</span>
                         </button>
                       ))}
                     </div>

@@ -71,7 +71,8 @@ function TrainingBanner({ job, onDismiss, onViewResults }) {
       <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl text-sm font-semibold transition-all
         ${isDone  ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300'
         : isError ? 'bg-red-950/90 border-red-500/30 text-red-300'
-                  : 'bg-[#0d0d1a]/95 border-blue-500/30 text-white'}`}>
+                  : 'border-blue-500/30'}`}
+        style={!isDone && !isError ? { background: 'var(--bg-elevated)', color: 'var(--text-main)' } : {}}>
         {/* Icon */}
         {isDone  ? <CheckCircle size={16} className="text-emerald-400 flex-shrink-0" />
         : isError ? <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
@@ -88,8 +89,8 @@ function TrainingBanner({ job, onDismiss, onViewResults }) {
           </div>
           {!job.done && (
             <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${job.pct}%` }} />
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${job.pct}%`, background: 'var(--accent)' }} />
             </div>
           )}
         </div>
@@ -277,17 +278,16 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   }, [isAdmin, isSystemLevel]);
 
   return (
-    <div className="app-container text-white min-h-screen selection:bg-white/20 font-sans relative overflow-hidden" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-main)' }} data-theme={theme}>
-      {/* Ambient Dashboard Background Glow */}
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/8 via-transparent to-transparent pointer-events-none" />
+    <div className="app-container text-white min-h-screen font-sans relative" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-main)' }} data-theme={theme}>
       
       {/* Vertical sidebar — desktop only, when orientation === 'vertical' */}
       {navOrientation === 'vertical' && (
         <aside
-          className="hidden md:flex fixed top-0 left-0 bottom-0 w-56 z-40 flex-col bg-black/20 backdrop-blur-xl border-r border-white/10"
+          className="hidden md:flex fixed top-0 left-0 bottom-0 w-56 z-40 flex-col backdrop-blur-xl border-r"
+          style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
           aria-label="Primary navigation"
         >
-          <div className="px-5 h-16 flex items-center border-b border-white/10 flex-shrink-0">
+          <div className="px-5 h-16 flex items-center border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
             <button
               onClick={() => navigate('overview')}
               className="text-lg font-bold tracking-tight text-white"
@@ -315,20 +315,24 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                   {isActive && (
                     <motion.div
                       layoutId="active-vertical-nav-pill"
-                      className="absolute inset-0 bg-white/10 rounded-lg"
+                      className="absolute inset-0 rounded-lg"
+                      style={{ background: 'var(--hover-bg)' }}
                       transition={{ type: 'spring', stiffness: 380, damping: 35 }}
                     />
                   )}
+                  {isActive && (
+                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full" style={{ background: 'var(--accent)' }} />
+                  )}
                   
-                  {Icon && <Icon size={16} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/50 group-hover:text-white'}`} />}
-                  <span className={`relative z-10 truncate transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white'}`}>{t.label}</span>
+                  {Icon && <Icon size={16} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'opacity-50 group-hover:opacity-100'}`} style={isActive ? { color: 'var(--text-main)' } : {}} />}
+                  <span className={`relative z-10 truncate transition-colors duration-200 ${isActive ? 'font-semibold' : 'opacity-60 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }}>{t.label}</span>
                 </button>
               );
             })}
           </nav>
           
           {/* Vertical Sidebar Bottom Actions (User, Theme, Notifications) */}
-          <div className="p-3 border-t border-white/10 flex-shrink-0 flex flex-col gap-2">
+          <div className="p-3 border-t flex-shrink-0 flex flex-col gap-2" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center justify-between px-2">
               <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">System</span>
               <div className="flex items-center gap-1">
@@ -379,7 +383,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
               {/* Sidebar popup menu */}
               {sidebarAvatarMenuOpen && (
                 <div className="absolute left-0 bottom-full mb-2 z-50 w-full" role="menu">
-                  <div className="w-full bg-black/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
+                  <div className="w-full backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden p-1" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
                     <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => { navigate('profile'); setSidebarAvatarMenuOpen(false); }}>
                       <UserCog size={14} /> Profile Settings
                     </button>
@@ -417,9 +421,10 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
       {/* Top bar — always rendered; shifted right when sidebar is active */}
       <nav
-        className={`fixed top-0 right-0 z-50 bg-black/10 backdrop-blur-xl border-b border-white/10 transition-all ${
+        className={`fixed top-0 right-0 z-50 backdrop-blur-xl border-b transition-all ${
           navOrientation === 'vertical' ? 'left-0 md:hidden' : 'left-0'
         }`}
+        style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
         aria-label="Top bar"
       >
         <div className={navOrientation === 'vertical' ? 'px-4 lg:px-6' : 'mx-auto max-w-7xl px-6 lg:px-8'}>
@@ -480,10 +485,10 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                       }`}
                     >
                       {isActive && (
-                        <motion.div layoutId="active-horizontal-nav-pill" className="absolute inset-0 bg-white/15 rounded-full shadow-sm" transition={{ type: 'spring', stiffness: 380, damping: 35 }} />
+                        <motion.div layoutId="active-horizontal-nav-pill" className="absolute inset-0 rounded-lg" style={{ background: 'var(--hover-bg)' }} transition={{ type: 'spring', stiffness: 380, damping: 35 }} />
                       )}
-                      {Icon && <Icon size={14} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/50 group-hover:text-white'}`} />}
-                      <span className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white'}`}>{t.label}</span>
+                      {Icon && <Icon size={14} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? '' : 'opacity-50 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }} />}
+                      <span className={`relative z-10 transition-colors duration-200 ${isActive ? 'font-semibold' : 'opacity-60 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }}>{t.label}</span>
                     </button>
                   );
                 })}
@@ -541,7 +546,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
               {avatarMenuOpen && (
                 <div className="absolute right-0 top-full pt-2 z-50" role="menu">
-                  <div className="w-60 max-w-[calc(100vw-1rem)] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
+                  <div className="w-60 max-w-[calc(100vw-1rem)] backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden p-1" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
                     <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('profile')}>
                       <UserCog size={14} /> Profile Settings
                     </button>
@@ -591,15 +596,16 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
             onClick={() => setMobileNavOpen(false)}
             aria-hidden="true"
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 max-w-[80%] bg-[#0a0a0f] border-r border-white/10 flex flex-col">
-            <div className="h-16 px-5 flex items-center justify-between border-b border-white/10 flex-shrink-0">
-              <span className="text-lg font-bold tracking-tight text-white">
+          <aside className="absolute left-0 top-0 bottom-0 w-64 max-w-[80%] border-r flex flex-col" style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}>
+            <div className="h-16 px-5 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <span className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
                 Spot<span className="text-zinc-500">fixes</span>
               </span>
               <button
                 onClick={() => setMobileNavOpen(false)}
                 aria-label="Close navigation menu"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10"
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                style={{ color: 'var(--text-sec)' }}
               >
                 <X size={16} />
               </button>
@@ -869,9 +875,9 @@ export default function App() {
   };
 
   if (loading) return (
-    <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-black">
-      <div className="w-9 h-9 rounded-full border-2 border-white/10 border-t-white animate-spin" />
-      <span className="text-sm text-white/40 font-semibold tracking-wide">Loading Spotfixes…</span>
+    <div className="h-screen w-full flex flex-col items-center justify-center gap-4" style={{ background: 'var(--bg)' }}>
+      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--border-strong)', borderTopColor: 'var(--accent)' }} />
+      <span className="text-sm font-medium" style={{ color: 'var(--text-dim, var(--text-sec))', letterSpacing: '-0.01em' }}>Loading Spotfixes…</span>
     </div>
   );
 

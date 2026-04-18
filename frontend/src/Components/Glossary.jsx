@@ -19,7 +19,7 @@ export const SEVERITY_DEFS = [
   },
   {
     code: 'S3', label: 'Medium',
-    color: '#3b82f6', bg: 'rgba(37,99,235,0.08)', border: 'rgba(37,99,235,0.25)',
+    color: '#6366f1', bg: 'rgba(99,102,241,0.08)', border: 'rgba(99,102,241,0.25)',
     desc: 'Feature works but behaves unexpectedly. A reasonable workaround exists.',
     action: 'Schedule for the next sprint.',
   },
@@ -33,7 +33,7 @@ export const SEVERITY_DEFS = [
 
 // ── Status definitions ────────────────────────────────────────────────────────
 export const STATUS_DEFS = [
-  { code: 'NEW',         color: '#3b82f6', bg: 'rgba(37,99,235,0.08)',  desc: 'Logged and waiting to be triaged.' },
+  { code: 'NEW',         color: '#6366f1', bg: 'rgba(99,102,241,0.08)',  desc: 'Logged and waiting to be triaged.' },
   { code: 'UNCONFIRMED', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', desc: 'Reported but not yet reproduced. Needs verification.' },
   { code: 'CONFIRMED',   color: '#10b981', bg: 'rgba(16,185,129,0.08)', desc: 'Verified and ready to be worked on.' },
   { code: 'RESOLVED',    color: '#10b981', bg: 'rgba(16,185,129,0.08)', desc: 'Fix implemented. Awaiting QA sign-off.' },
@@ -89,7 +89,7 @@ export function GlossaryDrawer({ onClose }) {
         {/* Header */}
         <div className="p-6 lg:p-8 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
               <BookOpen size={18} />
             </div>
             <span className="font-bold text-lg text-white tracking-tight">Reference Guide</span>
@@ -110,7 +110,7 @@ export function GlossaryDrawer({ onClose }) {
                 const activeColors = {
                   S1: 'border-red-500/20 bg-red-500/5 text-red-500',
                   S2: 'border-amber-500/20 bg-amber-500/5 text-amber-500',
-                  S3: 'border-blue-500/20 bg-blue-500/5 text-blue-500',
+                  S3: 'border-indigo-500/20 bg-indigo-500/5 text-indigo-500',
                   S4: 'border-white/10 bg-white/5 text-white/40'
                 }[s.code];
                 return (
@@ -137,7 +137,7 @@ export function GlossaryDrawer({ onClose }) {
             <div className="flex flex-col gap-3">
               {STATUS_DEFS.map(s => {
                 const activeColors = {
-                  'NEW': 'text-blue-400', 'UNCONFIRMED': 'text-amber-500',
+                  'NEW': 'text-indigo-400', 'UNCONFIRMED': 'text-amber-500',
                   'CONFIRMED': 'text-emerald-400', 'RESOLVED': 'text-emerald-400',
                   'VERIFIED': 'text-indigo-400', 'PROCESSED': 'text-white/40'
                 }[s.code] || 'text-white/40';

@@ -15,11 +15,11 @@ function RoleBadge({ role }) {
   const map = {
     super_admin: { text: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Super Admin' },
     admin:       { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', label: 'Admin' },
-    user:        { text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'User' },
+    user:        { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', label: 'User' },
   };
   const s = map[role] || map.user;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${s.bg} ${s.text} ${s.border}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${s.bg} ${s.text} ${s.border}`}>
       {role === 'super_admin' && <Crown size={10} />}
       {s.label}
     </span>
@@ -55,7 +55,7 @@ function DeleteConfirmModal({ user, isSuperAdmin, onConfirm, onCancel, loading }
     <>
       <div onClick={onCancel} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9998] transition-all" aria-hidden="true" />
       <div role="dialog" aria-modal="true" aria-label="Delete user" className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
-      <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 w-full max-w-md pointer-events-auto shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
+      <div className="border border-white/10 rounded-2xl p-8 w-full max-w-md pointer-events-auto shadow-xl animate-in fade-in zoom-in-95 duration-300" style={{ background: 'var(--card-bg)', backdropFilter: 'blur(20px)' }}>
         <div className="w-14 h-14 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
           <UserX size={24} className="text-red-500" />
         </div>
@@ -168,18 +168,18 @@ function InviteCodePanel() {
   if (loading || !inviteData) return null;
 
   return (
-    <div className="bg-blue-500/[0.03] border border-blue-500/20 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+    <div className="bg-blue-500/[0.03] border border-indigo-500/20 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
       <div className="flex items-center gap-2 mb-4 relative z-10">
-        <KeyRound size={16} className="text-blue-400" />
+        <KeyRound size={16} className="text-indigo-400" />
         <span className="text-xs font-bold text-white uppercase tracking-widest">Invite Code</span>
-        <span className="ml-auto text-[10px] font-bold text-blue-400/60 uppercase tracking-widest border border-blue-400/20 px-2 py-1 rounded hidden sm:block">{inviteData.company_name}</span>
+        <span className="ml-auto text-[11px] font-bold text-indigo-400/60 uppercase tracking-widest border border-blue-400/20 px-2 py-1 rounded hidden sm:block">{inviteData.company_name}</span>
       </div>
       <p className="text-sm text-white/50 mb-6 leading-relaxed relative z-10">
         Share this code with new team members when they register as a Regular User. Without it, no one can join your company.
       </p>
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10">
-        <div className={`flex-1 p-4 bg-black/40 border border-blue-500/20 rounded-xl font-mono text-2xl font-bold tracking-[0.3em] text-center shadow-inner transition-all ${showCode ? 'text-blue-400' : 'text-white/20 select-none'}`}>
+        <div className={`flex-1 p-4 bg-black/40 border border-indigo-500/20 rounded-xl font-mono text-2xl font-bold tracking-[0.3em] text-center shadow-inner transition-all ${showCode ? 'text-indigo-400' : 'text-white/20 select-none'}`}>
           {showCode ? inviteData.invite_code : '•'.repeat(inviteData.invite_code?.length || 8)}
         </div>
         <div className="flex gap-2">
@@ -241,13 +241,13 @@ function AccessRequestsPanel({ showToast }) {
   if (loading) return null;
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
+    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent opacity-50" />
       <div className="flex items-center gap-2 mb-6 relative z-10">
         <UserPlus size={16} className="text-indigo-400" />
         <span className="text-xs font-bold text-white uppercase tracking-widest">Access Requests</span>
         {requests.length > 0 && (
-          <span className="ml-2 px-2.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold">{requests.length}</span>
+          <span className="ml-2 px-2.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[11px] font-bold">{requests.length}</span>
         )}
         <button onClick={fetchRequests} className="ml-auto text-white/40 hover:text-white transition-colors p-1">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -314,7 +314,7 @@ export default function UserManagement({ currentUser }) {
   const StatusBadge = (st) => {
     const cfg = STATUS_STYLE[st] || { label: st, color: 'var(--text-sec)', bg: 'var(--hover-bg)', border: 'var(--border)' };
     return (
-      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+      <span className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${cfg.bg} ${cfg.text} ${cfg.border}`}>
         {cfg.label}
       </span>
     );
@@ -414,10 +414,10 @@ export default function UserManagement({ currentUser }) {
         <div className="relative z-10">
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400 w-max mb-4">
             <Users size={12} className="text-indigo-500" />
-            <span className="text-[10px] font-bold tracking-widest uppercase">Admin Panel</span>
+            <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Admin Panel</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            User <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">management</span>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight mb-3 text-white">
+            User <span className="text-indigo-400">management</span>
           </h1>
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
             {isSuperAdmin ? 'All users across every organisation.' : 'Users in your organisation.'}
@@ -428,11 +428,10 @@ export default function UserManagement({ currentUser }) {
           <button onClick={fetchUsers} className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ">
             <UserPlus size={16} /> Create User
           </button>
         </div>
-        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-indigo-500/20 via-white/5 to-transparent" />
       </div>
 
       {isAdmin && !isSuperAdmin && <InviteCodePanel />}
@@ -448,7 +447,7 @@ export default function UserManagement({ currentUser }) {
       <div className="mb-6 relative">
         <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
         <input placeholder="Search by name, email, role or company…" value={search} onChange={e => setSearch(e.target.value)} 
-          className="w-full h-14 bg-white/[0.02] border border-white/10 rounded-2xl pl-14 pr-12 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/5 outline-none transition-all text-sm shadow-inner" />
+          className="w-full h-14 bg-white/[0.02] border border-white/10 rounded-2xl pl-14 pr-12 text-white placeholder:text-white/30 focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all text-sm shadow-inner" />
         {search && (
           <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white p-2 transition-colors">
             <X size={16} />
@@ -456,11 +455,11 @@ export default function UserManagement({ currentUser }) {
         )}
       </div>
 
-      <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden backdrop-blur-md">
+      <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left min-w-[600px]">
             <thead>
-              <tr className="bg-black/20 border-b border-white/10">
+              <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
                 {['User', 'Email', 'Role', isSuperAdmin ? 'Company' : null, 'Status', 'Actions']
                   .filter(Boolean).map(h => (
                     <th key={h} className="px-6 py-4 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">{h}</th>
@@ -494,7 +493,7 @@ export default function UserManagement({ currentUser }) {
                         </div>
                         <div className="text-sm font-bold text-white">
                           {u.username || '—'}
-                          {isSelf && <span className="text-[10px] ml-2 text-white/40 font-medium">(you)</span>}
+                          {isSelf && <span className="text-[11px] ml-2 text-white/40 font-medium">(you)</span>}
                         </div>
                       </div>
                     </td>
@@ -524,7 +523,7 @@ export default function UserManagement({ currentUser }) {
                             <Trash2 size={12} />
                           </button>
                         )}
-                        {isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
+                        {isSelf && <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
                       </div>
                     </td>
                   </tr>
@@ -534,7 +533,7 @@ export default function UserManagement({ currentUser }) {
           </table>
         </div>
         {!loading && !error && (
-          <div className="px-6 py-4 border-t border-white/5 text-xs text-white/40 flex justify-between items-center bg-black/20">
+          <div className="px-6 py-4 border-t border-white/5 text-xs text-white/40 flex justify-between items-center" style={{ background: 'var(--bg-elevated)' }}>
             <span className="font-medium">{filtered.length} user{filtered.length !== 1 ? 's' : ''}{search ? ' matched' : ' total'}</span>
             <span>Your own account row is disabled for safety</span>
           </div>

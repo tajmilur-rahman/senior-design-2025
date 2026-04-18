@@ -40,16 +40,16 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   return (
     <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
-        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/40 ${open ? 'border-blue-500/50 bg-white/10 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
         <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full bg-[#1a1d27] border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
           <div className="max-h-52 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
-              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-blue-500/20 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
             })}
           </div>
         </div>
@@ -65,11 +65,11 @@ function RoleBadge({ role }) {
     super_admin: { text: 'text-amber-500',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  label: 'Super Admin' },
     developer:   { text: 'text-sky-400',    bg: 'bg-sky-500/10',    border: 'border-sky-500/20',    label: 'Developer' },
     admin:       { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', label: 'Admin' },
-    user:        { text: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   label: 'User' },
+    user:        { text: 'text-indigo-400',   bg: 'bg-indigo-500/10',   border: 'border-indigo-500/20',   label: 'User' },
   };
   const s = map[role] || map.user;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${s.bg} ${s.text} ${s.border}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${s.bg} ${s.text} ${s.border}`}>
       {role === 'super_admin' && <Crown size={10} />}
       {s.label}
     </span>
@@ -84,7 +84,7 @@ function StatusBadge({ status }) {
   };
   const s = map[status] || map.active;
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${s.bg} ${s.text} ${s.border}`}>
+    <span className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-widest ${s.bg} ${s.text} ${s.border}`}>
       {s.label}
     </span>
   );
@@ -309,12 +309,12 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-500">
-              <Crown size={12} /> <span className="text-[10px] font-bold tracking-widest uppercase">Global Control</span>
+              <Crown size={12} /> <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Global Control</span>
             </div>
-            <span className="text-[10px] font-bold px-2 py-1 rounded border bg-red-500/10 border-red-500/20 text-red-400 uppercase tracking-widest">Restricted</span>
+            <span className="text-[11px] font-bold px-2 py-1 rounded border bg-red-500/10 border-red-500/20 text-red-400 uppercase tracking-widest">Restricted</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Super <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">admin</span>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight mb-3 text-white">
+            Super <span className="text-amber-400">admin</span>
           </h1>
           <p className="text-white/50 text-sm max-w-xl leading-relaxed">Global control panel — manage all tenants, users, approvals, and system health in one place.</p>
         </div>
@@ -330,26 +330,25 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 <ShieldCheck size={16} /> Invite System User
               </button>
               <button onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ">
                 <UserPlus size={16} /> Create User
               </button>
             </>
           )}
         </div>
-        <div className="absolute -bottom-6 left-0 right-0 h-px bg-gradient-to-r from-amber-500/20 via-white/5 to-transparent" />
       </div>
 
       {/* Global stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mb-8">
         {[
-          { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={16} className="text-blue-400" />,         sub: 'Across all orgs' },
+          { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={16} className="text-indigo-400" />,         sub: 'Across all orgs' },
           { label: 'Critical open',  value: total_critical.toLocaleString(), icon: <AlertTriangle size={16} className="text-red-400" />, sub: 'Needs attention' },
           { label: 'Active users',   value: total_users,                     icon: <Users size={16} className="text-emerald-400" />,     sub: 'All organisations' },
           { label: 'Avg model acc.', value: avg_acc + '%',                   icon: <TrendingUp size={16} className="text-indigo-400" />, sub: 'Cross-org average' },
         ].map(s => (
-          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 lg:p-6 shadow-2xl relative overflow-hidden group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 lg:p-6 shadow-2xl relative overflow-hidden group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-2 mb-4 relative z-10">{s.icon}<span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">{s.label}</span></div>
+            <div className="flex items-center gap-2 mb-4 relative z-10">{s.icon}<span className="text-[11px] font-bold text-white/60 uppercase tracking-widest">{s.label}</span></div>
             <div className="text-3xl font-bold text-white font-mono tracking-tight mb-2 relative z-10">{s.value}</div>
             <div className="text-xs text-white/40 font-medium relative z-10">{s.sub}</div>
           </div>
@@ -380,18 +379,18 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
           )}
 
           {(pending.length > 0 || actionMsg) && (
-            <div className="bg-amber-500/[0.03] border border-amber-500/30 rounded-[2rem] shadow-2xl overflow-hidden mb-8 animate-in fade-in">
+            <div className="bg-amber-500/[0.03] border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden mb-8 animate-in fade-in">
               <div className="p-5 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-3">
                 <Clock size={16} className="text-amber-500" />
                 <span className="text-xs font-bold text-amber-500 uppercase tracking-widest">Pending Approvals</span>
-                <span className="ml-auto text-[10px] font-bold bg-amber-500/20 text-amber-500 px-2.5 py-1 rounded">{pending.length} awaiting review</span>
+                <span className="ml-auto text-[11px] font-bold bg-amber-500/20 text-amber-500 px-2.5 py-1 rounded">{pending.length} awaiting review</span>
               </div>
               {actionMsg && <div className="p-4 text-sm text-emerald-400 font-bold bg-emerald-500/10 border-b border-white/5">{actionMsg}</div>}
               {!(pending.length === 0 && actionMsg) && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead>
-                      <tr className="border-b border-amber-500/20 bg-black/20">
+                      <tr className="border-b border-amber-500/20" style={{ background: 'var(--bg-elevated)' }}>
                         {['User', 'Email', 'Role', 'Company', 'Actions'].map(h => (
                           <th key={h} className="px-6 py-4 text-xs font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
                         ))}
@@ -417,7 +416,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                                 </button>
                               </div>
                             ) : (
-                              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">View only</span>
+                              <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest">View only</span>
                             )}
                           </td>
                         </tr>
@@ -429,11 +428,11 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
             </div>
           )}
 
-          <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-white/10 bg-black/20 flex items-center gap-3">
-              <Globe size={16} className="text-blue-400" />
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
+              <Globe size={16} className="text-indigo-400" />
               <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
-              <span className="ml-auto text-[10px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded">{companies.length} org{companies.length !== 1 ? 's' : ''}</span>
+              <span className="ml-auto text-[11px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded">{companies.length} org{companies.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[700px]">
@@ -449,7 +448,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                     <tr><td colSpan={8} className="py-16 text-center"><RefreshCw size={24} className="animate-spin text-white/30 mx-auto" /></td></tr>
                   ) : companies.map(co => (
                     <tr key={co.id} onClick={() => setSelected(selected?.id === co.id ? null : co)}
-                      className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.04] ${selected?.id === co.id ? 'bg-blue-500/5' : ''}`}>
+                      className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.04] ${selected?.id === co.id ? 'bg-indigo-500/5' : ''}`}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center flex-shrink-0"><Building2 size={14} /></div>
@@ -457,7 +456,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</td>
-                      <td className="px-6 py-4"><span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded">{co.critical || 0}</span></td>
+                      <td className="px-6 py-4"><span className="text-[11px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded">{co.critical || 0}</span></td>
                       <td className="px-6 py-4 text-sm text-emerald-400 font-bold">{(co.resolved || 0).toLocaleString()}</td>
                       <td className="px-6 py-4 text-sm text-white/50">{co.users || 0}</td>
                       <td className="px-6 py-4">
@@ -470,7 +469,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                       </td>
                       <td className="px-6 py-4 text-xs text-white/40 whitespace-nowrap">{co.last_active}</td>
                       <td className="px-6 py-4 text-right">
-                        <ChevronRight size={16} className={`text-white/40 transition-transform duration-300 ${selected?.id === co.id ? 'rotate-90 text-blue-400' : ''}`} />
+                        <ChevronRight size={16} className={`text-white/40 transition-transform duration-300 ${selected?.id === co.id ? 'rotate-90 text-indigo-400' : ''}`} />
                       </td>
                     </tr>
                   ))}
@@ -480,9 +479,9 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
           </div>
 
           {selected && (
-            <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 mt-8">
+            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 mt-8">
               <div className="flex items-center gap-3 mb-8">
-                <Building2 size={18} className="text-blue-400" />
+                <Building2 size={18} className="text-indigo-400" />
                 <span className="text-lg font-bold text-white">{selected.name}</span>
                 <span className="text-xs text-white/40 ml-auto font-medium">Last active: {selected.last_active}</span>
               </div>
@@ -492,11 +491,11 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                   { label: 'Critical open',   value: selected.critical  || 0,                   color: 'text-red-400' },
                   { label: 'Resolved',        value: (selected.resolved || 0).toLocaleString(), color: 'text-emerald-400' },
                   { label: 'Active users',    value: selected.users     || 0,                   color: 'text-white' },
-                  { label: 'Model accuracy',  value: selected.model_acc + '%',                  color: 'text-blue-400' },
+                  { label: 'Model accuracy',  value: selected.model_acc + '%',                  color: 'text-indigo-400' },
                   { label: 'Resolution rate', value: selected.total ? ((selected.resolved / selected.total) * 100).toFixed(1) + '%' : '—', color: 'text-indigo-400' },
                 ].map(s => (
                   <div key={s.label} className="p-5 rounded-2xl bg-white/5 border border-white/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:bg-white/10 group">
-                    <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">{s.label}</div>
+                    <div className="text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">{s.label}</div>
                     <div className={`text-2xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
                   </div>
                 ))}
@@ -523,18 +522,18 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
             <input
               placeholder="Search by name, email, role or company…"
               value={userSearch} onChange={e => setUserSearch(e.target.value)}
-              className="w-full h-14 bg-white/[0.02] border border-white/10 rounded-2xl pl-14 pr-12 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/5 outline-none transition-all text-sm"
+              className="w-full h-14 bg-white/[0.02] border border-white/10 rounded-2xl pl-14 pr-12 text-white placeholder:text-white/30 focus:border-indigo-500/50 focus:bg-white/5 outline-none transition-all text-sm"
             />
             {userSearch && (
               <button onClick={() => setUserSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white p-2 transition-colors"><X size={16} /></button>
             )}
           </div>
 
-          <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden">
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left min-w-[700px]">
                 <thead>
-                  <tr className="bg-black/20 border-b border-white/10">
+                  <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
                     {['User', 'Email', 'Role', 'Company', 'Status', 'Actions'].map(h => (
                       <th key={h} className="px-6 py-4 text-xs font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
                     ))}
@@ -566,7 +565,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                             </div>
                             <div className="text-sm font-bold text-white">
                               {u.username || '—'}
-                              {isSelf && <span className="text-[10px] ml-2 text-white/40 font-medium">(you)</span>}
+                              {isSelf && <span className="text-[11px] ml-2 text-white/40 font-medium">(you)</span>}
                             </div>
                           </div>
                         </td>
@@ -599,11 +598,11 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                                 <Trash2 size={12} />
                                 </button>
                               )}
-                              {isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
-                              {!canManage && !isSelf && <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">View only</span>}
+                              {isSelf && <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">(Active Session)</span>}
+                              {!canManage && !isSelf && <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest px-2 py-1">View only</span>}
                             </div>
                           ) : (
-                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">View only</span>
+                            <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest">View only</span>
                           )}
                         </td>
                       </tr>
@@ -613,7 +612,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
               </table>
             </div>
             {!loadingUsers && (
-              <div className="px-6 py-4 border-t border-white/5 text-xs text-white/40 flex justify-between items-center bg-black/20">
+              <div className="px-6 py-4 border-t border-white/5 text-xs text-white/40 flex justify-between items-center" style={{ background: 'var(--bg-elevated)' }}>
                 <span className="font-medium">{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}{userSearch ? ' matched' : ' total'}</span>
                 <span>Your own account row is disabled for safety</span>
               </div>
@@ -627,7 +626,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
         <>
           <div onClick={() => setToDelete(null)} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9998] transition-all" aria-hidden="true" />
           <div role="dialog" aria-modal="true" aria-label="Delete user" className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
-            <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 w-full max-w-md pointer-events-auto shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
+            <div className="border border-white/10 rounded-2xl p-8 w-full max-w-md pointer-events-auto shadow-lg animate-in fade-in zoom-in-95 duration-300" style={{ background: 'var(--card-bg)', backdropFilter: 'blur(20px)' }}>
               <div className="w-14 h-14 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Trash2 size={24} className="text-red-500" />
               </div>
@@ -657,7 +656,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
       {/* Invite System User modal */}
       {showSystemInvite && createPortal(
         <div role="dialog" aria-modal="true" aria-label="Invite system user" className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md transition-all flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowSystemInvite(false); }}>
-          <div className="sf-modal sf-modal--amber bg-[#1a1d27] border border-white/10 rounded-[2rem] w-full max-w-md p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
+          <div className="sf-modal sf-modal--amber border border-white/10 rounded-2xl w-full max-w-md p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300" style={{ background: 'var(--card-bg)' }}>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 flex-shrink-0"><ShieldCheck size={18} /></div>
               <span className="sf-modal-title text-lg font-bold text-white">Invite System User</span>
@@ -670,14 +669,14 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
               ].map(f => (
                 <div key={f.key} className="mb-5">
-                  <label className="sf-modal-label block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
+                  <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
                   <input className="sf-modal-input w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-amber-500/50 focus:bg-white/10 outline-none transition-all text-sm"
                     type={f.type} required placeholder={f.placeholder}
                     value={systemInviteForm[f.key]} onChange={e => setSystemInviteForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
               <div className="mb-8">
-                <label className="sf-modal-label block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">System Role</label>
+                <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">System Role</label>
                 <CustomSelect
                   value={systemInviteForm.role}
                   onChange={v => setSystemInviteForm(p => ({ ...p, role: v }))}
@@ -703,9 +702,9 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
       {/* Create user modal */}
       {showCreate && createPortal(
         <div role="dialog" aria-modal="true" aria-label="Create user" className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md transition-all flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
-          <div className="sf-modal sf-modal--blue bg-[#1a1d27] border border-white/10 rounded-[2rem] w-full max-w-md p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300">
+          <div className="sf-modal sf-modal--blue border border-white/10 rounded-2xl w-full max-w-md p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-300" style={{ background: 'var(--card-bg)' }}>
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 flex-shrink-0"><UserPlus size={18} /></div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/30 flex-shrink-0"><UserPlus size={18} /></div>
               <span className="sf-modal-title text-lg font-bold text-white">Create User</span>
               <button onClick={() => setShowCreate(false)} aria-label="Close dialog" className="sf-modal-close ml-auto text-white/40 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-all"><X size={16} /></button>
             </div>
@@ -715,14 +714,14 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
               ].map(f => (
                 <div key={f.key} className="mb-5">
-                  <label className="sf-modal-label block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
-                  <input className="sf-modal-input w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/10 outline-none transition-all text-sm"
+                  <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
+                  <input className="sf-modal-input w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-indigo-500/50 focus:bg-white/10 outline-none transition-all text-sm"
                     type={f.type} required placeholder={f.placeholder}
                     value={createForm[f.key]} onChange={e => setCreateForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
               <div className="mb-5">
-                <label className="sf-modal-label block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">Role</label>
+                <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">Role</label>
                 <CustomSelect
                   value={createForm.role}
                   onChange={v => setCreateForm(p => ({ ...p, role: v }))}
@@ -731,7 +730,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 />
               </div>
               <div className="mb-8">
-                <label className="sf-modal-label block text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2">Company</label>
+                <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">Company</label>
                 <CustomSelect
                   value={createForm.company_id}
                   onChange={v => setCreateForm(p => ({ ...p, company_id: v }))}

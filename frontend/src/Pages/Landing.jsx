@@ -449,7 +449,7 @@ function ArchitectureModal({ onClose }) {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-emerald-400">System Blueprint</span>
+              <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-emerald-400">System Blueprint</span>
             </div>
             <h2 className="text-2xl font-bold text-white tracking-tight">Spotfixes Architecture</h2>
           </div>
@@ -470,7 +470,7 @@ function ArchitectureModal({ onClose }) {
                 <div key={p.label} className={`relative rounded-2xl border bg-gradient-to-br ${p.cls} p-6 overflow-hidden`}>
                   <div className={`flex items-center gap-2 mb-5 ${p.accent}`}>
                     <Icon size={16} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">{p.label}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest">{p.label}</span>
                   </div>
                   <div className="text-2xl font-bold text-white tracking-tight">{p.value}</div>
                   <div className="text-sm text-white/55 mt-1">{p.sub}</div>
@@ -481,7 +481,7 @@ function ArchitectureModal({ onClose }) {
 
           {/* Multi-tenancy — one tight callout */}
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Multi-Tenant by Default</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-3">Multi-Tenant by Default</p>
             <p className="text-sm text-white/65 leading-relaxed">
               Every company runs on its own isolated Postgres table with Row-Level Security. The universal model trains on aggregate data; per-company models fine-tune on proprietary bugs.
             </p>
@@ -600,11 +600,11 @@ export default function Landing({ onEnterWorkspace }) {
 
       {/* Scroll Progress Indicator */}
       <div className="fixed right-6 lg:right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-6 z-50 hidden md:flex pointer-events-none">
-        <div className="text-[10px] font-bold tracking-[0.2em] text-white/40 uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Scroll</div>
+        <div className="text-[11px] font-bold tracking-[0.2em] text-white/40 uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Scroll</div>
         <div className="w-[2px] h-32 bg-white/10 relative rounded-full overflow-hidden">
           <div className="absolute top-0 left-0 w-full bg-white transition-all duration-150 ease-out" style={{ height: `${scrollProgress * 100}%` }} />
         </div>
-        <div className="text-[10px] font-bold font-mono text-white/40">
+        <div className="text-[11px] font-bold font-mono text-white/40">
           {String(currentSection).padStart(2, '0')} / {String(totalSections).padStart(2, '0')}
         </div>
       </div>
@@ -769,7 +769,7 @@ export default function Landing({ onEnterWorkspace }) {
                      </div>
                      <div>
                        <div className="flex items-center gap-3 mb-2">
-                         <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 border border-white/10 px-2.5 py-1 rounded-full">Open Source</span>
+                         <span className="text-[11px] font-bold uppercase tracking-widest text-white/40 border border-white/10 px-2.5 py-1 rounded-full">Open Source</span>
                        </div>
                        <h3 className="text-xl font-bold text-white tracking-tight mb-2">Built in the open.</h3>
                        <p className="text-sm text-white/50 leading-relaxed max-w-lg">

@@ -26,7 +26,7 @@ function LaunchChoiceStep({ onChoice }) {
     },
     {
       id: "demo",
-      icon: <Brain size={26} color="#3b82f6" />,
+      icon: <Brain size={26} color="#6366f1" />,
       title: "Explore Firefox demo data",
       desc: "Browse 220,000+ pre-loaded Mozilla Firefox bugs to see the full dashboard and AI model in action.",
       badge: "220k+ bugs",
@@ -42,30 +42,30 @@ function LaunchChoiceStep({ onChoice }) {
           style={{
             display: "flex", alignItems: "center", gap: 16,
             padding: "16px 18px", borderRadius: 14, cursor: "pointer",
-            border: "1px solid rgba(255,255,255,0.1)",
-            background: "rgba(255,255,255,0.04)",
+            border: "1px solid var(--border)",
+            background: "var(--hover-bg)",
             transition: "all 0.15s", textAlign: "left",
             fontFamily: "var(--font-head)", width: "100%",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)";
-            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+            e.currentTarget.style.borderColor = "var(--accent)";
+            e.currentTarget.style.background = "var(--pill-bg)";
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
-            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+            e.currentTarget.style.borderColor = "var(--border)";
+            e.currentTarget.style.background = "var(--hover-bg)";
           }}
         >
           <div style={{
             width: 48, height: 48, borderRadius: 12,
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+            background: "var(--hover-bg)", border: "1px solid var(--border)",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
             {c.icon}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
                 {c.title}
               </span>
               {c.badge && (
@@ -79,11 +79,11 @@ function LaunchChoiceStep({ onChoice }) {
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "var(--text-sec)", lineHeight: 1.5 }}>
               {c.desc}
             </div>
           </div>
-          <ArrowRight size={15} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0 }} />
+          <ArrowRight size={15} color="var(--text-sec)" style={{ flexShrink: 0 }} />
         </button>
       ))}
     </div>
@@ -155,7 +155,7 @@ export default function Onboarding({ onComplete }) {
                 <X size={32} color="#ef4444" />
               </div>
               <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding failed</h2>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
+              <p style={{ color: "var(--text-sec)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="onboarding-btn-back" onClick={() => { setChoice(null); setSeedResult(null); }}>
                   <ArrowLeft size={15} /> Try again
