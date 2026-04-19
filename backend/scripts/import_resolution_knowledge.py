@@ -2,10 +2,16 @@ import csv
 import requests
 from datetime import datetime
 from pathlib import Path
-from database import supabase
+import time
 
-# Place the CSV in the project root (senior-design-2025/)
-CSV_PATH = Path(__file__).resolve().parent.parent / "bugs-2026-03-23.csv"
+CSV_PATH = Path(__file__).resolve().parent.parent / "bugs-2026-04-17-fixed.csv"
+OUTPUT_CSV = Path(__file__).resolve().parent.parent / "resolution_knowledge_full_5000.csv"
+
+BUG_API = "https://bugzilla.mozilla.org/rest/bug/{}"
+COMMENT_API = "https://bugzilla.mozilla.org/rest/bug/{}/comment"
+
+LIMIT = 5000
+SLEEP_SECONDS = 0.2
 
 
 def parse_dt(dt_str):
@@ -14,11 +20,39 @@ def parse_dt(dt_str):
     return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
 
 
+def normalize_severity(severity_raw):
+    if not severity_raw:
+        return ""
+
+    sev = severity_raw.strip().lower()
+
+    if sev in {"--", "", "n/a", "na", "none", "null"}:
+        return ""
+
+    severity_map = {
+        "blocker": "S1",
+        "critical": "S1",
+        "major": "S2",
+        "normal": "S3",
+        "minor": "S3",
+        "trivial": "S3",
+        "enhancement": "S4",
+        "s1": "S1",
+        "s2": "S2",
+        "s3": "S3",
+        "s4": "S4",
+    }
+
+    return severity_map.get(sev, "")
+
+
 def load_bug_ids_from_csv(csv_path):
     bug_ids = []
+    seen = set()
 
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+
         for row in reader:
             raw_id = row.get("Bug ID")
             status = (row.get("Status") or "").strip().upper()
@@ -27,25 +61,26 @@ def load_bug_ids_from_csv(csv_path):
             if not raw_id:
                 continue
 
-            # Only import RESOLVED + FIXED bugs for resolution knowledge
             if status != "RESOLVED" or resolution != "FIXED":
                 continue
 
             try:
                 bug_id = int(raw_id)
-                bug_ids.append(bug_id)
             except ValueError:
                 continue
+
+            if bug_id in seen:
+                continue
+
+            seen.add(bug_id)
+            bug_ids.append(bug_id)
 
     return bug_ids
 
 
 def fetch_bug_data(bug_id):
-    bug_url_api = f"https://bugzilla.mozilla.org/rest/bug/{bug_id}"
-    comment_url_api = f"https://bugzilla.mozilla.org/rest/bug/{bug_id}/comment"
-
-    bug_res = requests.get(bug_url_api, timeout=30)
-    comment_res = requests.get(comment_url_api, timeout=30)
+    bug_res = requests.get(BUG_API.format(bug_id), timeout=30)
+    comment_res = requests.get(COMMENT_API.format(bug_id), timeout=30)
 
     bug_res.raise_for_status()
     comment_res.raise_for_status()
@@ -56,15 +91,18 @@ def fetch_bug_data(bug_id):
     if not bug_json.get("bugs"):
         return None
 
-    bug_data = bug_json["bugs"][0]
+    bug = bug_json["bugs"][0]
     comments = comment_json.get("bugs", {}).get(str(bug_id), {}).get("comments", [])
 
-    summary = bug_data.get("summary")
-    component = bug_data.get("component")
-    status = bug_data.get("status")
-    resolution = bug_data.get("resolution")
-    creation_time = bug_data.get("creation_time")
-    last_change_time = bug_data.get("last_change_time")
+    summary = bug.get("summary", "")
+    component = bug.get("component", "")
+    status = bug.get("status", "")
+    resolution = bug.get("resolution", "")
+    severity_raw = bug.get("severity", "")
+    severity = normalize_severity(severity_raw)
+
+    creation_time = bug.get("creation_time")
+    last_change_time = bug.get("last_change_time")
 
     created_dt = parse_dt(creation_time)
     changed_dt = parse_dt(last_change_time)
@@ -75,9 +113,9 @@ def fetch_bug_data(bug_id):
 
     resolution_text = ""
     if comments:
-        resolution_text = comments[-1].get("text", "")[:2000]
+        resolution_text = comments[-1].get("text", "")[:5000]
 
-    row = {
+    return {
         "source_bug_id": bug_id,
         "summary": summary,
         "component": component,
@@ -86,71 +124,58 @@ def fetch_bug_data(bug_id):
         "resolved_in_days": resolved_in_days,
         "resolution_text": resolution_text,
         "bug_url": f"https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}",
+        "severity": severity,
     }
-
-    return row
-
-
-def already_exists(bug_id):
-    result = (
-        supabase.table("resolution_knowledge")
-        .select("id")
-        .eq("source_bug_id", bug_id)
-        .execute()
-    )
-    return bool(result.data)
 
 
 def main():
     print("START")
     print("CSV_PATH:", CSV_PATH)
-    print("CSV exists:", CSV_PATH.exists())
+    print("OUTPUT_CSV:", OUTPUT_CSV)
+    print("LIMIT:", LIMIT)
 
     if not CSV_PATH.exists():
-        print(f"CSV file not found: {CSV_PATH}")
+        print(f"CSV not found: {CSV_PATH}")
         return
 
-    bug_ids = load_bug_ids_from_csv(CSV_PATH)[:500]
-    print(f"Loaded {len(bug_ids)} bug IDs from CSV")
+    bug_ids = load_bug_ids_from_csv(CSV_PATH)[:LIMIT]
+    print(f"Loaded {len(bug_ids)} bug IDs")
 
-    inserted_count = 0
-    skipped_count = 0
-    failed_count = 0
+    rows_out = []
+    failed = 0
 
     for i, bug_id in enumerate(bug_ids, start=1):
-        print(f"\n[{i}/{len(bug_ids)}] Processing bug_id: {bug_id}")
-
+        print(f"[{i}/{len(bug_ids)}] Fetching bug {bug_id}")
         try:
-            if already_exists(bug_id):
-                print(f"Skipping existing bug_id: {bug_id}")
-                skipped_count += 1
-                continue
-
             row = fetch_bug_data(bug_id)
-            if not row:
-                print(f"No bug data found for bug_id: {bug_id}")
-                failed_count += 1
-                continue
-
-            print("Inserting row:")
-            print(row)
-
-            result = supabase.table("resolution_knowledge").insert(row).execute()
-
-            print("Insert result:")
-            print(result)
-
-            inserted_count += 1
-
+            if row:
+                rows_out.append(row)
+            time.sleep(SLEEP_SECONDS)
         except Exception as e:
-            print(f"Failed bug_id {bug_id}: {e}")
-            failed_count += 1
-            continue
+            print(f"  -> failed: {e}")
+            failed += 1
 
-    print("\n=== Import Summary ===")
-    print(f"Inserted: {inserted_count}")
-    print(f"Skipped:  {skipped_count}")
-    print(f"Failed:   {failed_count}")
+    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "source_bug_id",
+                "summary",
+                "component",
+                "status",
+                "resolution",
+                "resolved_in_days",
+                "resolution_text",
+                "bug_url",
+                "severity",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(rows_out)
+
+    print("=== DONE ===")
+    print(f"Wrote {len(rows_out)} rows to {OUTPUT_CSV}")
+    print(f"Failed: {failed}")
 
 
 if __name__ == "__main__":
