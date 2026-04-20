@@ -101,10 +101,13 @@
   .text-white\/20         { color: rgba(10,10,10,0.25)        !important; }
   .text-white\/25         { color: rgba(10,10,10,0.30)        !important; }
   .text-white\/30         { color: rgba(10,10,10,0.35)        !important; }
+  .text-white\/35         { color: rgba(10,10,10,0.40)        !important; }
   .text-white\/40         { color: rgba(10,10,10,0.45)        !important; }
+  .text-white\/45         { color: rgba(10,10,10,0.50)        !important; }
   .text-white\/50         { color: rgba(10,10,10,0.55)        !important; }
   .text-white\/60         { color: rgba(10,10,10,0.65)        !important; }
   .text-white\/70         { color: rgba(10,10,10,0.72)        !important; }
+  .text-white\/75         { color: rgba(10,10,10,0.78)        !important; }
   .text-white\/80         { color: rgba(10,10,10,0.80)        !important; }
 
   /* Hover text */

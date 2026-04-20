@@ -2748,39 +2748,43 @@ def _resolution_source(current_user: dict):
     Returns (table: str, is_mozilla: bool, company_id: int|None).
 
     Routing rules:
-      - super_admin (no company)  → resolution_knowledge  (mozilla=True)
-      - Firefox / Mozilla company → resolution_knowledge  (mozilla=True)
+      - super_admin (no company)  → resolution_knowledge_full_5000 (mozilla=True)
+      - Firefox / Mozilla company → resolution_knowledge_full_5000 (mozilla=True)
       - Any other company         → their own data_table  (mozilla=False)
       - User with no company yet  → empty data            (mozilla=False)
     """
-    role       = current_user.get("role")
+    role = current_user.get("role")
     company_id = current_user.get("company_id")
 
     if role == "super_admin" or company_id is None:
-        return "resolution_knowledge", True, None
+        return "resolution_knowledge_full_5000", True, None
 
     table = get_company_table(company_id)
     if table == "firefox_table":
-        return "resolution_knowledge", True, company_id
+        return "resolution_knowledge_full_5000", True, company_id
 
     return table, False, company_id
 
 
-def _fetch_resolved_rows(table: str, company_id, select: str = "*", limit: int = 1000) -> list:
-    """
-    Fetch resolved rows from the correct table with proper company scoping.
-    - resolution_knowledge  → no extra filter (all rows are resolved)
-    - shared 'bugs' table   → filter by company_id + status
-    - isolated company table → filter by status only
-    """
+def _fetch_resolved_rows(
+    table: str,
+    company_id,
+    select: str = "*",
+    limit: int = 1000,
+    start_offset: int = 0,
+) -> list:
     try:
-        q = supabase.table(table).select(select).limit(limit)
-        if table != "resolution_knowledge":
-            if not is_shared_table(table):          # shared 'bugs' table
+        end_offset = start_offset + limit - 1
+        q = supabase.table(table).select(select).range(start_offset, end_offset)
+
+        if table != "resolution_knowledge_full_5000":
+            if not is_shared_table(table):
                 q = q.eq("company_id", company_id)
             q = q.eq("status", "RESOLVED")
+
         return q.execute().data or []
-    except Exception:
+    except Exception as e:
+        print(f"_fetch_resolved_rows error: {e}")
         return []
 
 
@@ -2934,3 +2938,218 @@ def get_component_resolution_correlation(current_user: dict = Depends(auth.requi
     ]
     correlations.sort(key=lambda x: x["average_resolved_days"], reverse=True)
     return {"correlations": correlations[:8], "source": "mozilla" if is_mozilla else "company"}
+
+
+@app.get("/api/resolution-support/severity-vs-resolved-days-correlation")
+def get_severity_vs_resolved_days_correlation(
+    current_user: dict = Depends(auth.require_active)
+):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"points": [], "source": "company"}
+
+    rows = _fetch_resolved_rows(
+        table,
+        company_id,
+        select="source_bug_id, severity, resolved_in_days",
+        limit=5000,
+        start_offset=1200
+    )
+
+    severity_map = {"S1": 1, "S2": 2, "S3": 3, "S4": 4}
+    valid_points = []
+
+    for row in rows:
+        severity = (row.get("severity") or "").strip().upper()
+        raw_days = row.get("resolved_in_days")
+
+        if severity not in severity_map:
+            continue
+
+        try:
+            days = float(raw_days)
+        except (TypeError, ValueError):
+            continue
+
+        valid_points.append({
+            "x": severity_map[severity],
+            "y": days,
+            "label": f"{row.get('source_bug_id') or 'Bug'} ({severity})",
+        })
+
+    return {
+        "points": valid_points[:1000],
+        "source": "mozilla" if is_mozilla else "company",
+    }
+
+
+@app.get("/api/resolution-support/component-severity-distribution")
+def get_component_severity_distribution(
+    current_user: dict = Depends(auth.require_active)
+):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"rows": [], "source": "company"}
+
+    rows = _fetch_resolved_rows(
+        table,
+        company_id,
+        select="component, severity",
+        limit=5000,
+        start_offset=1200
+    )
+
+    severity_order = {"S1", "S2", "S3", "S4"}
+    counts = {}
+
+    for row in rows:
+        component = (row.get("component") or "").strip()
+        severity = (row.get("severity") or "").strip().upper()
+
+        if not component or severity not in severity_order:
+            continue
+
+        key = (component, severity)
+        counts[key] = counts.get(key, 0) + 1
+
+    component_totals = {}
+    for (component, severity), count in counts.items():
+        component_totals[component] = component_totals.get(component, 0) + count
+
+    top_components = sorted(
+        component_totals.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:8]
+
+    top_component_names = {name for name, _ in top_components}
+
+    result_rows = []
+    for (component, severity), count in counts.items():
+        if component in top_component_names:
+            result_rows.append({
+                "component": component,
+                "severity": severity,
+                "count": count,
+            })
+
+    result_rows.sort(
+        key=lambda r: (
+            next((i for i, (name, _) in enumerate(top_components) if name == r["component"]), 999),
+            r["severity"]
+        )
+    )
+
+    return {
+        "rows": result_rows,
+        "source": "mozilla" if is_mozilla else "company",
+    }
+
+
+# Koshi Resolution Support
+@app.get("/api/resolution-support/summary-length-correlation")
+def get_summary_length_correlation(current_user: dict = Depends(auth.require_active)):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"points": [], "source": "company"}
+
+    rows = _fetch_resolved_rows(
+        table,
+        company_id,
+        select="source_bug_id, summary, resolved_in_days",
+        limit=5000
+    )
+
+    points = []
+
+    for row in rows:
+        summary = (row.get("summary") or "").strip()
+        raw_days = row.get("resolved_in_days")
+
+        if not summary:
+            continue
+
+        try:
+            days = float(raw_days)
+        except (TypeError, ValueError):
+            continue
+
+        points.append({
+            "x": len(summary),
+            "y": days,
+            "label": str(row.get("source_bug_id") or "Bug"),
+        })
+
+    return {"points": points[:150], "source": "mozilla" if is_mozilla else "company"}
+
+
+@app.get("/api/resolution-support/resolution-text-length-correlation")
+def get_resolution_text_length_correlation(current_user: dict = Depends(auth.require_active)):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"points": [], "source": "company"}
+
+    rows = _fetch_resolved_rows(
+        table,
+        company_id,
+        select="source_bug_id, resolution_text, resolved_in_days",
+        limit=5000
+    )
+
+    points = []
+
+    for row in rows:
+        resolution_text = (row.get("resolution_text") or "").strip()
+        raw_days = row.get("resolved_in_days")
+
+        if not resolution_text:
+            continue
+
+        try:
+            days = float(raw_days)
+        except (TypeError, ValueError):
+            continue
+
+        points.append({
+            "x": len(resolution_text),
+            "y": days,
+            "label": str(row.get("source_bug_id") or "Bug"),
+        })
+
+    return {"points": points[:150], "source": "mozilla" if is_mozilla else "company"}
+
+
+@app.get("/api/resolution-support/summary-vs-resolution-length-correlation")
+def get_summary_vs_resolution_length_correlation(current_user: dict = Depends(auth.require_active)):
+    table, is_mozilla, company_id = _resolution_source(current_user)
+
+    if not is_mozilla and current_user.get("company_id") is None:
+        return {"points": [], "source": "company"}
+
+    rows = _fetch_resolved_rows(
+        table,
+        company_id,
+        select="source_bug_id, summary, resolution_text",
+        limit=5000
+    )
+
+    points = []
+
+    for row in rows:
+        summary = (row.get("summary") or "").strip()
+        resolution_text = (row.get("resolution_text") or "").strip()
+
+        if not summary or not resolution_text:
+            continue
+
+        points.append({
+            "x": len(resolution_text),
+            "y": len(summary),
+            "label": str(row.get("source_bug_id") or "Bug"),
+        })
+
+    return {"points": points[:150], "source": "mozilla" if is_mozilla else "company"}
