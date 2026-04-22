@@ -653,7 +653,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   {/* Submit button */}
                   <button
                     onClick={handleManualSubmit}
-                    disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}
+                    disabled={loading || !summary || (isSuperAdmin && !selectedCompanyId)}
                     className="w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                     style={{ background: 'var(--accent)', color: '#003822' }}
                   >
