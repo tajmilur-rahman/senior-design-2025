@@ -1,6 +1,8 @@
 # Spotfixes Intelligence
 Enterprise Bug Triage and Severity Prediction Engine
 
+**Live Demo:** [spotfixes.com](http://spotfixes.com)
+
 ## Overview
 
 Spotfixes is a machine learning platform designed to automate the triage and prioritization of software vulnerabilities. The system analyzes bug reports and predicts severity levels while identifying duplicate issues across large repositories.
