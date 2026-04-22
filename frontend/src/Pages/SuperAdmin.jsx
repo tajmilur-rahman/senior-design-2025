@@ -109,6 +109,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
 
   // --- Organizations state ---
   const [companies,  setCompanies]  = useState([]);
+  const [overview,   setOverview]   = useState(null);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
   const [selected,   setSelected]   = useState(null);
   const [orgError,   setOrgError]   = useState(null);
@@ -146,14 +147,17 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   const loadOrgs = async () => {
     setLoadingOrgs(true); setOrgError(null);
     try {
-      const [companiesRes, pendingRes] = await Promise.all([
+      const [companiesRes, pendingRes, overviewRes] = await Promise.all([
         axios.get('/api/superadmin/companies'),
         axios.get('/api/superadmin/pending'),
+        axios.get('/api/hub/overview'),
       ]);
       setCompanies(companiesRes.data || []);
       setPending(pendingRes.data || []);
+      setOverview(overviewRes?.data || null);
     } catch (e) {
       setCompanies([]);
+      setOverview(null);
       if (e.response?.status === 403) setOrgError('Super admin access required on this account.');
     } finally { setLoadingOrgs(false); }
   };
@@ -275,8 +279,8 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   };
 
   // Computed ---
-  const total_bugs     = companies.reduce((s, c) => s + (c.total    || 0), 0);
-  const total_critical = companies.reduce((s, c) => s + (c.critical || 0), 0);
+  const total_bugs     = overview?.stats?.total_db ?? companies.reduce((s, c) => s + (c.total    || 0), 0);
+  const total_critical = overview?.stats?.critical  ?? companies.reduce((s, c) => s + (c.critical || 0), 0);
   const total_users    = companies.reduce((s, c) => s + (c.users    || 0), 0);
   const avg_acc        = companies.length
     ? (companies.reduce((s, c) => s + (c.model_acc || 0), 0) / companies.length).toFixed(1) : '0';

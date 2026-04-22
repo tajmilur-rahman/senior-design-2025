@@ -105,20 +105,24 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
   const fetchGlobal = useCallback(async () => {
     setLoadingCo(true);
     try {
-      const [coRes, pendRes] = await Promise.all([
+      const [coRes, pendRes] = await Promise.allSettled([
         axios.get('/api/superadmin/companies'),
         axios.get('/api/superadmin/pending'),
       ]);
-      setCompanies(coRes.data || []);
-      setPending(pendRes.data || []);
+      if (coRes.status === 'fulfilled') {
+        setCompanies(coRes.value.data || []);
+      }
+      if (pendRes.status === 'fulfilled') {
+        setPending(pendRes.value.data || []);
+      }
     } catch { /* ignore */ }
     finally { setLoadingCo(false); }
   }, []);
 
   useEffect(() => { fetchGlobal(); }, [fetchGlobal]);
 
-  const totalBugs     = companies.reduce((s, c) => s + (c.total    || 0), 0);
-  const totalCritical = companies.reduce((s, c) => s + (c.critical || 0), 0);
+  const totalBugs     = data?.stats?.total_db ?? companies.reduce((s, c) => s + (c.total    || 0), 0);
+  const totalCritical = data?.stats?.critical  ?? companies.reduce((s, c) => s + (c.critical || 0), 0);
   const totalResolved = companies.reduce((s, c) => s + (c.resolved || 0), 0);
   const totalUsers    = companies.reduce((s, c) => s + (c.users    || 0), 0);
   const resolutionRate = totalBugs > 0 ? ((totalResolved / totalBugs) * 100).toFixed(1) : '0';

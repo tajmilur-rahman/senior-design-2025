@@ -1,6 +1,6 @@
 import os, json, joblib, numpy as np, pandas as pd, time as _time_global
 import random, re, shutil
-from .config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
+from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
 
 
 def _metrics_dir(artifact_paths):

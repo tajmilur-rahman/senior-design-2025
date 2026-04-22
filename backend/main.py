@@ -14,7 +14,7 @@ from database import supabase, SUPABASE_URL, SUPABASE_KEY, DATABASE_URL
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 import psycopg2
 import ml_logic
-from .config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
+from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
 import db_provision
 
 
