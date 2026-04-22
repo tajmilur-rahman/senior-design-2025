@@ -59,6 +59,14 @@ def _contains_high_risk_terms(text: str) -> bool:
     return any(term in t for term in HIGH_RISK_TERMS)
 
 
+def _forced_severity_from_text(text: str) -> str | None:
+    """Return a hard severity override when the text clearly signals a high-risk bug."""
+    t = (text or "").lower()
+    if any(term in t for term in HIGH_RISK_TERMS):
+        return "S1"
+    return None
+
+
 def load_pack(company_id=None):
     cache_key = company_id if company_id is not None else "global"
     if cache_key in _model_cache:
@@ -229,6 +237,7 @@ def extract_keywords(text):
 def predict_severity(summary: str, component: str = "General", platform: str = "All", company_id=None):
     used_source = "global"
     fallback = False
+    forced_severity = _forced_severity_from_text(summary)
 
     if company_id is not None and company_model_exists(company_id):
         m, v, e, _ = load_pack(company_id)
@@ -262,6 +271,11 @@ def predict_severity(summary: str, component: str = "General", platform: str = "
 
     if not label:
         label, conf, probs = heuristic_predict(summary)
+
+    if forced_severity:
+        label = forced_severity
+        conf = max(float(conf or 0.0), 0.95)
+        probs = {forced_severity: conf}
 
     needs_review, review_reason = _review_decision(label, conf, probs, summary_text=summary)
 
