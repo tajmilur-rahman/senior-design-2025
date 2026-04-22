@@ -183,8 +183,8 @@ All database timestamps are stored in UTC and automatically converted to local s
 ### Clone Repository
 
 ```
-git clone https://github.com/yourusername/spotfixes.git
-cd spotfixes
+git clone https://github.com/tajmilur-rahman/senior-design-2025.git
+cd senior-design-2025
 ```
 
 ### Create Virtual Environment
@@ -198,18 +198,56 @@ source venv/bin/activate
 
 ```
 pip install -r requirements.txt
+cd frontend && npm install && cd ..
+```
+
+### Configure Backend Environment
+
+Create a backend env file before running the API:
+
+```
+cp backend/.env.example backend/.env
+```
+
+Required values in `backend/.env`:
+
+```
+SUPABASE_URL=...
+SUPABASE_KEY=...
+DATABASE_URL=...
+SECRET_KEY=...
+```
+
+Optional values:
+
+```
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=43200
+PORT=8000
+DEBUG=False
+FRONTEND_URL=http://localhost:5173
 ```
 
 ### Run Backend Server
 
 ```
-uvicorn main:app --reload
+cd backend
+python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The API will start locally at:
 
 ```
 http://localhost:8000
+```
+
+### Run Full Stack (Backend + Frontend)
+
+From project root:
+
+```
+chmod +x run_app.sh
+./run_app.sh
 ```
 
 ---
