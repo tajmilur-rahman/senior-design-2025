@@ -197,8 +197,6 @@ function SevPillBadge({ sev }) {
 
 export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const [mode,             setMode]             = useState('manual');
-  const [team,             setTeam]             = useState('');
-  const [category,         setCategory]         = useState('');
   const [component,        setComponent]        = useState('');
   const [summary,          setSummary]          = useState('');
   const [severity,         setSeverity]         = useState('S3');
@@ -228,7 +226,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const switchMode = (newMode) => {
     setMode(newMode);
     setMsg({ text: '', type: '' });
-    setTeam(''); setCategory(''); setComponent(''); setSummary(''); setSeverity('S3');
+    setComponent(''); setSummary(''); setSeverity('S3');
     setFile(null);
     setAnalyzeResult(null); setAnalyzing(false);
   };
@@ -236,8 +234,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   useEffect(() => {
     if (prefill) {
       setSummary(prefill.summary || ''); setSeverity(prefill.severity || 'S3');
-      if (prefill.team)      setTeam(prefill.team);
-      if (prefill.category)  setCategory(prefill.category);
       if (prefill.component) setComponent(prefill.component);
       onClearPrefill?.();
     }
@@ -257,12 +253,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
     }
   }, [isSuperAdmin]);
 
-  const teams = Object.keys(mozillaTaxonomy || {});
-  const categories = team ? Object.keys(mozillaTaxonomy[team] || {}) : [];
-  const components = team && category ? (mozillaTaxonomy[team]?.[category] || []) : [];
 
-  const handleTeamChange = (val) => { setTeam(val); setCategory(''); setComponent(''); };
-  const handleCategoryChange = (val) => { setCategory(val); setComponent(''); };
 
   const fetchBatches = useCallback(async () => {
     try { const res = await axios.get('/api/batches'); setBatches(res.data || []); }
@@ -308,13 +299,13 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
   const handleManualSubmit = async () => {
     if (!summary) { showMsg('Please enter a bug summary.', 'error'); return; }
-    if (!component) { showMsg('Please select a component.', 'error'); return; }
     if (isSuperAdmin && !selectedCompanyId) { showMsg('Super Admin: please select a company.', 'error'); return; }
     setLoading(true);
     const tempId = `pending-${Date.now()}`;
-    setBugs(prev => [{ id: tempId, summary, component, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
+    const finalComponent = component || 'General';
+    setBugs(prev => [{ id: tempId, summary, component: finalComponent, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
     try {
-      const payload = { summary, component, severity, status: 'NEW' };
+      const payload = { summary, component: finalComponent, severity, status: 'NEW' };
       if (isSuperAdmin && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
       const response = await axios.post('/api/bug', payload);
       const realId = response.data?.[0]?.bug_id || response.data?.[0]?.id;
@@ -324,7 +315,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
         setTimeout(() => { newBugIdsRef.current.delete(String(realId)); setBugs(prev => prev.map(b => String(b.id) === String(realId) ? { ...b, _isNew: false } : b)); }, 8000);
       } else { setBugs(prev => prev.filter(b => b.id !== tempId)); }
       showMsg('Bug logged successfully');
-      setSummary(''); setTeam(''); setCategory(''); setComponent(''); setSeverity('S3');
+      setSummary(''); setComponent(''); setSeverity('S3');
       startFastRefresh();
     } catch { setBugs(prev => prev.filter(b => b.id !== tempId)); showMsg('Failed to save. Please try again.', 'error'); }
     finally { setLoading(false); }
@@ -491,46 +482,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                 >
-                  {/* Component selects: Team / Category / Component stacked */}
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <FolderTree size={14} style={{ color: 'var(--accent)' }} />
-                      <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Component</span>
-                      <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Team</label>
-                        <SubmitSelect
-                          value={team}
-                          onChange={handleTeamChange}
-                          placeholder="Select a team…"
-                          options={teams.map(t => ({ value: t, label: t }))}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Category</label>
-                        <SubmitSelect
-                          value={category}
-                          onChange={handleCategoryChange}
-                          placeholder={team ? 'Select a category…' : 'Select a team first'}
-                          options={categories.map(c => ({ value: c, label: c }))}
-                          disabled={!team}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Component</label>
-                        <SubmitSelect
-                          value={component}
-                          onChange={v => setComponent(v)}
-                          placeholder={category ? 'Select a component…' : 'Select a category first'}
-                          options={components.map(c => ({ value: c, label: c }))}
-                          disabled={!category}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Description textarea */}
                   <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3">
