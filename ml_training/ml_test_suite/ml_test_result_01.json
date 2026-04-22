@@ -1,0 +1,92 @@
+{
+  "summary": {
+    "total_test_cases": 4,
+    "passed": 1,
+    "failed": 3,
+    "skipped_rows": 0,
+    "pass_rate": 0.25,
+    "needs_review_count": 2,
+    "confusion_matrix": [
+      {
+        "actual": "S1",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      },
+      {
+        "actual": "S2",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      },
+      {
+        "actual": "S3",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      },
+      {
+        "actual": "S4",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      }
+    ],
+    "s2_predicted_as_s3": 1,
+    "s3_predicted_as_s2": 0
+  },
+  "results": [
+    {
+      "id": 1,
+      "summary": "Firefox crashes when opening more than 50 tabs",
+      "component": "General",
+      "platform": "All",
+      "expected": "S1",
+      "predicted": "S3",
+      "confidence": 0.767,
+      "needs_review": true,
+      "review_reason": "high_risk_terms",
+      "passed": false
+    },
+    {
+      "id": 2,
+      "summary": "4K video playback stutters on YouTube",
+      "component": "General",
+      "platform": "All",
+      "expected": "S2",
+      "predicted": "S3",
+      "confidence": 0.856,
+      "needs_review": false,
+      "review_reason": null,
+      "passed": false
+    },
+    {
+      "id": 3,
+      "summary": "Dark mode colours inconsistent across the Settings panel",
+      "component": "General",
+      "platform": "All",
+      "expected": "S3",
+      "predicted": "S3",
+      "confidence": 0.899,
+      "needs_review": false,
+      "review_reason": null,
+      "passed": true
+    },
+    {
+      "id": 4,
+      "summary": "Colour theme not applied consistently across all panels",
+      "component": "General",
+      "platform": "All",
+      "expected": "S4",
+      "predicted": "S3",
+      "confidence": 0.47,
+      "needs_review": true,
+      "review_reason": "low_confidence",
+      "passed": false
+    }
+  ]
+}
