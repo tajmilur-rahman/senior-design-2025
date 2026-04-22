@@ -91,6 +91,15 @@ def is_shared_table(table: str) -> bool:
     return table != "bugs"
 
 
+def _normalize_company_id(raw_company_id):
+    if raw_company_id in (None, "None", ""):
+        return None
+    try:
+        return int(raw_company_id)
+    except (TypeError, ValueError):
+        return None
+
+
 def _all_active_data_tables() -> list:
     """Return every unique company data table, always including 'bugs', never 'firefox_table'."""
     try:
@@ -835,7 +844,7 @@ async def analyze_bug(
     model_source: str = Query(default="universal"),
     current_user: dict = Depends(auth.require_active),
 ):
-    cid = current_user.get("company_id")
+    cid = _normalize_company_id(current_user.get("company_id"))
     try:
         target_cid = cid if model_source == "company" else None
         result = ml_logic.predict_severity(bug_text, company_id=target_cid)
@@ -865,7 +874,7 @@ async def analyze_bug(
 
 @app.post("/api/feedback")
 async def submit_feedback(req: FeedbackPayload, current_user: dict = Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
+    cid = _normalize_company_id(current_user.get("company_id"))
     is_correction = req.predicted_severity != req.actual_severity
 
     existing = supabase.table("feedback") \
@@ -899,7 +908,6 @@ async def submit_feedback(req: FeedbackPayload, current_user: dict = Depends(aut
         }).execute()
 
     return {"message": "Feedback recorded", "is_correction": is_correction}
-
 
 @app.get("/api/hub/ml_metrics")
 def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
