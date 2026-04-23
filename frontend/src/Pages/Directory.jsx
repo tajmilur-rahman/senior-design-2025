@@ -65,16 +65,10 @@ export default function Directory({ onNavigate, user }) {
     compName.includes('firefox') || compName.includes('mozilla') ||
     userName.includes('firefox') || userName.includes('mozilla');
 
-  // Detect whether the component data looks like Mozilla taxonomy —
-  // this catches non-Firefox companies whose DB was seeded from firefox_table
-  // before the component-stripping fix was applied.
-  const looksLikeMozilla = dynamicComponents.some(({ name }) =>
-    Object.keys(mozillaTaxonomy).some(k => k.toLowerCase() === name.toLowerCase())
-  );
-
-  // Only show dynamic component cards for non-Firefox companies that have
-  // their own real (non-Mozilla) component data.
-  const showDynamic = !isFirefoxCompany && dynamicComponents.length > 0 && !looksLikeMozilla;
+  // Show dynamic component cards for non-Firefox companies whenever they have
+  // component data. Do not suppress on name overlap (e.g. "DevTools") because
+  // legitimate tenant data can share labels with Mozilla taxonomy terms.
+  const showDynamic = !isFirefoxCompany && dynamicComponents.length > 0;
   const companyLabel = user?.company_name || 'your company';
 
   const getTeamCount = (teamName) => counts[teamName.toLowerCase()] || 0;

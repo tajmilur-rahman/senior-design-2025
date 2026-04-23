@@ -1132,15 +1132,16 @@ async def bulk_submit(
 ):
     """Insert bugs from a CSV/JSON file into the company database. No model training.
 
-    Bulk imports go into the company's primary data_table (`bugs` for most companies),
-    always with company_id set for reliable deletion and super-admin aggregation.
+    Bulk imports go into the company's primary data_table (per-tenant table preferred).
     firefox_table is never written to — it is the ML baseline only.
     """
     cid = current_user.get("company_id")
     table = get_company_table(cid)
-    # Fallback safety: never write into the shared ML baseline.
+
+    # Safety: never write into ML baseline.
     if table == "firefox_table":
         table = "bugs"
+
     content = await file.read()
 
     try:
@@ -1151,32 +1152,68 @@ async def bulk_submit(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
 
-    # Capture timestamp BEFORE inserting bugs so upload_time < all bug created_at values.
-    # This makes the gte("created_at", upload_time) delete in _delete_bulk_imported_bugs reliable.
     pre_insert_ts = datetime.now(timezone.utc).isoformat()
 
+    def _parse_bug_id(val):
+        # Handles NaN, empty strings, None
+        if val is None:
+            return None
+        # pandas NaN check
+        try:
+            if pd.isna(val):
+                return None
+        except Exception:
+            pass
+
+        s = str(val).strip()
+        if s == "" or s.lower() == "none" or s.lower() == "null":
+            return None
+
+        # Allow "12.0" coming from Excel/CSV
+        try:
+            as_float = float(s)
+            as_int = int(as_float)
+            if as_float != as_int:
+                raise ValueError("bug_id must be an integer")
+            return as_int
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid bug_id value: {val}")
+
     rows = []
+    has_bug_id_col = "bug_id" in df.columns
+
     for _, row in df.iterrows():
-        summary_text = str(row.get("summary", ""))
-        raw_component = str(row.get("component", "")).strip()
+        summary_text = str(row.get("summary", "") or "")
+        raw_component = str(row.get("component", "") or "").strip()
         component_value = raw_component if raw_component else _infer_component_from_summary(summary_text)
+
         bug_row = {
             "summary":   summary_text,
             "component": component_value,
             "severity":  str(row.get("severity", "S3")).upper(),
             "status":    str(row.get("status", "PROCESSED")),
         }
+
+        # Persist bug_id if present in upload
+        if has_bug_id_col:
+            parsed_bug_id = _parse_bug_id(row.get("bug_id"))
+            if parsed_bug_id is not None:
+                bug_row["bug_id"] = parsed_bug_id
+
+        # Only add company_id when writing to shared table(s) that need scoping by column.
+        # NOTE: your `is_shared_table()` naming is confusing (it returns table != "bugs").
+        # This preserves your existing behavior but you may want to revisit that function.
         if not is_shared_table(table):
             bug_row["company_id"] = cid
+
         rows.append(bug_row)
 
-    inserted_ids = []
     if rows:
-        result = supabase.table(table).insert(rows).execute()
-        for r in (result.data or []):
-            rid = r.get("bug_id") or r.get("id")
-            if rid is not None:
-                inserted_ids.append(int(rid))
+        try:
+            supabase.table(table).insert(rows).execute()
+        except Exception as e:
+            # If bug_id is unique in your schema, duplicates will error here.
+            raise HTTPException(status_code=400, detail=f"Insert failed: {e}")
 
     batch_payload = {
         "batch_name":  batch_name or file.filename,
@@ -1199,8 +1236,6 @@ async def bulk_submit(
         pass
 
     return {"message": "Bugs imported successfully", "records_processed": len(rows)}
-
-
 @app.get("/api/batches")
 def get_batches(current_user: dict = Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
