@@ -5,6 +5,7 @@ import {
   ArrowRight, ArrowLeft,
   Zap, Database, Brain, Download, CheckCircle, Loader, X
 } from "lucide-react";
+import { LiquidButton as Button } from "../liquid-glass-button";
 // ArrowLeft and X are used in the seed error/retry UI
 
 // ── First-launch choice screen ────────────────────────────────────────────────
@@ -21,7 +22,7 @@ function LaunchChoiceStep({ onChoice }) {
       id: "empty",
       icon: <Database size={26} color="#6366f1" />,
       title: "Start with empty database",
-      desc: "Begin with a clean slate. Submit your team's real bugs from day one using the Severity Analysis tab.",
+      desc: "Begin with a clean slate. Submit your team's real bugs from day one using the Bug Ingestion tab.",
       badge: null,
     },
     {
@@ -157,12 +158,12 @@ export default function Onboarding({ onComplete }) {
               <h2 className="onboarding-title" style={{ margin: 0 }}>Seeding failed</h2>
               <p style={{ color: "var(--text-sec)", fontSize: 13, margin: 0 }}>{seedResult.error}</p>
               <div style={{ display: "flex", gap: 10 }}>
-                <button className="onboarding-btn-back" onClick={() => { setChoice(null); setSeedResult(null); }}>
+                <Button variant="outline" onClick={() => { setChoice(null); setSeedResult(null); }}>
                   <ArrowLeft size={15} /> Try again
-                </button>
-                <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database", false)}>
+                </Button>
+                <Button onClick={() => onComplete(null, null, "database", false)}>
                   Go to Dashboard <ArrowRight size={15} />
-                </button>
+                </Button>
               </div>
             </>
           ) : (
@@ -174,9 +175,9 @@ export default function Onboarding({ onComplete }) {
               <p className="onboarding-subtitle" style={{ margin: 0 }}>
                 {seedResult?.count ? `${seedResult.count.toLocaleString()} sample bugs` : "Sample bugs"} have been loaded into your company's database.
               </p>
-              <button className="onboarding-btn-next" onClick={() => onComplete(null, null, "database", false)}>
+              <Button onClick={() => onComplete(null, null, "database", false)}>
                 Explore my database <ArrowRight size={15} />
-              </button>
+              </Button>
             </>
           )}
         </div>

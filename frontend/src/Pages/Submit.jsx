@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { MotionBentoCard } from '../bento-card';
 
 /* Keyboard-accessible dropdown matching the Database/Explorer tab style.
    Implements the listbox pattern: arrows navigate, Enter selects, Esc closes. */
@@ -89,13 +91,13 @@ function SubmitSelect({ value, onChange, options, placeholder, disabled = false,
         aria-label={ariaLabel || placeholder}
         onClick={() => { if (!disabled) setOpen(o => !o); }}
         onKeyDown={onKeyDown}
-        className={`sf-select-trigger h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30
+        className={`sf-select-trigger h-12 flex items-center justify-between px-5 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30
           ${open
             ? 'sf-select-trigger--open border-indigo-500/40 bg-white/[0.08] text-white'
             : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'
           }`}
       >
-        <span className={`sf-select-value ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <span className={`sf-select-value tracking-wide ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`sf-select-chevron flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
@@ -104,9 +106,9 @@ function SubmitSelect({ value, onChange, options, placeholder, disabled = false,
           role="listbox"
           ref={listRef}
           aria-label={ariaLabel || placeholder}
-          className="sf-select-panel absolute z-[9999] w-full mt-1.5 border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5" style={{ background: 'var(--card-bg)' }}
+          className="sf-select-panel absolute z-[9999] w-full mt-2 border border-white/10 rounded-xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200" style={{ backgroundColor: 'var(--bg-elevated)', backdropFilter: 'blur(16px)' }}
         >
-          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
               const isActive   = i === activeIdx;
@@ -117,7 +119,7 @@ function SubmitSelect({ value, onChange, options, placeholder, disabled = false,
                   aria-selected={isSelected}
                   onClick={() => commit(i)}
                   onMouseEnter={() => setActiveIdx(i)}
-                  className={`sf-select-option px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl
+                  className={`sf-select-option px-5 py-3 text-[13px] font-semibold tracking-wide cursor-pointer transition-colors mx-2 my-0.5 rounded-lg
                     ${isSelected
                       ? 'sf-select-option--active bg-indigo-500/15 text-indigo-400'
                       : isActive
@@ -195,10 +197,8 @@ function SevPillBadge({ sev }) {
   );
 }
 
-export default function SubmitTab({ user, prefill, onClearPrefill }) {
+export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate }) {
   const [mode,             setMode]             = useState('manual');
-  const [team,             setTeam]             = useState('');
-  const [category,         setCategory]         = useState('');
   const [component,        setComponent]        = useState('');
   const [summary,          setSummary]          = useState('');
   const [severity,         setSeverity]         = useState('S3');
@@ -228,7 +228,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const switchMode = (newMode) => {
     setMode(newMode);
     setMsg({ text: '', type: '' });
-    setTeam(''); setCategory(''); setComponent(''); setSummary(''); setSeverity('S3');
+    setComponent(''); setSummary(''); setSeverity('S3');
     setFile(null);
     setAnalyzeResult(null); setAnalyzing(false);
   };
@@ -236,8 +236,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   useEffect(() => {
     if (prefill) {
       setSummary(prefill.summary || ''); setSeverity(prefill.severity || 'S3');
-      if (prefill.team)      setTeam(prefill.team);
-      if (prefill.category)  setCategory(prefill.category);
       if (prefill.component) setComponent(prefill.component);
       onClearPrefill?.();
     }
@@ -257,12 +255,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
     }
   }, [isSuperAdmin]);
 
-  const teams = Object.keys(mozillaTaxonomy || {});
-  const categories = team ? Object.keys(mozillaTaxonomy[team] || {}) : [];
-  const components = team && category ? (mozillaTaxonomy[team]?.[category] || []) : [];
 
-  const handleTeamChange = (val) => { setTeam(val); setCategory(''); setComponent(''); };
-  const handleCategoryChange = (val) => { setCategory(val); setComponent(''); };
 
   const fetchBatches = useCallback(async () => {
     try { const res = await axios.get('/api/batches'); setBatches(res.data || []); }
@@ -308,24 +301,33 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
 
   const handleManualSubmit = async () => {
     if (!summary) { showMsg('Please enter a bug summary.', 'error'); return; }
-    if (!component) { showMsg('Please select a component.', 'error'); return; }
     if (isSuperAdmin && !selectedCompanyId) { showMsg('Super Admin: please select a company.', 'error'); return; }
+    const hadExistingBugs = bugs.some(b => !String(b.id).startsWith('pending-'));
     setLoading(true);
     const tempId = `pending-${Date.now()}`;
-    setBugs(prev => [{ id: tempId, summary, component, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
+    const finalComponent = component || 'General';
+    setBugs(prev => [{ id: tempId, summary, component: finalComponent, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
     try {
-      const payload = { summary, component, severity, status: 'NEW' };
+      const payload = { summary, component: finalComponent, severity, status: 'NEW' };
       if (isSuperAdmin && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
       const response = await axios.post('/api/bug', payload);
+      const savedRow = response.data?.[0] || {};
+      const savedComponent = savedRow.component || finalComponent;
       const realId = response.data?.[0]?.bug_id || response.data?.[0]?.id;
       if (realId) {
         newBugIdsRef.current.add(String(realId));
-        setBugs(prev => prev.map(b => b.id === tempId ? { id: realId, summary, component, severity, status: 'NEW', _isNew: true } : b));
+        setBugs(prev => prev.map(b => b.id === tempId ? { id: realId, summary, component: savedComponent, severity, status: 'NEW', _isNew: true } : b));
         setTimeout(() => { newBugIdsRef.current.delete(String(realId)); setBugs(prev => prev.map(b => String(b.id) === String(realId) ? { ...b, _isNew: false } : b)); }, 8000);
       } else { setBugs(prev => prev.filter(b => b.id !== tempId)); }
-      showMsg('Bug logged successfully');
-      setSummary(''); setTeam(''); setCategory(''); setComponent(''); setSeverity('S3');
+      showMsg(`Bug logged successfully (${savedComponent})`);
+      setSummary(''); setComponent(''); setSeverity('S3');
       startFastRefresh();
+
+      // First-time flow: after the first successful bug, jump to Directory
+      // so users immediately see component discovery begin.
+      if (!hadExistingBugs && typeof onNavigate === 'function') {
+        setTimeout(() => onNavigate('directory'), 900);
+      }
     } catch { setBugs(prev => prev.filter(b => b.id !== tempId)); showMsg('Failed to save. Please try again.', 'error'); }
     finally { setLoading(false); }
   };
@@ -396,6 +398,26 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
     finally { setLoading(false); }
   };
 
+  const handleDownloadTemplate = () => {
+    const csvTemplate = [
+      'summary,component,severity,status',
+      'Database connection timeout causing complete system crash,Database,S1,NEW',
+      'Security vulnerability allows unauthorized database access,Security,S1,NEW',
+      'Login page button misaligned on mobile,Frontend,S3,NEW',
+      'Example without component (auto-detect),,S3,NEW',
+    ].join('\n');
+
+    const blob = new Blob([csvTemplate], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'bug_import_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const selectedSevDef = SEVERITY_DEFS.find(d => d.code === severity);
 
   const PIPELINE = [
@@ -417,10 +439,10 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="text-[1.75rem] font-semibold text-white tracking-tight mb-1">
-            Submit <span style={{ color: 'var(--accent)' }}>issue</span>
+            Bug <span style={{ color: 'var(--accent)' }}>Ingestion</span>
           </h1>
           <p className="text-white/50 text-sm">
-            Describe the bug and get instant AI severity classification.
+            Ingest bugs manually or in bulk — AI classifies severity and routes to the right team.
           </p>
         </div>
         <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Severity & Status Guide" />
@@ -448,8 +470,8 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
         {/* ── LEFT col-span-8: Triage Form Card ───────────────────────────────── */}
-        <motion.div
-          className="lg:col-span-8 border border-white/10 rounded-2xl overflow-visible flex flex-col"
+        <MotionBentoCard
+          className="lg:col-span-8 overflow-visible flex flex-col"
           style={{ background: 'var(--card-bg)' }}
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 16 }}
@@ -491,45 +513,22 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                 >
-                  {/* Component selects: Team / Category / Component stacked */}
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <FolderTree size={14} style={{ color: 'var(--accent)' }} />
-                      <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Component</span>
-                      <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                  {/* Super admin company picker — required first field */}
+                  {isSuperAdmin && (
+                    <div className="mb-6 p-4 rounded-2xl border-2 border-amber-500/30 bg-amber-500/5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Building2 size={14} className="text-amber-500" />
+                        <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Target Company</span>
+                        <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
+                      </div>
+                      <SubmitSelect
+                        value={selectedCompanyId}
+                        onChange={v => setSelectedCompanyId(v)}
+                        placeholder="Select which company to ingest this bug into…"
+                        options={companies.map(c => ({ value: c.id, label: c.name }))}
+                      />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Team</label>
-                        <SubmitSelect
-                          value={team}
-                          onChange={handleTeamChange}
-                          placeholder="Select a team…"
-                          options={teams.map(t => ({ value: t, label: t }))}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Category</label>
-                        <SubmitSelect
-                          value={category}
-                          onChange={handleCategoryChange}
-                          placeholder={team ? 'Select a category…' : 'Select a team first'}
-                          options={categories.map(c => ({ value: c, label: c }))}
-                          disabled={!team}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Component</label>
-                        <SubmitSelect
-                          value={component}
-                          onChange={v => setComponent(v)}
-                          placeholder={category ? 'Select a component…' : 'Select a category first'}
-                          options={components.map(c => ({ value: c, label: c }))}
-                          disabled={!category}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Description textarea */}
                   <div className="mb-6">
@@ -598,35 +597,18 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     )}
                   </div>
 
-                  {/* Super admin company picker */}
-                  {isSuperAdmin && (
-                    <div className="mb-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Building2 size={14} className="text-amber-500" />
-                        <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Company</span>
-                        <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
-                      </div>
-                      <SubmitSelect
-                        value={selectedCompanyId}
-                        onChange={v => setSelectedCompanyId(v)}
-                        placeholder="Select a company…"
-                        options={companies.map(c => ({ value: c.id, label: c.name }))}
-                      />
-                    </div>
-                  )}
-
                   {/* Analyze button — green solid, full-width */}
-                  <button
+                  <Button
                     onClick={() => handleAnalyze('universal')}
                     disabled={analyzing || !summary}
-                    className="w-full font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 mb-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                    className="w-full font-bold py-3 px-4 mb-2 shadow-lg"
                     style={{ background: 'var(--accent)', color: '#003822' }}
                   >
                     {analyzing
                       ? <><RefreshCw size={16} className="animate-spin" /> Analyzing…</>
                       : <><Zap size={16} /> Analyze Issue</>
                     }
-                  </button>
+                  </Button>
 
                   {/* Company model button (secondary) */}
                   <button
@@ -700,9 +682,9 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   </label>
 
                   {/* Submit button */}
-                  <button
+                  <Button
                     onClick={handleManualSubmit}
-                    disabled={loading || !summary || !component || (isSuperAdmin && !selectedCompanyId)}
+                    disabled={loading}
                     className="w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                     style={{ background: 'var(--accent)', color: '#003822' }}
                   >
@@ -710,7 +692,13 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                       ? <><RefreshCw size={16} className="animate-spin" /> Submitting…</>
                       : <><Send size={16} /> Submit Bug</>
                     }
-                  </button>
+                  </Button>
+                  {!summary && (
+                    <p className="mt-2 text-xs text-white/40">Tip: click Submit to see required-field guidance, or add a short bug summary first.</p>
+                  )}
+                  {isSuperAdmin && !selectedCompanyId && (
+                    <p className="mt-2 text-xs text-amber-400/80">Select a company to enable submit.</p>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div
@@ -720,6 +708,17 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                 >
+                  <div className="flex items-center justify-between mb-4 gap-3">
+                    <p className="text-xs text-white/40">First time here? Download the template and upload your bug list.</p>
+                    <button
+                      onClick={handleDownloadTemplate}
+                      type="button"
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-white/15 text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                    >
+                      Download CSV Template
+                    </button>
+                  </div>
+
                   <div
                     className={`border-2 border-dashed rounded-2xl p-12 text-center mb-8 cursor-pointer transition-all ${file ? 'bg-white/5' : 'border-white/20 hover:border-white/40 hover:bg-white/5'}`}
                     style={file ? { borderColor: 'var(--accent)50', background: 'var(--accent)08' } : {}}
@@ -732,14 +731,14 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     <p className="text-xs text-white/40 font-medium">JSON or CSV · Max 50 MB</p>
                     <input id="file-upload-input" type="file" accept=".json,.csv" className="hidden" onChange={e => setFile(e.target.files[0])} />
                   </div>
-                  <button
+                  <Button
                     onClick={handleBulkUpload}
                     disabled={loading || !file}
-                    className="w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mb-8"
+                    className="w-full font-bold py-4 shadow-lg mb-8"
                     style={{ background: 'var(--accent)', color: '#003822' }}
                   >
                     {loading ? <><RefreshCw size={16} className="animate-spin" /> Importing…</> : <><UploadCloud size={16} /> Import Bugs</>}
-                  </button>
+                  </Button>
 
                   {batches.length > 0 && (
                     <div>
@@ -813,12 +812,12 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
               )}
             </AnimatePresence>
           </div>
-        </motion.div>
+        </MotionBentoCard>
 
         {/* ── RIGHT col-span-4: Severity Quick Reference ──────────────────────── */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <motion.div
-            className="border border-white/10 rounded-2xl p-6"
+          <MotionBentoCard
+            className="p-6"
             style={{ background: 'var(--card-bg)' }}
             whileInView={{ opacity: 1, y: 0 }}
             initial={{ opacity: 0, y: 16 }}
@@ -863,13 +862,13 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                 );
               })}
             </div>
-          </motion.div>
+          </MotionBentoCard>
         </div>
       </div>
 
-      {/* ── Below-the-fold: Recent Bugs panel (full width under left column) ──── */}
-      <motion.div
-        className="mt-8 border border-white/10 rounded-2xl overflow-hidden"
+      {/* ── Below-the-fold: Recent Bugs panel (full width) ──── */}
+      <MotionBentoCard
+        className="mt-8 overflow-hidden"
         style={{ background: 'var(--card-bg)' }}
         whileInView={{ opacity: 1, y: 0 }}
         initial={{ opacity: 0, y: 16 }}
@@ -897,19 +896,20 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
           {bugs.length === 0 ? (
             <div className="p-12 text-center text-white/40 text-sm font-medium">
               No bugs yet — submit your first one.
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-10" style={{ background: 'var(--card-bg)' }}>
                 <tr className="border-b border-white/5">
                   <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium pl-6">Severity</th>
                   <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium">Summary</th>
                   <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium hidden sm:table-cell">Component</th>
-                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium text-right pr-6 hidden md:table-cell">Status</th>
+                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium hidden md:table-cell">Product</th>
+                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium text-right pr-6 hidden lg:table-cell">Status</th>
                   <th className="pb-3 pt-4 pr-4"></th>
                 </tr>
               </thead>
@@ -922,7 +922,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     <td className="py-3 pl-6">
                       <SevPillBadge sev={b.severity} />
                     </td>
-                    <td className="py-3 pr-4 max-w-xs">
+                    <td className="py-3 pr-4 max-w-md">
                       <span className={`text-sm font-medium truncate block ${b._isNew ? 'text-white' : 'text-white/80'}`}>
                         {b.summary}
                       </span>
@@ -930,7 +930,10 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                     <td className="py-3 pr-4 hidden sm:table-cell">
                       <span className="text-xs text-white/50 font-mono">{b.component || 'General'}</span>
                     </td>
-                    <td className="py-3 pr-6 text-right hidden md:table-cell">
+                    <td className="py-3 pr-4 hidden md:table-cell">
+                      <span className="text-xs text-white/50 font-mono">{b.product || 'Firefox'}</span>
+                    </td>
+                    <td className="py-3 pr-6 text-right hidden lg:table-cell">
                       <span className="text-[11px] text-white/40 uppercase tracking-widest font-mono">{b.status || 'NEW'}</span>
                     </td>
                     <td className="py-3 pr-4">
@@ -947,7 +950,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
             </table>
           )}
         </div>
-      </motion.div>
+      </MotionBentoCard>
     </div>
   );
 }

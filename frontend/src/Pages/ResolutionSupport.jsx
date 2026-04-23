@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
   Search, History, Clock3, CheckCircle2, Wrench,
@@ -6,6 +6,8 @@ import {
   RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Filter,
   Database,
 } from "lucide-react";
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 function useIsDark() {
   const [isDark, setIsDark] = useState(
@@ -35,6 +37,67 @@ const SCORE_CONFIG = [
   { min: 0, label: "Weak match", accent: "text-white/40", bg: "bg-white/5", border: "border-white/10" },
 ];
 
+function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const ref = useRef(null);
+  const listRef = useRef(null);
+  const listId = useRef(`sf-listbox-${Math.random().toString(36).slice(2, 9)}`).current;
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectedIdx = options.findIndex(o => String(o.value) === String(value));
+  const selected = selectedIdx >= 0 ? options[selectedIdx] : null;
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIdx(selectedIdx >= 0 ? selectedIdx : 0);
+  }, [open]);
+
+  const openAnd = (idx) => { if (disabled) return; setOpen(true); setActiveIdx(idx); };
+  const commit = (idx) => {
+    if (idx < 0 || idx >= options.length) return;
+    onChange(options[idx].value);
+    setOpen(false);
+  };
+
+  const onKeyDown = (e) => {
+    if (disabled) return;
+    switch (e.key) {
+      case 'Enter': case ' ': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else commit(activeIdx); break;
+      case 'ArrowDown': e.preventDefault(); if (!open) openAnd(selectedIdx >= 0 ? selectedIdx : 0); else setActiveIdx(i => Math.min(options.length - 1, i + 1)); break;
+      case 'ArrowUp': e.preventDefault(); if (!open) openAnd(Math.max(0, selectedIdx)); else setActiveIdx(i => Math.max(0, i - 1)); break;
+      case 'Escape': if (open) { e.preventDefault(); setOpen(false); } break;
+      case 'Tab': setOpen(false); break;
+      default: break;
+    }
+  };
+
+  return (
+    <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
+        className={triggerClassName || `h-10 flex items-center justify-between px-5 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-blue-500/30 ${open ? 'border-blue-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        <span className={`truncate pr-2 tracking-wide ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
+      </div>
+      {open && (
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ backgroundColor: 'var(--bg-elevated)', backdropFilter: 'blur(16px)' }}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
+            {options.map((opt, i) => {
+              const isSelected = String(opt.value) === String(value);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-5 py-3 text-[13px] font-semibold tracking-wide cursor-pointer transition-colors mx-2 my-0.5 rounded-lg ${isSelected ? 'bg-blue-500/15 text-blue-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getScoreConfig(score) {
   return SCORE_CONFIG.find((c) => score >= c.min) || SCORE_CONFIG[SCORE_CONFIG.length - 1];
 }
@@ -56,7 +119,7 @@ function getSeverityBadgeClasses(severity) {
 
 function SkeletonCard() {
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 flex flex-col gap-4 animate-pulse">
+    <BentoCard className="rounded-[2rem] p-6 lg:p-8 flex flex-col gap-4 animate-pulse">
       <div className="flex justify-between">
         <div className="bg-white/10 rounded-md w-24 h-6" />
         <div className="bg-white/10 rounded-md w-20 h-6" />
@@ -68,7 +131,7 @@ function SkeletonCard() {
         <div className="bg-white/10 rounded-md w-28 h-4" />
       </div>
       <div className="bg-white/5 rounded-xl w-full h-20 mt-4" />
-    </div>
+    </BentoCard>
   );
 }
 
@@ -334,7 +397,7 @@ function ComponentSeverityGrid({ rows }) {
       case "S4":
         return { backgroundColor: `rgba(14, 165, 233, ${opacity})` };
       default:
-        return { backgroundColor: isDark ? `rgba(255,255,255,0.06)` : `rgba(0,0,0,0.05)` };
+        return { backgroundColor: 'var(--hover-bg)' };
     }
   };
 
@@ -379,14 +442,14 @@ function ComponentSeverityGrid({ rows }) {
 
 function AnalyticsCard({ title, subtitle, icon, children }) {
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8">
+    <BentoCard className="rounded-[2rem] p-6 lg:p-8">
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <h2 className="text-sm font-bold text-white tracking-tight">{title}</h2>
       </div>
       <p className="text-xs text-white/40 mb-6">{subtitle}</p>
       {children}
-    </div>
+    </BentoCard>
   );
 }
 
@@ -598,11 +661,11 @@ export default function ResolutionSupport() {
               )}
             </button>
 
-            <button
+            <Button
               type="button"
               onClick={() => handleSearch()}
               disabled={loading || !query.trim()}
-              className="h-14 px-8 bg-white text-black hover:bg-zinc-200 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.1)] whitespace-nowrap"
+              className="h-14 px-8 font-bold shadow-[0_0_20px_rgba(255,255,255,0.1)] whitespace-nowrap"
             >
               {loading ? (
                 <>
@@ -615,7 +678,7 @@ export default function ResolutionSupport() {
                   Search KB
                 </>
               )}
-            </button>
+            </Button>
 
             {searched && (
               <button
@@ -635,18 +698,19 @@ export default function ResolutionSupport() {
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1 min-w-[170px]">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Resolution type</label>
-                <select
+                <CustomSelect
                   value={resolutionFilter}
-                  onChange={(e) => setResolutionFilter(e.target.value)}
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-zinc-900 text-white text-sm focus:outline-none focus:border-blue-500/50"
-                >
-                  <option value=""       className="bg-zinc-900 text-white">All types</option>
-                  <option value="fixed"       className="bg-zinc-900 text-white">FIXED</option>
-                  <option value="duplicate"   className="bg-zinc-900 text-white">DUPLICATE</option>
-                  <option value="worksforme"  className="bg-zinc-900 text-white">WORKSFORME</option>
-                  <option value="invalid"     className="bg-zinc-900 text-white">INVALID</option>
-                  <option value="wontfix"     className="bg-zinc-900 text-white">WONTFIX</option>
-                </select>
+                  onChange={setResolutionFilter}
+                  options={[
+                    { value: '', label: 'All types' },
+                    { value: 'fixed', label: 'FIXED' },
+                    { value: 'duplicate', label: 'DUPLICATE' },
+                    { value: 'worksforme', label: 'WORKSFORME' },
+                    { value: 'invalid', label: 'INVALID' },
+                    { value: 'wontfix', label: 'WONTFIX' }
+                  ]}
+                  placeholder="All types"
+                />
               </div>
 
               <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
@@ -662,17 +726,18 @@ export default function ResolutionSupport() {
 
               <div className="flex flex-col gap-1 min-w-[130px]">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Severity</label>
-                <select
+                <CustomSelect
                   value={severityFilter}
-                  onChange={(e) => setSeverityFilter(e.target.value)}
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-zinc-900 text-white text-sm focus:outline-none focus:border-blue-500/50"
-                >
-                  <option value="">All severities</option>
-                  <option value="S1">S1</option>
-                  <option value="S2">S2</option>
-                  <option value="S3">S3</option>
-                  <option value="S4">S4</option>
-                </select>
+                  onChange={setSeverityFilter}
+                  options={[
+                    { value: '', label: 'All severities' },
+                    { value: 'S1', label: 'S1' },
+                    { value: 'S2', label: 'S2' },
+                    { value: 'S3', label: 'S3' },
+                    { value: 'S4', label: 'S4' }
+                  ]}
+                  placeholder="All severities"
+                />
               </div>
 
               <div className="flex flex-col gap-1 w-28">
@@ -929,11 +994,11 @@ export default function ResolutionSupport() {
               Boolean(item.bug_url);
 
             return (
-              <div
+              <BentoCard
                 key={item.id ?? idx}
-                className="group bg-white/[0.02] border border-white/10 rounded-[2rem] p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden transition-all hover:bg-white/[0.04] hover:border-white/20 flex flex-col gap-5"
+                className="rounded-[2rem] p-6 lg:p-8 shadow-2xl flex flex-col gap-5 hover:!bg-white/[0.04]"
               >
-                <div className={`absolute top-0 left-0 w-full h-[2px] ${sc.bg.replace("/10", "/50")}`} />
+                <div className={`absolute top-0 left-0 w-full h-[2px] ${sc.bg.replace("/10", "/50")} z-0`} />
 
                 <div className="flex justify-between items-center gap-4 flex-wrap">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
@@ -1110,7 +1175,7 @@ export default function ResolutionSupport() {
                     )}
                   </div>
                 )}
-              </div>
+              </BentoCard>
             );
           })}
         </div>

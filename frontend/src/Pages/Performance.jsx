@@ -8,22 +8,18 @@ import {
     Play, Upload, X, CheckCircle, Building2, Tag, Cpu, Trash2
 } from 'lucide-react';
 import {
-    BarChart, Bar, XAxis, YAxis,
-    Tooltip, ResponsiveContainer, CartesianGrid, LabelList
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList,
+    Tooltip, ResponsiveContainer
 } from 'recharts';
+import { ModelShowcase } from '../spatial-model-showcase';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
-// Two opposing hues — blue (baseline) vs amber (live). High contrast, high legibility.
+// Two opposing hues — Indigo (baseline) vs Emerald (live). Clean SaaS aesthetic.
 const BUILD_COLORS = {
-    Enterprise: '#3b82f6', // blue — static baseline ("Main brain")
-    Active:     '#f59e0b', // amber — live build
+    Enterprise: '#6366f1', // indigo — static baseline
+    Active:     '#10b981', // emerald — live build
 };
-
-const classMetrics = [
-    { subject: 'S1 Critical', precision: 95, recall: 98 },
-    { subject: 'S2 High',     precision: 88, recall: 85 },
-    { subject: 'S3 Normal',   precision: 92, recall: 94 },
-    { subject: 'S4 Low',      precision: 85, recall: 82 },
-];
 
 const SEV_COLORS = { S1: '#ef4444', S2: '#f59e0b', S3: '#3b82f6', S4: '#64748b' };
 
@@ -290,13 +286,14 @@ export default function Performance({ user, onTrainStart }) {
   const [error, setError]             = useState(null);
   const [showTrainModal, setShowTrainModal]     = useState(false);
   const [showResetModal, setShowResetModal]     = useState(false);
-  const [resettingKey, setResettingKey]         = useState(null); // null | 'global' | company_id int
+  const [resettingKey, setResettingKey]         = useState(null);
   const [refreshing, setRefreshing]             = useState(false);
   const [companies, setCompanies]               = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(''); // '' = universal (super admin only)
 
   const isSuperAdmin = user?.role === 'super_admin';
 
-  // Fetch company list for super admin reset modal
+  // Fetch company list for super admin — used for both reset modal and company selector
   useEffect(() => {
     if (!isSuperAdmin) return;
     const token = localStorage.getItem('token');
@@ -334,13 +331,17 @@ export default function Performance({ user, onTrainStart }) {
       dataset_size: null, status: 'Not Trained', last_trained: '—', total_trees: 0
   };
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = async (overrideCompanyId) => {
       setLoading(true); setError(null);
       if (!refreshing) setRefreshing(true);
       try {
           const token = localStorage.getItem('token');
+          const params = {};
+          const cid = overrideCompanyId !== undefined ? overrideCompanyId : selectedCompanyId;
+          if (isSuperAdmin && cid !== '') params.target_company_id = Number(cid);
           const res = await axios.get('/api/hub/ml_metrics', {
-              headers: { Authorization: `Bearer ${token}` }
+              headers: { Authorization: `Bearer ${token}` },
+              params,
           });
           const { current, baseline, previous, confusion_matrix, feedback_stats,
                   model_source, model_status, dataset_label, company_name } = res.data;
@@ -360,13 +361,13 @@ export default function Performance({ user, onTrainStart }) {
       } catch (e) {
           if (e.response?.status === 403) setError('Admin access required to view model performance.');
           else setModelData({ baseline: fallbackCurrent, current: fallbackCurrent, previous: fallbackCurrent, confusion_matrix: null, feedback_stats: null });
-          } finally {
-              setLoading(false);
-              setTimeout(() => setRefreshing(false), 500);
-          }
+      } finally {
+          setLoading(false);
+          setTimeout(() => setRefreshing(false), 500);
+      }
   };
 
-  useEffect(() => { fetchMetrics(); }, []);
+  useEffect(() => { fetchMetrics(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const baseMetrics = modelData.baseline || fallbackCurrent;
   const currMetrics = modelData.current  || fallbackCurrent;
@@ -377,43 +378,56 @@ export default function Performance({ user, onTrainStart }) {
   else if (viewVersion === 'current') metricsToUse = currMetrics;
   else                                metricsToUse = prevMetrics;
 
-  const comparisonData = [
-      { name: 'Accuracy',  Enterprise: baseMetrics.accuracy  * 100, Previous: prevMetrics.accuracy  * 100, Active: currMetrics.accuracy  * 100 },
-      { name: 'F1-Score',  Enterprise: baseMetrics.f1_score  * 100, Previous: prevMetrics.f1_score  * 100, Active: currMetrics.f1_score  * 100 },
-      { name: 'Precision', Enterprise: baseMetrics.precision * 100, Previous: prevMetrics.precision * 100, Active: currMetrics.precision * 100 },
-      { name: 'Recall',    Enterprise: baseMetrics.recall    * 100, Previous: prevMetrics.recall    * 100, Active: currMetrics.recall    * 100 },
-  ];
+  // Robust validation to prevent React crashes from malformed legacy JSON structures
+  let realConfusionMatrix = modelData.confusion_matrix;
+  const isValidMatrix = Array.isArray(realConfusionMatrix) && 
+                        realConfusionMatrix.length === 4 &&
+                        realConfusionMatrix.every(r => r && typeof r === 'object' && typeof r.actual === 'string');
 
-  const realConfusionMatrix = modelData.confusion_matrix || [
-      { actual: 'S1', S1: 0, S2: 0, S3: 0, S4: 0 },
-      { actual: 'S2', S1: 0, S2: 0, S3: 0, S4: 0 },
-      { actual: 'S3', S1: 0, S2: 0, S3: 0, S4: 0 },
-      { actual: 'S4', S1: 0, S2: 0, S3: 0, S4: 0 },
-  ];
+  if (!isValidMatrix) {
+      realConfusionMatrix = [
+          { actual: 'S1', S1: 0, S2: 0, S3: 0, S4: 0 },
+          { actual: 'S2', S1: 0, S2: 0, S3: 0, S4: 0 },
+          { actual: 'S3', S1: 0, S2: 0, S3: 0, S4: 0 },
+          { actual: 'S4', S1: 0, S2: 0, S3: 0, S4: 0 },
+      ];
+  }
 
-  const MAX_MATRIX_VAL = Math.max(1, ...realConfusionMatrix.flatMap(row => [row.S1, row.S2, row.S3, row.S4]));
+  // Dynamically calculate per-class Precision and Recall from the live Confusion Matrix
+  const classMetrics = ['S1', 'S2', 'S3', 'S4'].map(cls => {
+      const tpRow = realConfusionMatrix.find(r => r.actual === cls);
+      const tp = tpRow ? (tpRow[cls] || 0) : 0;
+      const actualTotal = tpRow ? ((tpRow.S1 || 0) + (tpRow.S2 || 0) + (tpRow.S3 || 0) + (tpRow.S4 || 0)) : 0;
+      const predictedTotal = realConfusionMatrix.reduce((sum, r) => sum + (r[cls] || 0), 0);
+
+      return {
+          subject: cls,
+          precision: predictedTotal > 0 ? Math.round((tp / predictedTotal) * 100) : 0,
+          recall: actualTotal > 0 ? Math.round((tp / actualTotal) * 100) : 0,
+      };
+  });
+
+  const MAX_MATRIX_VAL = Math.max(1, ...realConfusionMatrix.flatMap(row => [row.S1 || 0, row.S2 || 0, row.S3 || 0, row.S4 || 0]));
 
   const feedbackStats = modelData.feedback_stats || { total_corrections: 0, correction_rate: 0, weak_components: [] };
 
-  const isLight = !!document.querySelector('[data-theme="light"]');
   const chartTooltipStyle = {
     borderRadius: '12px',
-    border: `1px solid ${isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'}`,
-    background: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(0,0,0,0.9)',
+    border: '1px solid var(--border)',
+    background: 'var(--bg-elevated)',
     backdropFilter: 'blur(12px)',
-    color: isLight ? '#0f172a' : '#fff',
+    color: 'var(--text-main)',
     fontSize: '13px',
-    boxShadow: isLight ? '0 10px 40px rgba(0,0,0,0.12)' : '0 10px 40px rgba(0,0,0,0.5)',
+    boxShadow: 'var(--shadow-md)',
     padding: '10px 14px',
   };
-  const chartItemStyle  = { color: isLight ? '#0f172a' : '#fff', fontWeight: 700 };
-  const chartCursorFill = isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.03)';
-  const axisTickDim     = isLight ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.3)';
-  const axisTickBright  = isLight ? 'rgba(15,23,42,0.65)' : 'rgba(255,255,255,0.6)';
-  const axisStroke      = isLight ? 'rgba(15,23,42,0.40)' : 'rgba(255,255,255,0.4)';
-  const gridStroke      = isLight ? 'rgba(15,23,42,0.07)' : 'rgba(255,255,255,0.05)';
+  const chartItemStyle  = { color: 'var(--text-main)', fontWeight: 700 };
+  const chartCursorFill = 'var(--hover-bg)';
+  const axisTickDim     = 'var(--text-dim)';
+  const axisTickBright  = 'var(--text-sec)';
+  const gridStroke      = 'var(--border)';
 
-  const formatPct = (val) => `${(val * 100).toFixed(1)}%`;
+  const formatPct = (val) => `${((Number(val) || 0) * 100).toFixed(1)}%`;
 
   const getHeatmapColor = (val, max) => {
       const ratio = val / max;
@@ -422,19 +436,23 @@ export default function Performance({ user, onTrainStart }) {
 
   const getDelta = (key) => {
       if (viewVersion === 'enterprise' || viewVersion === 'previous') return null;
+      if (currMetrics[key] === undefined || prevMetrics[key] === undefined) return null;
+
+      // Handle raw numerical diffs for dataset sizes instead of percentage shifts
+      if (key === 'dataset_size') {
+          const diff = currMetrics[key] - prevMetrics[key];
+          if (diff === 0) return null;
+          const sign = diff > 0 ? '+' : '';
+          const cls = diff > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20';
+          return <span className={`text-[11px] font-bold ml-3 px-2 py-0.5 rounded-md border ${cls}`}>{sign}{diff.toLocaleString()}</span>;
+      }
+
       const diff = (currMetrics[key] - prevMetrics[key]) * 100;
       if (diff === 0) return null;
       const sign = diff > 0 ? '+' : '';
       const cls = diff > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20';
       return <span className={`text-[11px] font-bold ml-3 px-2 py-0.5 rounded-md border ${cls}`}>{sign}{diff.toFixed(1)}%</span>;
   };
-
-  const modelSourceBadge = () => {
-      if (meta.model_source === 'company') return { label: `${meta.company_name} Model`, cls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', icon: <Building2 size={11} /> };
-      if (meta.model_source === 'global')  return { label: 'Global Model', cls: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400', icon: <Globe size={11} /> };
-      return { label: 'No Model Trained', cls: 'bg-white/5 border-white/10 text-white/40', icon: <AlertCircle size={11} /> };
-  };
-  const badge = modelSourceBadge();
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4 animate-in fade-in duration-500">
@@ -495,9 +513,11 @@ export default function Performance({ user, onTrainStart }) {
           <BrainCircuit size={32} className="text-white/20 relative z-10" />
         </div>
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">No Company Model Trained Yet</h2>
+          <h2 className="text-3xl font-bold text-white mb-2">{isSuperAdmin ? 'No Universal Model Trained Yet' : 'No Company Model Trained Yet'}</h2>
           <p className="text-white/40 text-sm max-w-sm leading-relaxed">
-            Train a model on your company's bug data to unlock isolated severity predictions, performance metrics, and the confusion matrix.
+            {isSuperAdmin 
+              ? 'Train the universal baseline model on the aggregated dataset to unlock global severity predictions and analytics.' 
+              : "Train a model on your company's bug data to unlock isolated severity predictions, performance metrics, and the confusion matrix."}
           </p>
         </div>
         <button onClick={() => setShowTrainModal(true)}
@@ -539,23 +559,54 @@ export default function Performance({ user, onTrainStart }) {
             <Trash2 size={15} />
             Reset Model
           </button>
-          <button
+          <Button
             onClick={() => setShowTrainModal(true)}
-            className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest text-black flex items-center gap-2 transition-colors"
+            className="px-5 py-2.5 font-bold text-xs uppercase tracking-widest text-black"
             style={{ background: 'var(--accent)' }}
           >
             <BrainCircuit size={15} />
             Train Model
-          </button>
+          </Button>
         </div>
       </div>
+
+      <ModelShowcase liveDataProp={modelData} isSuperAdmin={isSuperAdmin} />
+
+      {/* Super admin: company selector to act on behalf of a tenant */}
+      {isSuperAdmin && (
+        <div className="flex items-center gap-4 mb-6 p-4 rounded-2xl border border-white/10" style={{ background: 'var(--card-bg)' }}>
+          <Building2 size={15} className="text-amber-400 flex-shrink-0" />
+          <span className="text-[11px] font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">Viewing model for</span>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => { setSelectedCompanyId(''); fetchMetrics(''); }}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${selectedCompanyId === '' ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}
+            >
+              <Globe size={11} className="inline mr-1.5" />Universal
+            </button>
+            {companies.map(co => (
+              <button
+                key={co.id}
+                onClick={() => { setSelectedCompanyId(String(co.id)); fetchMetrics(String(co.id)); }}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${String(selectedCompanyId) === String(co.id) ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}
+              >
+                {co.name}
+                {co.has_own_model && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />}
+              </button>
+            ))}
+          </div>
+          {meta.company_name && (
+            <span className="ml-auto text-[11px] font-bold text-white/30 whitespace-nowrap">{meta.company_name}</span>
+          )}
+        </div>
+      )}
 
       {/* Version Selector */}
       <div className="flex items-center gap-2 p-1 w-max rounded-full border border-white/10 mb-8" style={{ background: 'var(--bg-elevated)' }}>
         {[
           {
             id: 'enterprise',
-            label: 'Enterprise Build',
+            label: isSuperAdmin ? 'Universal Baseline' : 'Enterprise Build',
             tip: isSuperAdmin
               ? 'Static baseline — trained on the full universal dataset (all companies + Firefox). Only updates when you run "Train on Universal Data".'
               : 'Static baseline — trained on your full company bug database. Only updates when you run "Train on Company Data".',
@@ -563,8 +614,8 @@ export default function Performance({ user, onTrainStart }) {
           },
           {
             id: 'current',
-            label: 'Active Build',
-            tip: 'Your most recently trained model (bulk upload or feedback retrain).',
+            label: isSuperAdmin ? 'Active Universal Build' : 'Active Build',
+            tip: isSuperAdmin ? 'Your most recently trained universal model.' : 'Your most recently trained model (bulk upload or feedback retrain).',
             meta: currMetrics,
           },
         ].map(v => (
@@ -610,30 +661,39 @@ export default function Performance({ user, onTrainStart }) {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { key: 'accuracy',  label: 'Accuracy',  icon: <Target size={14} />,     val: formatPct(metricsToUse.accuracy),  accentBar: 'var(--accent)' },
-          { key: 'f1_score',  label: 'F1 Score',  icon: <Activity size={14} />,   val: formatPct(metricsToUse.f1_score),  accentBar: '#51df9c' },
-          { key: 'precision', label: 'Precision', icon: <Crosshair size={14} />,  val: formatPct(metricsToUse.precision), accentBar: 'var(--accent)' },
-          { key: 'recall',    label: 'Recall',    icon: <TrendingUp size={14} />, val: formatPct(metricsToUse.recall),    accentBar: '#f59e0b' },
+          { key: 'accuracy',  label: 'Accuracy',  icon: <Target size={14} />,     val: formatPct(metricsToUse.accuracy),  accentBar: 'var(--accent)', tip: 'Overall correctness of the model across all records.' },
+          { key: 'f1_score',  label: 'F1 Score',  icon: <Activity size={14} />,   val: formatPct(metricsToUse.f1_score),  accentBar: '#51df9c', tip: 'Harmonic mean of precision and recall.' },
+          { key: 'precision', label: 'Precision', icon: <Crosshair size={14} />,  val: formatPct(metricsToUse.precision), accentBar: 'var(--accent)', tip: 'Measures the exactness of severity predictions.' },
+          { key: 'recall',    label: 'Recall',    icon: <TrendingUp size={14} />, val: formatPct(metricsToUse.recall),    accentBar: '#f59e0b', tip: "Measures the model's ability to capture all relevant cases." },
         ].map(s => (
-          <div
+          <BentoCard
             key={s.key}
-            className="border border-white/10 rounded-2xl p-5 relative overflow-hidden group hover:brightness-105 transition-all"
+            className="hover:brightness-105 group/stat relative !overflow-visible"
             style={{ background: 'var(--card-bg)' }}
           >
             {/* Left accent bar */}
             <div className="absolute top-0 left-0 w-1 h-full rounded-l-2xl" style={{ background: s.accentBar }} />
-            <div className="flex justify-between items-start mb-2">
-              <h3 className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                {s.label}
-              </h3>
-              {getDelta(s.key)}
+
+            {/* Hover Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-52 p-3 backdrop-blur-xl border rounded-xl text-xs text-left opacity-0 scale-95 group-hover/stat:opacity-100 group-hover/stat:scale-100 group-hover/stat:-translate-y-1 transition-all duration-200 pointer-events-none z-50 shadow-2xl" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
+              <div className="font-bold uppercase tracking-widest mb-1 text-[10px]" style={{ color: 'var(--text-dim)' }}>{s.label} Explained</div>
+              <div className="leading-relaxed font-medium whitespace-normal" style={{ color: 'var(--text-main)' }}>{s.tip}</div>
             </div>
-            <div className="text-4xl font-bold tracking-tighter mt-1" style={{ color: 'var(--text)' }}>
-              {s.val}
+
+            <div className="relative z-10 p-4 lg:p-5">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/50 truncate pr-2">
+                  {s.label}
+                </h3>
+                {getDelta(s.key)}
+              </div>
+              <div className={`font-bold tracking-tighter mt-1 text-white truncate ${typeof s.val === 'string' && s.val.length > 5 && !s.val.includes('%') ? 'text-2xl pt-2' : 'text-4xl'}`} title={s.val}>
+                {s.val}
+              </div>
             </div>
-          </div>
+          </BentoCard>
         ))}
       </div>
 
@@ -641,66 +701,59 @@ export default function Performance({ user, onTrainStart }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
         {/* Left: Precision / Recall by Class */}
-        <div
-          className="border border-white/10 rounded-2xl p-6 flex flex-col"
+        <BentoCard
+          className="p-6 flex flex-col"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-sm font-semibold tracking-wide" style={{ color: 'var(--text)' }}>
+            <h2 className="text-sm font-semibold tracking-wide text-white">
               Precision / Recall by Class
             </h2>
             <div className="flex gap-4">
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BUILD_COLORS.Enterprise }} />
-                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Precision</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-white/50">Precision</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BUILD_COLORS.Active }} />
-                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Recall</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-white/50">Recall</span>
               </div>
             </div>
           </div>
-          <div className="h-[300px] w-full">
+          <div className="h-[220px] w-full mt-auto">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={classMetrics} layout="vertical" margin={{ left: 8, right: 56, top: 8, bottom: 28 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tick={{ fontSize: 11, fill: axisTickBright }}
-                  tickFormatter={v => `${v}%`}
-                  tickLine={false}
-                  axisLine={false}
-                  label={{ value: 'Score (%)', position: 'insideBottom', offset: -16, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+              <BarChart data={classMetrics} margin={{ top: 24, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                <XAxis 
+                  dataKey="subject" 
+                  tick={{ fontSize: 12, fill: axisTickBright, fontWeight: 600 }} 
+                  axisLine={false} tickLine={false} dy={10} 
                 />
-                <YAxis
-                  dataKey="subject"
-                  type="category"
-                  width={96}
-                  tick={{ fontSize: 12, fontWeight: 700, fill: axisTickBright }}
-                  tickLine={false}
-                  axisLine={false}
-                  label={{ value: 'Severity', angle: -90, position: 'insideLeft', offset: 14, fill: axisTickDim, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+                <YAxis 
+                  type="number" domain={[0, 100]} 
+                  tick={{ fontSize: 11, fill: axisTickDim }} 
+                  tickFormatter={v => `${v}%`} 
+                  axisLine={false} tickLine={false} 
                 />
                 <Tooltip contentStyle={chartTooltipStyle} itemStyle={chartItemStyle} formatter={v => [`${v}%`, '']} cursor={{ fill: chartCursorFill }} />
-                <Bar dataKey="precision" name="Precision" fill={BUILD_COLORS.Enterprise} radius={[0,6,6,0]} barSize={18}>
-                  <LabelList dataKey="precision" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+                <Bar dataKey="precision" name="Precision" fill={BUILD_COLORS.Enterprise} radius={[4, 4, 0, 0]} maxBarSize={48}>
+                  <LabelList dataKey="precision" position="top" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={600} />
                 </Bar>
-                <Bar dataKey="recall" name="Recall" fill={BUILD_COLORS.Active} radius={[0,6,6,0]} barSize={18}>
-                  <LabelList dataKey="recall" position="right" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={700} />
+                <Bar dataKey="recall" name="Recall" fill={BUILD_COLORS.Active} radius={[4, 4, 0, 0]} maxBarSize={48}>
+                  <LabelList dataKey="recall" position="top" formatter={v => `${v}%`} fill={axisTickBright} fontSize={11} fontWeight={600} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </BentoCard>
 
         {/* Right: Confusion Matrix */}
-        <div
-          className="border border-white/10 rounded-2xl p-6 flex flex-col"
+        <BentoCard
+          className="p-6 flex flex-col"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-sm font-semibold tracking-wide" style={{ color: 'var(--text)' }}>
+            <h2 className="text-sm font-semibold tracking-wide text-white">
               Confusion Matrix
             </h2>
             <span className="text-[11px] font-bold border border-white/10 text-white/50 px-2.5 py-1 rounded-md tracking-widest uppercase" style={{ background: 'var(--bg-elevated)' }}>
@@ -723,12 +776,12 @@ export default function Performance({ user, onTrainStart }) {
                   <React.Fragment key={row.actual}>
                     <div className="flex items-center justify-end pr-2 text-[11px] font-bold uppercase tracking-widest" style={{ color: SEV_COLORS[row.actual] }}>{row.actual}</div>
                     {['S1','S2','S3','S4'].map(col => {
-                      const val = row[col]; const ratio = val / MAX_MATRIX_VAL;
+                      const val = row[col] || 0; const ratio = val / MAX_MATRIX_VAL;
                       const isDiagonal = row.actual === col;
                       return (
                         <div key={col} className={`aspect-square flex items-center justify-center text-sm font-bold rounded-xl transition-all duration-200 group-hover/matrix:opacity-60 hover:!opacity-100 hover:scale-105 ${isDiagonal ? 'ring-2 ring-white/30' : ''}`}
                           style={{ background: getHeatmapColor(val, MAX_MATRIX_VAL), color: ratio > 0.4 ? '#000' : '#fff', boxShadow: ratio > 0.6 ? '0 4px 15px rgba(37,99,235,0.4)' : 'none' }}>
-                          {val.toLocaleString()}
+                          {Number(val).toLocaleString()}
                         </div>
                       );
                     })}
@@ -738,39 +791,7 @@ export default function Performance({ user, onTrainStart }) {
               <div className="text-center text-[11px] font-bold text-white/30 uppercase tracking-widest mt-6 pl-9">Predicted</div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Training Metadata Card */}
-      <div
-        className="border border-white/10 rounded-2xl p-6 lg:p-8 mb-8"
-        style={{ background: 'var(--card-bg)' }}
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <Database size={18} className="text-[var(--accent)]" />
-          <h2 className="text-sm font-bold tracking-wide uppercase" style={{ color: 'var(--text)' }}>
-            Training Metadata
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-          {[
-            { label: 'Last Trained',     value: metricsToUse.last_trained || '—' },
-            { label: 'Algorithm',        value: `Random Forest — ${metricsToUse.total_trees || 0} estimators` },
-            { label: 'Dataset Size',     value: `${metricsToUse.dataset_size?.toLocaleString() || 0} verified bug reports` },
-            { label: 'Dataset',          value: meta.dataset_label || '—' },
-            { label: 'Model Source',     value: badge.label },
-            { label: 'Status',           value: metricsToUse.status || 'Not Trained' },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex justify-between items-end border-b border-white/[0.06] pb-2">
-              <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                {label}
-              </span>
-              <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
-                {value}
-              </span>
-            </div>
-          ))}
-        </div>
+        </BentoCard>
       </div>
 
     </div>

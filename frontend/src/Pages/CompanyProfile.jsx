@@ -4,9 +4,11 @@ import {
   Building2, Globe, Save, CheckCircle, AlertTriangle,
   RefreshCw, Users, Bug, ShieldCheck, Crown, TrendingUp,
   BrainCircuit, Database, Layers, Activity, Zap, Clock, BarChart2, Lock,
-  ShieldAlert, ExternalLink
+  ShieldAlert, ExternalLink, MessageSquare
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 // ── Super Admin view: reworked system intelligence panel ─────────────────────
 function SystemPanel() {
@@ -88,13 +90,13 @@ function SystemPanel() {
           { label: 'Triaged',         value: totalResolved, icon: <TrendingUp size={16} className="text-emerald-400" />, color: 'emerald' },
           { label: 'Platform Users',  value: totalUsers,    icon: <Users size={16} className="text-indigo-400" />,   color: 'indigo' },
         ].map(s => (
-          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 lg:p-6 backdrop-blur-md shadow-2xl relative overflow-hidden group hover:bg-white/[0.04] transition-colors">
+          <BentoCard key={s.label} className="p-5 lg:p-6 shadow-2xl hover:!bg-white/[0.04]">
             <div className="flex items-center gap-2 mb-4 relative z-10">
               {s.icon}
               <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span>
             </div>
             <div className="text-3xl font-bold text-white font-mono tracking-tight relative z-10">{s.value.toLocaleString()}</div>
-          </div>
+          </BentoCard>
         ))}
       </div>
 
@@ -106,20 +108,20 @@ function SystemPanel() {
           { label: 'Models Trained',  value: modelsActive,     icon: <BrainCircuit size={14} className="text-emerald-400" /> },
           { label: 'Feedback Items',  value: totalFeedback,    icon: <MessageSquare size={14} className="text-indigo-400" /> },
         ].map(s => (
-          <div key={s.label} className={`bg-white/[0.02] border rounded-2xl p-4 relative overflow-hidden ${s.alert ? 'border-amber-500/30 bg-amber-500/5' : 'border-white/10'}`}>
+          <BentoCard key={s.label} className={`p-4 ${s.alert ? '!border-amber-500/30 !bg-amber-500/5' : ''}`}>
             <div className="flex items-center gap-2 mb-2">
               {s.icon}
               <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span>
             </div>
             <div className="text-2xl font-bold text-white font-mono">{s.value.toLocaleString()}</div>
-          </div>
+          </BentoCard>
         ))}
       </div>
 
       {/* Two-column: hotspots + recent activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Vulnerability hotspots */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md">
+        <BentoCard className="p-6 lg:p-8 shadow-2xl">
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6 flex items-center gap-2">
             <BarChart2 size={14} className="text-indigo-400" /> Vulnerability Hotspots
           </div>
@@ -138,10 +140,10 @@ function SystemPanel() {
               ))}
             </div>
           )}
-        </div>
+        </BentoCard>
 
         {/* Recent system activity */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md">
+        <BentoCard className="p-6 lg:p-8 shadow-2xl">
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6 flex items-center gap-2">
             <Activity size={14} className="text-emerald-400" /> Recent System Activity
           </div>
@@ -160,11 +162,11 @@ function SystemPanel() {
               ))}
             </div>
           )}
-        </div>
+        </BentoCard>
       </div>
 
       {/* Per-company breakdown */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+      <BentoCard className="p-6 lg:p-8 shadow-2xl">
         <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">
           Organizations — Full Breakdown ({companies.length})
         </div>
@@ -208,7 +210,7 @@ function SystemPanel() {
             </div>
           ))}
         </div>
-      </div>
+      </BentoCard>
     </div>
   );
 }
@@ -332,8 +334,8 @@ export default function CompanyProfile({ user }) {
             sub: resolutionRate !== null ? `${resolutionRate}% rate` : null,
           },
         ].map(s => (
-          <div key={s.label}
-            className={`border rounded-2xl p-4 relative overflow-hidden transition-colors ${s.accent ? 'border-red-500/20 bg-red-500/5' : 'bg-white/[0.02] border-white/10 hover:bg-white/[0.04]'}`}>
+          <BentoCard key={s.label}
+            className={`p-4 transition-colors ${s.accent ? '!border-red-500/20 !bg-red-500/5' : ''}`}>
             <div className="flex items-center gap-2 mb-3">
               {s.icon}
               <span className="text-[11px] text-white/40 uppercase tracking-[0.06em]">{s.label}</span>
@@ -342,13 +344,13 @@ export default function CompanyProfile({ user }) {
               {s.value.toLocaleString()}
             </div>
             {s.sub && <div className="text-[11px] text-white/30 mt-0.5">{s.sub}</div>}
-          </div>
+          </BentoCard>
         ))}
       </div>
 
       {/* Severity distribution strip — only if data exists */}
       {hasSevData && (
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 mb-4">
+        <BentoCard className="p-4 mb-4">
           <div className="text-[11px] text-white/40 uppercase tracking-[0.06em] mb-3">Severity distribution</div>
           <div className="flex gap-1 h-2 rounded-full overflow-hidden mb-3">
             {sevBreakdown.map(s => s.count > 0 && (
@@ -365,11 +367,11 @@ export default function CompanyProfile({ user }) {
               </div>
             ))}
           </div>
-        </div>
+        </BentoCard>
       )}
 
       {/* ML Model status */}
-      <div className={`mb-4 p-4 rounded-2xl border relative overflow-hidden ${hasOwnModel ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/10 bg-white/[0.02]'}`}>
+      <BentoCard className={`mb-4 p-4 ${hasOwnModel ? '!border-emerald-500/20 !bg-emerald-500/5' : ''}`}>
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${hasOwnModel ? 'bg-emerald-500/15 border-emerald-500/25' : 'bg-white/5 border-white/10'}`}>
             <BrainCircuit size={18} className={hasOwnModel ? 'text-emerald-400' : 'text-white/40'} />
@@ -388,12 +390,12 @@ export default function CompanyProfile({ user }) {
             {hasOwnModel ? 'Isolated' : 'Universal'}
           </div>
         </div>
-      </div>
+      </BentoCard>
 
       {/* Configuration + Edit Profile — side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Configuration */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
+        <BentoCard className="p-5">
           <div className="text-[11px] font-medium text-white/40 uppercase tracking-[0.06em] mb-4 flex items-center gap-2">
             <Lock size={12} className="text-white/30" /> Workspace configuration
           </div>
@@ -429,10 +431,10 @@ export default function CompanyProfile({ user }) {
               )}
             </div>
           </div>
-        </div>
+        </BentoCard>
 
         {/* Edit Profile */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
+        <BentoCard className="p-5">
           <div className="text-[11px] font-medium text-white/40 uppercase tracking-[0.06em] mb-4 flex items-center gap-2">
             <Save size={12} className="text-white/30" /> Edit profile
           </div>
@@ -455,12 +457,12 @@ export default function CompanyProfile({ user }) {
                   {msg.type === 'error' ? <AlertTriangle size={13} /> : <CheckCircle size={13} />} {msg.text}
                 </div>
               ) : <div />}
-              <button type="submit" disabled={saving} className="bg-white text-black hover:bg-zinc-200 font-semibold text-sm px-5 py-2 rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 flex-shrink-0">
+              <Button type="submit" disabled={saving} className="font-semibold text-sm px-5 py-2 flex-shrink-0">
                 <Save size={13} /> {saving ? 'Saving…' : 'Save'}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </BentoCard>
       </div>
     </motion.div>
   );

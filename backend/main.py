@@ -14,7 +14,7 @@ from database import supabase, SUPABASE_URL, SUPABASE_KEY, DATABASE_URL
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 import psycopg2
 import ml_logic
-from config import company_model_exists, ART_RF, get_artifact_paths
+from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
 import db_provision
 
 
@@ -42,9 +42,10 @@ def load_models():
 app = FastAPI()
 load_models()
 
+_allowed_origins = [o.strip().rstrip("/") for o in FRONTEND_URL.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +90,38 @@ def is_shared_table(table: str) -> bool:
     All other tables (firefox_table, acme_corp_bugs, etc.) are isolated by table.
     """
     return table != "bugs"
+
+
+def _normalize_company_id(raw_company_id):
+    if raw_company_id in (None, "None", ""):
+        return None
+    try:
+        return int(raw_company_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _infer_component_from_summary(summary: str) -> str:
+    text = (summary or "").lower()
+    if not text:
+        return "General"
+
+    rules = [
+        ("Security", ["security", "vulnerability", "xss", "csrf", "sql injection", "auth bypass", "unauthorized", "token leak"]),
+        ("Authentication", ["login", "logout", "signin", "sign in", "signup", "password", "oauth", "mfa", "session", "jwt", "sso"]),
+        ("Database", ["database", "db", "sql", "postgres", "query", "migration", "deadlock", "constraint", "connection pool"]),
+        ("API", ["api", "endpoint", "request", "response", "http", "rest", "graphql", "timeout", "500", "404"]),
+        ("Networking", ["network", "dns", "socket", "latency", "packet", "proxy", "gateway", "tls", "ssl"]),
+        ("Frontend", ["ui", "frontend", "layout", "css", "button", "modal", "dropdown", "render", "react", "page"]),
+        ("Performance", ["slow", "performance", "lag", "latency spike", "high cpu", "memory leak", "throughput", "optimize"]),
+        ("Crash", ["crash", "freeze", "hang", "segfault", "panic", "fatal", "unresponsive"]),
+        ("Data Processing", ["import", "export", "csv", "json", "parser", "transform", "etl", "batch"]),
+    ]
+
+    for component_name, keywords in rules:
+        if any(k in text for k in keywords):
+            return component_name
+    return "General"
 
 
 def _all_active_data_tables() -> list:
@@ -646,7 +679,12 @@ def _apply_bug_filters(query, search, sev, status, comp, db_sort, sort_dir):
             query = query.ilike("summary", f"%{search.strip()}%")
     if sev:    query = query.ilike("severity",  f"%{sev}%")
     if status: query = query.ilike("status",    f"%{status}%")
-    if comp:   query = query.ilike("component", f"%{comp}%")
+    if comp:
+        comp_list = [c.strip() for c in comp.split(',') if c.strip()]
+        if len(comp_list) > 1:
+            query = query.in_("component", comp_list)
+        else:
+            query = query.ilike("component", f"%{comp}%")
     return query.order(db_sort, desc=(sort_dir.lower() == "desc"))
 
 
@@ -752,7 +790,12 @@ def export_bugs_csv(
     if search: query = query.ilike("summary",   f"%{search}%")
     if sev:    query = query.ilike("severity",  f"%{sev}%")
     if status: query = query.ilike("status",    f"%{status}%")
-    if comp:   query = query.ilike("component", f"%{comp}%")
+    if comp:
+        comp_list = [c.strip() for c in comp.split(',') if c.strip()]
+        if len(comp_list) > 1:
+            query = query.in_("component", comp_list)
+        else:
+            query = query.ilike("component", f"%{comp}%")
 
     bugs = query.order(db_sort, desc=(sort_dir.lower() == "desc")).limit(10000).execute().data or []
 
@@ -781,10 +824,15 @@ async def create_bug(request: BugPayload, current_user: dict = Depends(auth.requ
     else:
         cid = current_user.get("company_id")
 
+    raw_component = (request.component or "").strip()
+    component_value = raw_component
+    if not raw_component or raw_component.lower() in ("general", "none", "n/a", "na"):
+        component_value = _infer_component_from_summary(request.summary)
+
     table = get_company_table(cid)
     payload = {
         "summary":   request.summary,
-        "component": request.component,
+        "component": component_value,
         "severity":  request.severity,
         "status":    "NEW",
     }
@@ -835,7 +883,7 @@ async def analyze_bug(
     model_source: str = Query(default="universal"),
     current_user: dict = Depends(auth.require_active),
 ):
-    cid = current_user.get("company_id")
+    cid = _normalize_company_id(current_user.get("company_id"))
     try:
         target_cid = cid if model_source == "company" else None
         result = ml_logic.predict_severity(bug_text, company_id=target_cid)
@@ -844,20 +892,6 @@ async def analyze_bug(
         result = {"prediction": "S3", "confidence": 0.6, "diagnosis": "Standard Logic Defect",
                   "team": "🔧 General Maintenance", "keywords": [], "model_source": "global", "fallback": True}
 
-    try:
-        supabase.table("feedback").insert({
-            "summary":              bug_text,
-            "predicted_severity":   result.get("prediction"),
-            "actual_severity":      None,
-            "confidence":           result.get("confidence", 0.0),
-            "component":            "General",
-            "company_id":           cid,
-            "is_correction":        False,
-            "consent_global_model": True,
-        }).execute()
-    except Exception as log_err:
-        print(f"[analyze] feedback log error: {log_err}")
-
     similar_bugs = ml_logic.find_similar_bugs(bug_text, company_id=cid, top_k=5)
 
     return {"severity": result, "similar_bugs": similar_bugs}
@@ -865,7 +899,7 @@ async def analyze_bug(
 
 @app.post("/api/feedback")
 async def submit_feedback(req: FeedbackPayload, current_user: dict = Depends(auth.get_current_user)):
-    cid = current_user.get("company_id")
+    cid = _normalize_company_id(current_user.get("company_id"))
     is_correction = req.predicted_severity != req.actual_severity
 
     existing = supabase.table("feedback") \
@@ -900,9 +934,11 @@ async def submit_feedback(req: FeedbackPayload, current_user: dict = Depends(aut
 
     return {"message": "Feedback recorded", "is_correction": is_correction}
 
-
 @app.get("/api/hub/ml_metrics")
-def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
+def get_ml_metrics(
+    current_user: dict = Depends(auth.require_admin),
+    target_company_id: int | None = Query(default=None),
+):
     role = current_user.get("role")
     is_super = role == "super_admin"
     raw_cid = current_user.get("company_id")
@@ -910,14 +946,16 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
         cid = int(raw_cid) if raw_cid not in (None, "None", "") else None
     except (TypeError, ValueError):
         cid = None
-    # Super admin always operates on the global/universal model
+
+    # Super admin: if a target_company_id is provided, view that company's model.
+    # Otherwise fall back to the global/universal model (cid=None).
     if is_super:
-        cid = None
+        cid = target_company_id  # None = universal, int = specific company
 
     total_live = 0
     feedback_list = []
     last_trained_str = "Not yet trained"
-    company_name = "Universal" if is_super else "Your Company"
+    company_name = "Universal" if (is_super and cid is None) else "Your Company"
 
     try:
         table = get_company_table(cid)
@@ -965,9 +1003,9 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
                     saved = json.load(f)
                 current_metrics.update({
                     "accuracy":        round(saved.get("accuracy",  0.0), 4),
-                    "f1_score":        round(saved.get("f1_score",  saved.get("accuracy", 0.0)), 4),
-                    "precision":       round(saved.get("precision", saved.get("accuracy", 0.0)), 4),
-                    "recall":          round(saved.get("recall",    saved.get("accuracy", 0.0)), 4),
+                    "f1_score":        round(saved.get("f1_score",  0.0), 4),
+                    "precision":       round(saved.get("precision", 0.0), 4),
+                    "recall":          round(saved.get("recall",    0.0), 4),
                     "last_trained":    saved.get("last_trained", last_trained_str),
                     "total_trees":     saved.get("total_trees", 100),
                     "status":          "Active Build",
@@ -989,12 +1027,12 @@ def get_ml_metrics(current_user: dict = Depends(auth.require_admin)):
                 with open(met_path) as f:
                     saved = json.load(f)
                 current_metrics.update({
-                    "accuracy":        round(saved.get("accuracy",  0.863), 4),
-                    "f1_score":        round(saved.get("f1_score",  0.858), 4),
-                    "precision":       round(saved.get("precision", 0.860), 4),
-                    "recall":          round(saved.get("recall",    0.855), 4),
+                        "accuracy":        round(saved.get("accuracy",  0.0), 4),
+                        "f1_score":        round(saved.get("f1_score",  0.0), 4),
+                        "precision":       round(saved.get("precision", 0.0), 4),
+                        "recall":          round(saved.get("recall",    0.0), 4),
                     "last_trained":    saved.get("last_trained", last_trained_str),
-                    "total_trees":     saved.get("total_trees", 200),
+                        "total_trees":     saved.get("total_trees", 0),
                     "status":          "Active Build",
                     "model_source":    "global",
                     "model_status":    "ready",
@@ -1096,15 +1134,16 @@ async def bulk_submit(
 ):
     """Insert bugs from a CSV/JSON file into the company database. No model training.
 
-    Bulk imports go into the company's primary data_table (`bugs` for most companies),
-    always with company_id set for reliable deletion and super-admin aggregation.
+    Bulk imports go into the company's primary data_table (per-tenant table preferred).
     firefox_table is never written to — it is the ML baseline only.
     """
     cid = current_user.get("company_id")
     table = get_company_table(cid)
-    # Fallback safety: never write into the shared ML baseline.
+
+    # Safety: never write into ML baseline.
     if table == "firefox_table":
         table = "bugs"
+
     content = await file.read()
 
     try:
@@ -1115,29 +1154,68 @@ async def bulk_submit(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
 
-    # Capture timestamp BEFORE inserting bugs so upload_time < all bug created_at values.
-    # This makes the gte("created_at", upload_time) delete in _delete_bulk_imported_bugs reliable.
     pre_insert_ts = datetime.now(timezone.utc).isoformat()
 
+    def _parse_bug_id(val):
+        # Handles NaN, empty strings, None
+        if val is None:
+            return None
+        # pandas NaN check
+        try:
+            if pd.isna(val):
+                return None
+        except Exception:
+            pass
+
+        s = str(val).strip()
+        if s == "" or s.lower() == "none" or s.lower() == "null":
+            return None
+
+        # Allow "12.0" coming from Excel/CSV
+        try:
+            as_float = float(s)
+            as_int = int(as_float)
+            if as_float != as_int:
+                raise ValueError("bug_id must be an integer")
+            return as_int
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid bug_id value: {val}")
+
     rows = []
+    has_bug_id_col = "bug_id" in df.columns
+
     for _, row in df.iterrows():
+        summary_text = str(row.get("summary", "") or "")
+        raw_component = str(row.get("component", "") or "").strip()
+        component_value = raw_component if raw_component else _infer_component_from_summary(summary_text)
+
         bug_row = {
-            "summary":   str(row.get("summary", "")),
-            "component": str(row.get("component", "General")),
+            "summary":   summary_text,
+            "component": component_value,
             "severity":  str(row.get("severity", "S3")).upper(),
             "status":    str(row.get("status", "PROCESSED")),
         }
+
+        # Persist bug_id if present in upload
+        if has_bug_id_col:
+            parsed_bug_id = _parse_bug_id(row.get("bug_id"))
+            if parsed_bug_id is not None:
+                bug_row["bug_id"] = parsed_bug_id
+
+        # Only add company_id when writing to shared table(s) that need scoping by column.
+        # NOTE: your `is_shared_table()` naming is confusing (it returns table != "bugs").
+        # This preserves your existing behavior but you may want to revisit that function.
         if not is_shared_table(table):
             bug_row["company_id"] = cid
+
         rows.append(bug_row)
 
-    inserted_ids = []
     if rows:
-        result = supabase.table(table).insert(rows).execute()
-        for r in (result.data or []):
-            rid = r.get("bug_id") or r.get("id")
-            if rid is not None:
-                inserted_ids.append(int(rid))
+        try:
+            supabase.table(table).insert(rows).execute()
+        except Exception as e:
+            # If bug_id is unique in your schema, duplicates will error here.
+            raise HTTPException(status_code=400, detail=f"Insert failed: {e}")
 
     batch_payload = {
         "batch_name":  batch_name or file.filename,
@@ -1160,15 +1238,17 @@ async def bulk_submit(
         pass
 
     return {"message": "Bugs imported successfully", "records_processed": len(rows)}
-
-
 @app.get("/api/batches")
 def get_batches(current_user: dict = Depends(auth.get_current_user)):
     cid = current_user.get("company_id")
     if cid is None:
         return []
+    try:
+        company_id_int = int(cid)
+    except (TypeError, ValueError):
+        return []
     res = supabase.table("training_batches").select("*") \
-                  .eq("company_id", int(cid)) \
+                  .eq("company_id", company_id_int) \
                   .order("upload_time", desc=True).limit(20).execute()
     rows = []
     for r in (res.data or []):
@@ -1332,6 +1412,11 @@ def _train_upload_in_background(key: str, cid, table: str):
             return
         print(f"[upload_train/bg] Training on {len(records):,} company bugs (key={key})")
         result = ml_logic.full_train_from_dataset(records, company_id=cid, progress_cb=cb)
+        
+        if result and not result.get("success"):
+            _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": result.get("error", "Training failed."), "result": result}
+            return
+
         cb("Saving model", 95)
         _time.sleep(0.2)
         _training_progress[key] = {"step": "Done", "pct": 100, "done": True, "error": None, "result": result}
@@ -1599,6 +1684,10 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
             result = ml_logic.fast_retrain(feedback_list, company_id=target_cid, progress_cb=cb)
             records_used = len(feedback_list)
 
+        if result and not result.get("success"):
+            _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": result.get("error", "Training failed."), "result": result}
+            return
+
         cb("Saving model", 95)
         # Persist training metadata to Supabase
         _save_model_artifact_log(result, target_cid, records_used)
@@ -1633,14 +1722,18 @@ def train_model_start(current_user: dict = Depends(auth.require_admin)):
     cid     = int(raw_cid) if raw_cid is not None else None
     role    = current_user.get("role")
     target_cid = None if role == "super_admin" else cid
-    key = str(target_cid) if target_cid is not None else "global"
+    
+    base_key = str(target_cid) if target_cid is not None else "global"
+    key = f"train_{base_key}_{int(_time.time())}"
 
     feedback_res = supabase.table("feedback").select("*").eq("is_correction", True)
     if target_cid is not None:
         feedback_res = feedback_res.eq("company_id", target_cid)
     feedback_list = feedback_res.execute().data or []
 
-    if feedback_list:
+    has_model = company_model_exists(target_cid)
+
+    if feedback_list and has_model:
         return _start_train_thread(
             key, feedback_list, target_cid,
             message=f"Training started on {len(feedback_list)} feedback corrections.",
@@ -1931,12 +2024,11 @@ def superadmin_get_companies(current_user: dict = Depends(auth.require_developer
         if uid is not None:
             user_counts[uid] = user_counts.get(uid, 0) + 1
 
-    RESOLVED_STATUSES = {"RESOLVED", "VERIFIED", "FIXED", "PROCESSED"}
-
     result = []
     for co in companies:
         cid        = co.get("id")
         data_table = co.get("data_table") or "bugs"
+        resolved_statuses = co.get("resolved_statuses") or ["RESOLVED", "VERIFIED", "FIXED", "PROCESSED"]
 
         total    = 0
         critical = 0
@@ -1948,17 +2040,28 @@ def superadmin_get_companies(current_user: dict = Depends(auth.require_developer
                 total    = supabase.table("bugs").select("*", count="exact").eq("company_id", cid).limit(1).execute().count or 0
                 critical = supabase.table("bugs").select("*", count="exact").eq("company_id", cid).eq("severity", "S1").limit(1).execute().count or 0
                 resolved = 0
-                for st in RESOLVED_STATUSES:
+                for st in resolved_statuses:
                     resolved += supabase.table("bugs").select("*", count="exact").eq("company_id", cid).ilike("status", st).limit(1).execute().count or 0
             else:
                 # Company has its own table (firefox_table, company_N_bugs, etc.)
                 total    = supabase.table(data_table).select("*", count="exact").limit(1).execute().count or 0
                 critical = supabase.table(data_table).select("*", count="exact").eq("severity", "S1").limit(1).execute().count or 0
                 resolved = 0
-                for st in RESOLVED_STATUSES:
+                for st in resolved_statuses:
                     resolved += supabase.table(data_table).select("*", count="exact").ilike("status", st).limit(1).execute().count or 0
         except Exception as e:
             print(f"[superadmin companies] cid={cid} table={data_table}: {e}")
+
+        model_acc = 0.0
+        if co.get("has_own_model", False):
+            try:
+                met_path = get_artifact_paths(cid).get("met", "")
+                if met_path and os.path.exists(met_path):
+                    with open(met_path, "r") as f:
+                        saved = json.load(f)
+                        model_acc = round(saved.get("accuracy", 0.0) * 100, 1)
+            except Exception:
+                pass
 
         result.append({
             "id":             cid,
@@ -1973,7 +2076,7 @@ def superadmin_get_companies(current_user: dict = Depends(auth.require_developer
             # legacy aliases used by SystemPanel / SuperAdmin.jsx
             "total":          total,
             "users":          user_counts.get(cid, 0),
-            "model_acc":      86.3,
+            "model_acc":      model_acc,
             "last_active":    "Live",
         })
 
@@ -2247,6 +2350,15 @@ def admin_list_pending(current_user: dict = Depends(auth.require_admin)):
     res = supabase.table("users").select(
         "uuid, username, email, role, status"
     ).eq("company_id", cid).eq("status", "pending").execute()
+    return res.data or []
+
+
+@app.get("/api/admin/users/pending/all")
+def admin_list_pending_all(current_user: dict = Depends(auth.require_admin)):
+    cid = current_user.get("company_id")
+    res = supabase.table("users").select(
+        "uuid, username, email, role, status"
+    ).eq("company_id", cid).in_("status", ["pending", "invite_requested", "pending_code"]).execute()
     return res.data or []
 
 
@@ -2780,7 +2892,15 @@ def _fetch_resolved_rows(
         if table != "resolution_knowledge_full_5000":
             if not is_shared_table(table):
                 q = q.eq("company_id", company_id)
-            q = q.eq("status", "RESOLVED")
+            
+            # Dynamically fetch company's resolved statuses
+            resolved_statuses = ["RESOLVED", "VERIFIED", "FIXED", "PROCESSED"]
+            if company_id:
+                co_res = supabase.table("companies").select("resolved_statuses").eq("id", company_id).execute()
+                if co_res.data and co_res.data[0].get("resolved_statuses"):
+                    resolved_statuses = co_res.data[0]["resolved_statuses"]
+            
+            q = q.in_("status", [s.upper() for s in resolved_statuses])
 
         return q.execute().data or []
     except Exception as e:

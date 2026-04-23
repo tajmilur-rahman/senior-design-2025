@@ -1,5 +1,7 @@
 import { Clock, LogOut, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 export default function PendingApproval({ user, onLogout, status = 'pending' }) {
   const isInactive       = status === 'inactive';
@@ -15,11 +17,11 @@ export default function PendingApproval({ user, onLogout, status = 'pending' }) 
     : 'Your account is pending Super Admin approval. You\'ll receive access once your registration is reviewed.';
 
   return (
-    <div className="min-h-[100dvh] w-full flex items-center justify-center font-sans bg-black p-6 relative overflow-hidden">
+    <div className="min-h-[100dvh] w-full flex items-center justify-center font-sans p-6 relative overflow-hidden" style={{ background: 'var(--bg)' }}>
       {/* Ambient background glow */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/10 via-black to-black pointer-events-none" />
       
-      <div className="relative z-10 w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
+      <BentoCard className="w-full max-w-md p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500 rounded-[2rem]">
         <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 ${isInactive ? 'bg-red-500/10 border border-red-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
           {isInactive ? <ShieldCheck size={28} className="text-red-500" /> : <Clock size={28} className="text-amber-500" />}
         </div>
@@ -39,16 +41,16 @@ export default function PendingApproval({ user, onLogout, status = 'pending' }) 
         )}
         {isInactive && <div className="mb-8" />}
 
-        <button
+        <Button variant="outline"
           onClick={async () => {
             await supabase.auth.signOut();
             if (onLogout) onLogout();
           }}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-bold transition-all w-full"
+          className="w-full"
         >
           <LogOut size={15} /> Sign out
-        </button>
-      </div>
+        </Button>
+      </BentoCard>
     </div>
   );
 }

@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS } from '../Components/Glossary';
 import { motion } from 'framer-motion';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
   const [open, setOpen] = useState(false);
@@ -38,16 +40,16 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   return (
     <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
-        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
-        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        className={triggerClassName || `h-12 flex items-center justify-between px-5 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        <span className={`truncate pr-2 tracking-wide ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
-          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ backgroundColor: 'var(--bg-elevated)', backdropFilter: 'blur(16px)' }}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
-              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-5 py-3 text-[13px] font-semibold tracking-wide cursor-pointer transition-colors mx-2 my-0.5 rounded-lg ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
             })}
           </div>
         </div>
@@ -331,8 +333,8 @@ export default function BugAnalysis({ user }) {
         )}
 
         {/* Bug input card */}
-        <div
-          className="border border-white/10 rounded-2xl p-1 flex flex-col transition-colors focus-within:border-white/20"
+        <BentoCard
+          className="p-1 flex flex-col focus-within:!border-white/20 !overflow-visible relative z-20"
           style={{ background: 'var(--card-bg)' }}
         >
           {/* Textarea area */}
@@ -384,19 +386,19 @@ export default function BugAnalysis({ user }) {
             </div>
 
             {/* Right: primary CTA */}
-            <button
+            <Button
               onClick={() => handleAnalyze()}
               disabled={analyzing || !query.trim()}
-              className="flex items-center gap-2 text-sm font-semibold px-6 py-2 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed "
+              className="font-bold px-6 py-2"
               style={{ background: 'var(--accent)', color: '#022c1e' }}
             >
               {analyzing
                 ? <><RefreshCw size={15} className="animate-spin" /> Analyzing…</>
                 : <><Zap size={15} /> Analyze Severity</>
               }
-            </button>
+            </Button>
           </div>
-        </div>
+        </BentoCard>
 
       </section>
 
@@ -406,19 +408,32 @@ export default function BugAnalysis({ user }) {
           <p className="text-[11px] font-bold text-white/40 mb-5 flex items-center justify-center gap-2 tracking-widest uppercase">
             <Sparkles size={12} style={{ color: 'var(--accent)' }} /> Try an example
           </p>
-          <div className="flex flex-wrap gap-3 justify-center max-w-3xl mx-auto">
-            {SAMPLE_BUGS.map((sample, i) => (
-              <button
+          <motion.div
+            variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }}
+            initial="hidden"
+            animate="show"
+            className="flex flex-wrap gap-2.5 justify-center max-w-3xl mx-auto"
+          >
+            {SAMPLE_BUGS.map((sample, i) => {
+              const dots = ['#f87171', '#fbbf24', '#60a5fa', '#34d399', '#a855f7', '#e879f9'];
+              const dotColor = dots[i % dots.length];
+              return (
+              <motion.button
                 key={i}
+                variants={{ hidden: { opacity: 0, scale: 0.9, y: 10 }, show: { opacity: 1, scale: 1, y: 0 } }}
+                whileHover={{ scale: 1.03, backgroundColor: 'rgba(255,255,255,0.06)' }}
+                whileTap={{ scale: 0.97 }}
+                layout
                 onClick={() => handleAnalyze(sample)}
-                className="border border-white/10 text-white/70 hover:text-white rounded-full text-xs px-5 py-2.5 font-medium transition-all duration-300 flex items-center gap-2 group hover:-translate-y-0.5 hover:border-white/20"
-                style={{ background: 'var(--card-bg)' }}
+                className="flex items-center gap-2.5 cursor-pointer rounded-xl px-4 py-2.5 text-[13px] font-semibold border transition-colors text-left max-w-full group"
+                style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}
               >
-                {sample}
-                <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-              </button>
-            ))}
-          </div>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}80` }} />
+                <span className="truncate group-hover:text-white transition-colors">{sample}</span>
+              </motion.button>
+              );
+            })}
+          </motion.div>
         </div>
       )}
 
@@ -439,8 +454,8 @@ export default function BugAnalysis({ user }) {
           className="grid grid-cols-1 lg:grid-cols-12 gap-6"
         >
           {/* ── Left: Prediction card ── */}
-          <div
-            className="lg:col-span-5 border border-white/10 rounded-2xl p-6 lg:p-8 flex flex-col shadow-2xl"
+          <BentoCard
+            className="lg:col-span-5 p-6 lg:p-8 flex flex-col shadow-2xl !overflow-visible relative z-10"
             style={{ background: 'var(--card-bg)' }}
           >
             {/* Card heading */}
@@ -593,11 +608,11 @@ export default function BugAnalysis({ user }) {
                 </div>
               )}
             </div>
-          </div>
+          </BentoCard>
 
           {/* ── Right: Duplicate Detection card ── */}
-          <div
-            className="lg:col-span-7 border border-white/10 rounded-2xl p-6 lg:p-8 flex flex-col shadow-2xl"
+          <BentoCard
+            className="lg:col-span-7 p-6 lg:p-8 flex flex-col shadow-2xl"
             style={{ background: 'var(--card-bg)' }}
           >
             <div className="flex items-center justify-between mb-6">
@@ -659,7 +674,7 @@ export default function BugAnalysis({ user }) {
                 ))}
               </div>
             )}
-          </div>
+          </BentoCard>
         </motion.section>
       )}
     </div>

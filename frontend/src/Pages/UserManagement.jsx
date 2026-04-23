@@ -10,6 +10,8 @@ import {
   Mail, Send, UserPlus, ShieldCheck
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 function RoleBadge({ role }) {
   const map = {
@@ -168,7 +170,7 @@ function InviteCodePanel() {
   if (loading || !inviteData) return null;
 
   return (
-    <div className="bg-blue-500/[0.03] border border-indigo-500/20 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
+    <BentoCard className="bg-blue-500/[0.03] border-indigo-500/20 p-6 lg:p-8 shadow-2xl mb-6 hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
       <div className="flex items-center gap-2 mb-4 relative z-10">
         <KeyRound size={16} className="text-indigo-400" />
@@ -194,7 +196,7 @@ function InviteCodePanel() {
         </button>
         </div>
       </div>
-    </div>
+    </BentoCard>
   );
 }
 
@@ -241,7 +243,7 @@ function AccessRequestsPanel({ showToast }) {
   if (loading) return null;
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden mb-6 group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl">
+    <BentoCard className="p-6 lg:p-8 shadow-2xl mb-6 hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent opacity-50" />
       <div className="flex items-center gap-2 mb-6 relative z-10">
         <UserPlus size={16} className="text-indigo-400" />
@@ -282,19 +284,23 @@ function AccessRequestsPanel({ showToast }) {
           ))}
         </div>
       )}
-    </div>
+    </BentoCard>
   );
 }
 
-export default function UserManagement({ currentUser }) {
+export default function UserManagement({ currentUser, initialQuery = '' }) {
   const [users,     setUsers]     = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
   const [deleting,  setDeleting]  = useState(false);
   const [toDelete,  setToDelete]  = useState(null);
   const [toast,     setToast]     = useState({ text: '', type: '' });
-  const [search,    setSearch]    = useState('');
+  const [search,    setSearch]    = useState(initialQuery);
   const [actioning, setActioning] = useState(null);
+
+  useEffect(() => {
+    setSearch(initialQuery);
+  }, [initialQuery]);
 
   const myUuid       = currentUser?.uuid || currentUser?.id || null;
   const myRole       = currentUser?.role || 'user';
@@ -428,9 +434,9 @@ export default function UserManagement({ currentUser }) {
           <button onClick={fetchUsers} className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ">
+          <Button onClick={() => setShowCreate(true)} className="px-5 py-2.5 font-bold">
             <UserPlus size={16} /> Create User
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -455,7 +461,7 @@ export default function UserManagement({ currentUser }) {
         )}
       </div>
 
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md">
+      <BentoCard className="shadow-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left min-w-[600px]">
             <thead>
@@ -538,7 +544,7 @@ export default function UserManagement({ currentUser }) {
             <span>Your own account row is disabled for safety</span>
           </div>
         )}
-      </div>
+      </BentoCard>
     </motion.div>
   );
 }

@@ -9,6 +9,7 @@ import {
   Search, Mail, ChevronDown
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { LiquidButton as Button } from '../liquid-glass-button';
 
 function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
   const [open, setOpen] = useState(false);
@@ -40,16 +41,16 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   return (
     <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
-        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
-        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        className={triggerClassName || `h-12 flex items-center justify-between px-5 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        <span className={`truncate pr-2 tracking-wide ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
-          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ backgroundColor: 'var(--bg-elevated)', backdropFilter: 'blur(16px)' }}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
-              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-5 py-3 text-[13px] font-semibold tracking-wide cursor-pointer transition-colors mx-2 my-0.5 rounded-lg ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
             })}
           </div>
         </div>
@@ -109,6 +110,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
 
   // --- Organizations state ---
   const [companies,  setCompanies]  = useState([]);
+  const [overview,   setOverview]   = useState(null);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
   const [selected,   setSelected]   = useState(null);
   const [orgError,   setOrgError]   = useState(null);
@@ -146,14 +148,17 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   const loadOrgs = async () => {
     setLoadingOrgs(true); setOrgError(null);
     try {
-      const [companiesRes, pendingRes] = await Promise.all([
+      const [companiesRes, pendingRes, overviewRes] = await Promise.all([
         axios.get('/api/superadmin/companies'),
         axios.get('/api/superadmin/pending'),
+        axios.get('/api/hub/overview'),
       ]);
       setCompanies(companiesRes.data || []);
       setPending(pendingRes.data || []);
+      setOverview(overviewRes?.data || null);
     } catch (e) {
       setCompanies([]);
+      setOverview(null);
       if (e.response?.status === 403) setOrgError('Super admin access required on this account.');
     } finally { setLoadingOrgs(false); }
   };
@@ -275,8 +280,8 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   };
 
   // Computed ---
-  const total_bugs     = companies.reduce((s, c) => s + (c.total    || 0), 0);
-  const total_critical = companies.reduce((s, c) => s + (c.critical || 0), 0);
+  const total_bugs     = overview?.stats?.total_db ?? companies.reduce((s, c) => s + (c.total    || 0), 0);
+  const total_critical = overview?.stats?.critical  ?? companies.reduce((s, c) => s + (c.critical || 0), 0);
   const total_users    = companies.reduce((s, c) => s + (c.users    || 0), 0);
   const avg_acc        = companies.length
     ? (companies.reduce((s, c) => s + (c.model_acc || 0), 0) / companies.length).toFixed(1) : '0';
@@ -325,14 +330,14 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
           </button>
           {canManage && (
             <>
-              <button onClick={() => { setShowSystemInvite(true); setSystemInviteMsg(null); setSystemInviteForm(BLANK_SYSTEM_INVITE); }}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">
+              <Button onClick={() => { setShowSystemInvite(true); setSystemInviteMsg(null); setSystemInviteForm(BLANK_SYSTEM_INVITE); }}
+                className="flex-1 md:flex-none px-5 py-2.5 bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 font-bold">
                 <ShieldCheck size={16} /> Invite System User
-              </button>
-              <button onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ">
+              </Button>
+              <Button onClick={() => { setShowCreate(true); setCreateMsg(null); setCreateForm(BLANK_USER); }}
+                className="flex-1 md:flex-none px-5 py-2.5 font-bold">
                 <UserPlus size={16} /> Create User
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -378,6 +383,58 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
             </div>
           )}
 
+          {/* Registered Organizations — shown first */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden mb-8">
+            <div className="p-6 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
+              <Globe size={16} className="text-indigo-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
+              <span className="ml-auto text-[11px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded">{companies.length} org{companies.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5">
+                    {['Organisation', 'Total bugs', 'Critical', 'Resolved', 'Users', 'Model acc.', 'Last active', ''].map(h => (
+                      <th key={h} className="px-6 py-4 text-xs font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingOrgs ? (
+                    <tr><td colSpan={8} className="py-16 text-center"><RefreshCw size={24} className="animate-spin text-white/30 mx-auto" /></td></tr>
+                  ) : companies.map(co => (
+                    <tr key={co.id} onClick={() => setSelected(selected?.id === co.id ? null : co)}
+                      className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.04] ${selected?.id === co.id ? 'bg-indigo-500/5' : ''}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center flex-shrink-0"><Building2 size={14} /></div>
+                          <span className="font-bold text-sm text-white truncate max-w-[150px]">{co.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</td>
+                      <td className="px-6 py-4"><span className="text-[11px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded">{co.critical || 0}</span></td>
+                      <td className="px-6 py-4 text-sm text-emerald-400 font-bold">{(co.resolved || 0).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-sm text-white/50">{co.users || 0}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-1.5 bg-white/10 rounded-full max-w-[60px] overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full" style={{ width: (co.model_acc || 0) + '%' }} />
+                          </div>
+                          <span className="text-xs font-bold text-white font-mono min-w-[36px]">{co.model_acc}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-white/40 whitespace-nowrap">{co.last_active}</td>
+                      <td className="px-6 py-4 text-right">
+                        <ChevronRight size={16} className={`text-white/40 transition-transform duration-300 ${selected?.id === co.id ? 'rotate-90 text-indigo-400' : ''}`} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pending Approvals — shown below organizations */}
           {(pending.length > 0 || actionMsg) && (
             <div className="bg-amber-500/[0.03] border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden mb-8 animate-in fade-in">
               <div className="p-5 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-3">
@@ -427,56 +484,6 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
               )}
             </div>
           )}
-
-          <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
-              <Globe size={16} className="text-indigo-400" />
-              <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
-              <span className="ml-auto text-[11px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded">{companies.length} org{companies.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/5">
-                    {['Organisation', 'Total bugs', 'Critical', 'Resolved', 'Users', 'Model acc.', 'Last active', ''].map(h => (
-                      <th key={h} className="px-6 py-4 text-xs font-bold text-white/60 uppercase tracking-widest whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadingOrgs ? (
-                    <tr><td colSpan={8} className="py-16 text-center"><RefreshCw size={24} className="animate-spin text-white/30 mx-auto" /></td></tr>
-                  ) : companies.map(co => (
-                    <tr key={co.id} onClick={() => setSelected(selected?.id === co.id ? null : co)}
-                      className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.04] ${selected?.id === co.id ? 'bg-indigo-500/5' : ''}`}>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center flex-shrink-0"><Building2 size={14} /></div>
-                          <span className="font-bold text-sm text-white truncate max-w-[150px]">{co.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</td>
-                      <td className="px-6 py-4"><span className="text-[11px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded">{co.critical || 0}</span></td>
-                      <td className="px-6 py-4 text-sm text-emerald-400 font-bold">{(co.resolved || 0).toLocaleString()}</td>
-                      <td className="px-6 py-4 text-sm text-white/50">{co.users || 0}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-1.5 bg-white/10 rounded-full max-w-[60px] overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: (co.model_acc || 0) + '%' }} />
-                          </div>
-                          <span className="text-xs font-bold text-white font-mono min-w-[36px]">{co.model_acc}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-white/40 whitespace-nowrap">{co.last_active}</td>
-                      <td className="px-6 py-4 text-right">
-                        <ChevronRight size={16} className={`text-white/40 transition-transform duration-300 ${selected?.id === co.id ? 'rotate-90 text-indigo-400' : ''}`} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
           {selected && (
             <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 mt-8">
@@ -690,9 +697,9 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                   {systemInviteMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={systemInviting} className="w-full bg-amber-500 text-black hover:bg-amber-400 active:bg-amber-600 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_4px_20px_rgba(245,158,11,0.35)]">
+              <Button type="submit" disabled={systemInviting} className="w-full bg-amber-500 text-black hover:bg-amber-400 font-bold py-3.5 shadow-[0_4px_20px_rgba(245,158,11,0.35)]">
                 {systemInviting ? <><RefreshCw size={16} className="animate-spin" /> Sending…</> : <><Mail size={16} /> Send System Invite</>}
-              </button>
+              </Button>
             </form>
           </div>
         </div>,
@@ -744,9 +751,9 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                   {createMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={creating} className="w-full bg-blue-600 text-white hover:bg-blue-500 active:bg-blue-700 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_4px_20px_rgba(59,130,246,0.30)]">
+              <Button type="submit" disabled={creating} className="w-full bg-blue-600 text-white hover:bg-blue-500 font-bold py-3.5 shadow-[0_4px_20px_rgba(59,130,246,0.30)]">
                 {creating ? <><RefreshCw size={16} className="animate-spin" /> Creating…</> : <><UserPlus size={16} /> Create & Send Invite</>}
-              </button>
+              </Button>
             </form>
           </div>
         </div>,

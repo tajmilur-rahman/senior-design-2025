@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useEscapeKey } from '../Components/Modal';
@@ -8,6 +8,9 @@ import {
     Globe, PenTool, UploadCloud, Info
 } from 'lucide-react';
 import { GlossaryDrawer, GlossaryTrigger, SEVERITY_DEFS, STATUS_DEFS } from '../Components/Glossary';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
+import { MultipleSelect } from '../multiple-select';
 
 function statusColor(status) {
     const s = (status || '').toUpperCase();
@@ -32,6 +35,7 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
 
   const selectedIdx = options.findIndex(o => String(o.value) === String(value));
   const selected = selectedIdx >= 0 ? options[selectedIdx] : null;
+  const isMulti = String(value).includes(',');
 
   useEffect(() => {
     if (!open) return;
@@ -63,21 +67,20 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
         role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder}
         onClick={() => { if (!disabled) setOpen(o => !o); }}
         onKeyDown={onKeyDown}
-        className={triggerClassName || `h-9 flex items-center justify-between px-3 border rounded-lg cursor-pointer text-sm transition-all outline-none focus:ring-1 focus:ring-emerald-500/40 ${open ? 'border-emerald-500/50 text-white' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}
-        style={{ background: 'var(--card-bg)' }}
+        className={triggerClassName || `h-11 flex items-center justify-between px-5 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
       >
-        <span className={`truncate pr-2 text-sm ${selected ? 'text-white' : 'text-white/50'}`}>{selected ? selected.label : placeholder}</span>
-        <ChevronDown size={13} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
+        <span className={`truncate pr-2 text-sm tracking-wide ${selected || isMulti ? 'text-white' : 'text-white/50'}`}>{selected ? selected.label : (isMulti ? 'Multiple components' : placeholder)}</span>
+        <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
-          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ backgroundColor: 'var(--bg-elevated)', backdropFilter: 'blur(16px)' }}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
               const isActive   = i === activeIdx;
               return (
                 <div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)}
-                  className={`px-3 py-2 text-xs font-semibold uppercase tracking-widest cursor-pointer transition-colors mx-1 rounded-lg ${isSelected ? 'bg-emerald-500/20 text-emerald-400' : isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
+                  className={`px-5 py-3 text-[13px] font-semibold tracking-wide cursor-pointer transition-colors mx-2 my-0.5 rounded-lg ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>
                   {opt.label}
                 </div>
               );
@@ -151,8 +154,11 @@ const PER_PAGE_OPTIONS = [
 const QUICK_FILTERS = [
     { key: 'critical',  label: 'S1 Critical',    dot: '#f87171' },
     { key: 'high',      label: 'S2 High',        dot: '#fbbf24' },
+    { key: 'new',       label: 'New Issues',     dot: '#60a5fa' },
     { key: 'triage',    label: 'Needs triage',   dot: '#94a3b8' },
     { key: 'resolved',  label: 'Resolved',       dot: '#34d399' },
+    { key: 'security',  label: 'Security',       dot: '#a855f7' },
+    { key: 'frontend',  label: 'Frontend',       dot: '#e879f9' },
 ];
 
 export default function Explorer({ user, initialQuery = "", initialFilters = null, onNavigate }) {
@@ -214,21 +220,39 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
     const totalPages = Math.ceil(total / itemsPerPage);
     const requestSort = (key) => { setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' })); setPage(1); };
     const clearFilters = () => { setSearch(''); setSevFilter(''); setStatusFilter(''); setCompFilter(''); setCompanyFilter(''); setPage(1); };
-    const applyQuickFilter = (type) => {
-        clearFilters();
-        if (type === 'critical')  { setSevFilter('S1'); }
-        if (type === 'high')      { setSevFilter('S2'); }
-        if (type === 'triage')    { setStatusFilter('UNCONFIRMED'); }
-        if (type === 'resolved')  { setStatusFilter('RESOLVED'); }
-    };
 
-    const activeQuickFilter = (() => {
-        if (sevFilter === 'S1' && !statusFilter) return 'critical';
-        if (sevFilter === 'S2' && !statusFilter) return 'high';
-        if (statusFilter === 'UNCONFIRMED' && !sevFilter) return 'triage';
-        if (statusFilter === 'RESOLVED' && !sevFilter) return 'resolved';
-        return null;
-    })();
+    const activeQuickFilters = useMemo(() => {
+        const active = [];
+        if (sevFilter === 'S1') active.push('critical');
+        if (sevFilter === 'S2') active.push('high');
+        if (statusFilter === 'NEW') active.push('new');
+        if (statusFilter === 'UNCONFIRMED') active.push('triage');
+        if (statusFilter === 'RESOLVED') active.push('resolved');
+        
+        const comps = (compFilter || '').split(',').map(c => c.trim());
+        if (comps.includes('Security')) active.push('security');
+        if (comps.includes('Frontend')) active.push('frontend');
+        return active;
+    }, [sevFilter, statusFilter, compFilter]);
+
+    const handleQuickFiltersChange = (newKeys) => {
+        let newSev = '';
+        let newStatus = '';
+        let newComps = [];
+        newKeys.forEach(k => {
+            if (k === 'critical') newSev = 'S1';
+            if (k === 'high')     newSev = 'S2';
+            if (k === 'new')      newStatus = 'NEW';
+            if (k === 'triage')   newStatus = 'UNCONFIRMED';
+            if (k === 'resolved') newStatus = 'RESOLVED';
+            if (k === 'security') newComps.push('Security');
+            if (k === 'frontend') newComps.push('Frontend');
+        });
+        setSevFilter(newSev);
+        setStatusFilter(newStatus);
+        setCompFilter(newComps.join(','));
+        setPage(1);
+    };
 
     const handleExport = async () => {
         setExporting(true);
@@ -265,42 +289,41 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                     <GlossaryTrigger onClick={() => setShowGlossary(true)} label="Labels & statuses" />
-                    <button
+                    <Button variant="outline"
                         onClick={handleExport}
                         disabled={exporting}
-                        className="h-9 px-4 border border-white/10 hover:bg-white/10 text-white/70 hover:text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap"
-                        style={{ background: 'var(--card-bg)' }}
                     >
                         {exporting ? <Loader size={15} className="animate-spin" /> : <Download size={15} />}
                         Export
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             {/* Filter Toolbar Card */}
-            <div className="border border-white/10 rounded-2xl p-3.5 mb-4 flex flex-col gap-2.5" style={{ background: 'var(--card-bg)' }}>
+                <BentoCard className="p-6 mb-6 flex flex-col gap-6 !overflow-visible relative z-20" style={{ background: 'var(--card-bg)' }}>
                 {/* Row 1: search bar — always full width */}
-                <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                    <input
-                        placeholder="Search summaries or #ID…"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full h-9 border border-white/10 rounded-lg pl-9 pr-8 text-white placeholder:text-white/30 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all text-sm"
-                        style={{ background: 'var(--bg)' }}
-                    />
-                    {search && (
-                        <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-0.5">
-                            <X size={13} />
-                        </button>
-                    )}
+                    <div className="border-b border-white/5 pb-6">
+                        <div className="relative">
+                            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                            <input
+                                placeholder="Search summaries or #ID…"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-12 border border-white/10 rounded-xl pl-11 pr-10 text-white placeholder:text-white/30 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all text-sm shadow-inner"
+                                style={{ background: 'var(--bg)' }}
+                            />
+                            {search && (
+                                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10">
+                                    <X size={15} />
+                                </button>
+                            )}
+                        </div>
                 </div>
 
-                {/* Row 2: dropdowns + quick filters + clear */}
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Company filter for system-level users */}
+                {/* Row 2: Dropdowns Grid */}
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${isSystemLevel && companies.length > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
                     {isSystemLevel && companies.length > 0 && (
-                        <div className="w-36 flex-shrink-0">
+                        <div className="w-full">
                             <CustomSelect
                                 value={companyFilter}
                                 onChange={v => { setCompanyFilter(v); setPage(1); }}
@@ -313,9 +336,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                             />
                         </div>
                     )}
-
-                    {/* Component filter */}
-                    <div className="w-36 flex-shrink-0">
+                    <div className="w-full">
                         <CustomSelect
                             value={compFilter}
                             onChange={v => { setCompFilter(v); setPage(1); }}
@@ -324,9 +345,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                             ariaLabel="Filter by component"
                         />
                     </div>
-
-                    {/* Severity filter */}
-                    <div className="w-28 flex-shrink-0">
+                    <div className="w-full">
                         <CustomSelect
                             value={sevFilter}
                             onChange={v => { setSevFilter(v); setPage(1); }}
@@ -335,9 +354,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                             ariaLabel="Filter by severity"
                         />
                     </div>
-
-                    {/* Status filter */}
-                    <div className="w-32 flex-shrink-0">
+                    <div className="w-full">
                         <CustomSelect
                             value={statusFilter}
                             onChange={v => { setStatusFilter(v); setPage(1); }}
@@ -346,40 +363,28 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                             ariaLabel="Filter by status"
                         />
                     </div>
-
-                    {/* Divider */}
-                    <div className="w-px h-5 bg-white/10 flex-shrink-0 hidden sm:block" />
-
-                    {/* Quick filter chips */}
-                    {QUICK_FILTERS.map(f => {
-                        const isActive = activeQuickFilter === f.key;
-                        return (
-                            <button
-                                key={f.key}
-                                onClick={() => isActive ? clearFilters() : applyQuickFilter(f.key)}
-                                className="h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 transition-all border"
-                                style={isActive
-                                    ? { background: `${f.dot}18`, borderColor: `${f.dot}50`, color: f.dot }
-                                    : { background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }
-                                }
-                            >
-                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: f.dot }} />
-                                {f.label}
-                            </button>
-                        );
-                    })}
-
-                    {/* Clear */}
-                    {hasFilters && (
-                        <button
-                            onClick={clearFilters}
-                            className="h-8 px-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-[12px] font-medium text-red-400 transition-all flex items-center gap-1.5 flex-shrink-0"
-                        >
-                            <X size={12} /> Clear
-                        </button>
-                    )}
                 </div>
-            </div>
+
+                {/* Row 3: Quick Filters & Clear */}
+                <div className="flex flex-col gap-4 pt-4 mt-2 border-t border-white/5">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest">Quick Filters</span>
+                        {hasFilters && (
+                            <button
+                                onClick={clearFilters}
+                                className="h-9 px-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-[11px] font-bold uppercase tracking-widest text-red-400 transition-all flex items-center gap-1.5 flex-shrink-0"
+                            >
+                                <X size={14} /> Clear All
+                            </button>
+                        )}
+                    </div>
+                    <MultipleSelect 
+                        tags={QUICK_FILTERS} 
+                        value={activeQuickFilters} 
+                        onChange={handleQuickFiltersChange} 
+                    />
+                </div>
+            </BentoCard>
 
             {/* Company filter active label */}
             {isSystemLevel && companyFilter && (
@@ -389,7 +394,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
             )}
 
             {/* Main Table Card */}
-            <div className="border border-white/10 rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--card-bg)' }}>
+            <BentoCard className="overflow-hidden flex flex-col" style={{ background: 'var(--card-bg)' }}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[800px]">
                         <thead>
@@ -420,7 +425,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                         <tbody className="divide-y divide-white/5 text-sm">
                             {loading && (
                                 <tr>
-                                    <td colSpan={7} className="py-20 text-center">
+                                    <td colSpan={5} className="py-20 text-center">
                                         <Loader size={26} className="animate-spin text-white/20 mx-auto mb-3" />
                                         <div className="text-sm text-white/40 font-medium">Querying database…</div>
                                     </td>
@@ -428,7 +433,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                             )}
                             {!loading && bugs.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="py-20 text-center text-white/30 text-sm">
+                                    <td colSpan={5} className="py-20 text-center text-white/30 text-sm">
                                         No telemetry records match your exact filters.
                                     </td>
                                 </tr>
@@ -508,7 +513,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                         </button>
                     </div>
                 </div>
-            </div>
+            </BentoCard>
 
             {/* Detail Slide-over Panel */}
             {selectedBug && (() => {

@@ -1,7 +1,9 @@
 import { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
-import { FolderTree, ExternalLink, ArrowRight, Layers, Building2, Users, Bug, BrainCircuit, CheckCircle, XCircle, Trash2, RefreshCw } from 'lucide-react';
+import { FolderTree, ExternalLink, ArrowRight, Layers, Building2, Users, Bug, BrainCircuit, CheckCircle, XCircle, Trash2, RefreshCw, Search, Globe, Activity } from 'lucide-react';
 import { mozillaTaxonomy, teamDescriptions } from '../javascript/taxonomy';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 export default function Directory({ onNavigate, user }) {
   const [expandedTeam, setExpandedTeam] = useState(null);
@@ -10,6 +12,7 @@ export default function Directory({ onNavigate, user }) {
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [resettingId, setResettingId] = useState(null);   // company id currently being reset
   const [confirmReset, setConfirmReset] = useState(null); // company id awaiting confirm
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleResetCompany = async (coId) => {
     setResettingId(coId);
@@ -65,118 +68,167 @@ export default function Directory({ onNavigate, user }) {
     compName.includes('firefox') || compName.includes('mozilla') ||
     userName.includes('firefox') || userName.includes('mozilla');
 
-  // Detect whether the component data looks like Mozilla taxonomy —
-  // this catches non-Firefox companies whose DB was seeded from firefox_table
-  // before the component-stripping fix was applied.
-  const looksLikeMozilla = dynamicComponents.some(({ name }) =>
-    Object.keys(mozillaTaxonomy).some(k => k.toLowerCase() === name.toLowerCase())
-  );
-
-  // Only show dynamic component cards for non-Firefox companies that have
-  // their own real (non-Mozilla) component data.
-  const showDynamic = !isFirefoxCompany && dynamicComponents.length > 0 && !looksLikeMozilla;
+  // Show dynamic component cards for non-Firefox companies whenever they have
+  // component data. Do not suppress on name overlap (e.g. "DevTools") because
+  // legitimate tenant data can share labels with Mozilla taxonomy terms.
+  const showDynamic = !isFirefoxCompany && dynamicComponents.length > 0;
   const companyLabel = user?.company_name || 'your company';
 
   const getTeamCount = (teamName) => counts[teamName.toLowerCase()] || 0;
 
   // ── Super admin: Companies Directory ─────────────────────────────────────────
   if (isSuperAdmin) {
+    const totalPlatformBugs = companies.reduce((acc, c) => acc + (c.total_bugs ?? c.total ?? 0), 0);
+    const totalPlatformUsers = companies.reduce((acc, c) => acc + (c.total_users ?? c.users ?? 0), 0);
+    const activeModels = companies.filter(c => c.has_own_model).length;
+    const filteredCompanies = companies.filter(c => (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
+
     return (
       <div className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 animate-in fade-in duration-700 font-sans relative z-10">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6 relative">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 relative">
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-4">
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
-                <Building2 size={12} className="text-indigo-500" />
-                <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Platform Overview</span>
+                <Globe size={12} className="text-indigo-500" />
+                <span className="text-[11px] font-medium tracking-[0.06em] uppercase">Global Directory</span>
               </div>
             </div>
             <h1 className="text-[1.75rem] font-semibold tracking-tight mb-3 text-white">
-              Companies <span className="text-indigo-400">Directory</span>
+              Tenant <span className="text-indigo-400">Directory</span>
             </h1>
             <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
-              All registered tenant companies on the platform, with model and usage status.
+              Monitor and manage all registered organizations, their telemetry volume, and machine learning models.
             </p>
           </div>
         </div>
 
+        {/* Aggregate Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <BentoCard className="p-5 hover:bg-white/[0.02] transition-colors">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2"><Building2 size={14} className="text-white/30" /> Organizations</div>
+            <div className="text-3xl font-bold font-mono text-white">{companies.length}</div>
+          </BentoCard>
+          <BentoCard className="p-5 hover:bg-white/[0.02] transition-colors">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2"><BrainCircuit size={14} className="text-emerald-400/50" /> Active Models</div>
+            <div className="text-3xl font-bold font-mono text-emerald-400">{activeModels}</div>
+          </BentoCard>
+          <BentoCard className="p-5 hover:bg-white/[0.02] transition-colors">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2"><Bug size={14} className="text-indigo-400/50" /> Total Telemetry</div>
+            <div className="text-3xl font-bold font-mono text-indigo-400">{totalPlatformBugs.toLocaleString()}</div>
+          </BentoCard>
+          <BentoCard className="p-5 hover:bg-white/[0.02] transition-colors">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2"><Users size={14} className="text-white/30" /> Platform Users</div>
+            <div className="text-3xl font-bold font-mono text-white">{totalPlatformUsers.toLocaleString()}</div>
+          </BentoCard>
+        </div>
+
+        {/* Search & Toolbar */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+            <input 
+              type="text"
+              placeholder="Search organizations by name…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 text-sm text-white placeholder:text-white/30 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all shadow-inner"
+            />
+          </div>
+        </div>
+
         {loadingCompanies ? (
-          <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 mt-12 animate-in fade-in duration-500">
+          <div className="flex flex-col items-center justify-center min-h-[30vh] gap-4 mt-8 animate-in fade-in duration-500">
             <div className="w-14 h-14 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/20 to-transparent animate-pulse" />
               <RefreshCw size={20} className="animate-spin text-white/40 relative z-10" />
             </div>
             <div className="text-white/40 text-sm font-medium">Loading companies…</div>
           </div>
-        ) : companies.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 mt-12">
+        ) : filteredCompanies.length === 0 ? (
+          <div className="flex flex-col items-center justify-center min-h-[30vh] gap-3 mt-8">
             <Building2 size={32} className="text-white/15" />
-            <div className="text-white/30 text-sm font-medium">No companies registered yet.</div>
+            <div className="text-white/30 text-sm font-medium">{searchQuery ? 'No organizations match your search.' : 'No companies registered yet.'}</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
-            {companies.map(co => (
-              <div key={co.id} className="group bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-white/[0.04] rounded-2xl p-6 lg:p-8 transition-all relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            {filteredCompanies.map(co => (
+              <BentoCard key={co.id} onClick={() => onNavigate('users', co.name)} className="flex flex-col p-6 lg:p-8 hover:!border-indigo-500/30 hover:!bg-white/[0.04] cursor-pointer group">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" />
 
-                <div className="flex items-start justify-between gap-3 mb-4 relative z-10">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                      <Building2 size={15} className="text-indigo-400" />
+                <div className="flex items-start justify-between gap-3 mb-6 relative z-10">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-blue-500/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                      <Building2 size={18} className="text-indigo-400" />
                     </div>
-                    <div className="text-base font-bold text-white truncate">{co.name || `Company ${co.id}`}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-bold text-white truncate">{co.name || `Company ${co.id}`}</div>
+                      <div className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">ID: {co.id}</div>
+                    </div>
                   </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-bold uppercase tracking-widest flex-shrink-0 ${
+                  <div className={`px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest flex-shrink-0 ${
                     co.has_own_model
                       ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                       : 'bg-white/5 border-white/10 text-white/30'
                   }`}>
-                    {co.has_own_model
-                      ? <><CheckCircle size={9} /> Model Ready</>
-                      : <><XCircle size={9} /> No Model</>}
+                    {co.has_own_model ? 'Model Active' : 'No Model'}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 relative z-10">
-                  {[
-                    { icon: <Bug size={12} />, label: 'Bugs',    val: co.total_bugs    ?? '—' },
-                    { icon: <Users size={12} />, label: 'Users',   val: co.total_users   ?? '—' },
-                    { icon: <BrainCircuit size={12} />, label: 'Feedback', val: co.total_feedback ?? '—' },
-                  ].map(({ icon, label, val }) => (
-                    <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 text-center">
-                      <div className="flex items-center justify-center text-white/30 mb-1">{icon}</div>
-                      <div className="text-white font-bold text-sm">{typeof val === 'number' ? val.toLocaleString() : val}</div>
-                      <div className="text-white/30 text-[11px] uppercase tracking-widest">{label}</div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-3 mb-5 relative z-10">
+                  <div className="bg-white/5 border border-white/5 rounded-xl p-3.5">
+                    <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Bug size={12}/> Telemetry</div>
+                    <div className="text-lg font-mono font-bold text-white">{(co.total_bugs ?? co.total ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white/5 border border-white/5 rounded-xl p-3.5">
+                    <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Users size={12}/> Users</div>
+                    <div className="text-lg font-mono font-bold text-white">{(co.total_users ?? co.users ?? 0).toLocaleString()}</div>
+                  </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between relative z-10">
-                  {co.status && (
-                    <span className={`text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${
-                      co.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
-                    }`}>{co.status}</span>
-                  )}
+                {(co.total_bugs ?? co.total ?? 0) > 0 && (
+                  <div className="mb-6 relative z-10">
+                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest mb-2">
+                      <span className="text-white/40 flex items-center gap-1.5"><Activity size={10} /> Resolution Rate</span>
+                      <span className="text-indigo-400">{Math.round(((co.resolved || 0) / (co.total_bugs ?? co.total ?? 1)) * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.round(((co.resolved || 0) / (co.total_bugs ?? co.total ?? 1)) * 100)}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-auto pt-4 flex items-center justify-between relative z-10 border-t border-white/10">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded border ${
+                    co.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
+                  }`}>
+                    {co.status || 'Active'}
+                  </span>
+
                   {/* Per-company model reset — super admin only */}
                   {confirmReset === co.id ? (
                     <div className="flex items-center gap-1.5 ml-auto">
-                      <button onClick={() => setConfirmReset(null)}
+                      <button onClick={(e) => { e.stopPropagation(); setConfirmReset(null); }}
                         className="px-2.5 py-1 bg-white/5 border border-white/10 text-white/40 text-[11px] font-bold rounded-lg hover:bg-white/10 transition-all">
                         No
                       </button>
-                      <button onClick={() => handleResetCompany(co.id)} disabled={resettingId === co.id}
+                      <button onClick={(e) => { e.stopPropagation(); handleResetCompany(co.id); }} disabled={resettingId === co.id}
                         className="flex items-center gap-1 px-2.5 py-1 bg-red-500/20 border border-red-500/30 text-red-400 text-[11px] font-bold rounded-lg hover:bg-red-500/30 transition-all disabled:opacity-50">
                         {resettingId === co.id ? <RefreshCw size={9} className="animate-spin" /> : <Trash2 size={9} />} Reset
                       </button>
                     </div>
                   ) : (
-                    <button onClick={() => setConfirmReset(co.id)} disabled={resettingId !== null}
-                      className="ml-auto flex items-center gap-1 px-2.5 py-1 bg-white/[0.03] border border-white/[0.08] text-white/30 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 text-[11px] font-bold rounded-lg transition-all disabled:opacity-30">
-                      <Trash2 size={9} /> Reset model
-                    </button>
+                    <div className="flex items-center gap-3 ml-auto">
+                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                        Manage users <ArrowRight size={10} />
+                      </span>
+                      <button onClick={(e) => { e.stopPropagation(); setConfirmReset(co.id); }} disabled={resettingId !== null}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-white/[0.03] border border-white/[0.08] text-white/30 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 text-[11px] font-bold rounded-lg transition-all disabled:opacity-30">
+                        <Trash2 size={9} /> Reset model
+                      </button>
+                    </div>
                   )}
                 </div>
-              </div>
+              </BentoCard>
             ))}
           </div>
         )}
@@ -208,9 +260,9 @@ export default function Directory({ onNavigate, user }) {
         </div>
         {isFirefoxCompany && (
           <div className="relative z-10">
-            <button onClick={() => window.open('https://bugzilla.mozilla.org/', '_blank')} className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm whitespace-nowrap">
+            <Button variant="outline" onClick={() => window.open('https://bugzilla.mozilla.org/', '_blank')} className="px-5 py-2.5 font-bold shadow-sm whitespace-nowrap">
               Open Bugzilla <ExternalLink size={14} className="opacity-70" />
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -218,12 +270,12 @@ export default function Directory({ onNavigate, user }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
         {showDynamic ? (
           dynamicComponents.map((item) => (
-            <div
+            <BentoCard
               key={item.name}
-              className="group bg-white/[0.02] border border-white/10 hover:border-indigo-500/40 hover:bg-white/[0.04] rounded-2xl p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden"
+              className="p-6 lg:p-8 cursor-pointer hover:!border-indigo-500/40 hover:!bg-white/[0.04]"
               onClick={() => onNavigate('submit', '', { component: item.name })}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" />
 
               <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                 <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{item.name}</div>
@@ -237,7 +289,7 @@ export default function Directory({ onNavigate, user }) {
               <div className="text-indigo-400 group-hover:text-indigo-300 font-bold text-xs uppercase tracking-widest flex items-center gap-2 relative z-10 transition-colors">
                 Pre-fill &amp; Submit <ArrowRight size={12} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </div>
-            </div>
+            </BentoCard>
           ))
         ) : !isFirefoxCompany ? (
           // Non-Firefox company with no own-component data yet — show empty state
@@ -252,12 +304,12 @@ export default function Directory({ onNavigate, user }) {
                 Tag bugs with a component when submitting to start building your directory.
               </p>
             </div>
-            <button
+            <Button
               onClick={() => onNavigate('submit')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 rounded-xl text-sm font-bold transition-all"
+              className="px-5 py-2.5 bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 font-bold"
             >
-              Submit a bug <ArrowRight size={14} />
-            </button>
+              Open Bug Ingestion <ArrowRight size={14} />
+            </Button>
           </div>
         ) : (
           Object.keys(mozillaTaxonomy).map((team) => {
@@ -265,12 +317,12 @@ export default function Directory({ onNavigate, user }) {
             const isExpanded = expandedTeam === team;
 
             return (
-              <div
+              <BentoCard
                 key={team}
-                className={`group bg-white/[0.02] border rounded-2xl p-6 lg:p-8 transition-all cursor-pointer relative overflow-hidden ${isExpanded ? 'border-white/30 bg-white/[0.04] ' : 'border-white/10 hover:border-white/20 hover:bg-white/[0.04]'}`}
+                className={`p-6 lg:p-8 cursor-pointer ${isExpanded ? '!border-white/30 !bg-white/[0.04] ' : 'hover:!border-white/20 hover:!bg-white/[0.04]'}`}
                 onClick={() => setExpandedTeam(isExpanded ? null : team)}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" />
                 
                 <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                   <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{team}</div>
@@ -315,7 +367,7 @@ export default function Directory({ onNavigate, user }) {
                     ))}
                   </div>
                 )}
-              </div>
+              </BentoCard>
             );
           })
         )}

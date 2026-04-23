@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList, CartesianGrid } from 'recharts';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard, MotionBentoCard } from '../bento-card';
 
 function CustomSelect({ value, onChange, options, placeholder, disabled = false, ariaLabel, triggerClassName, dropUp = false }) {
   const [open, setOpen] = useState(false);
@@ -38,16 +40,16 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   return (
     <div ref={ref} className={`relative select-none w-full ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div role="combobox" tabIndex={disabled ? -1 : 0} aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-disabled={disabled} aria-label={ariaLabel || placeholder} onClick={() => { if (!disabled) setOpen(o => !o); }} onKeyDown={onKeyDown}
-        className={triggerClassName || `h-12 flex items-center justify-between px-4 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
-        <span className={`truncate pr-2 ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
+        className={triggerClassName || `h-12 flex items-center justify-between px-5 border rounded-xl cursor-pointer text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-indigo-500/30 ${open ? 'border-indigo-500/40 bg-white/[0.08] text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/20'}`}>
+        <span className={`truncate pr-2 tracking-wide ${selected ? 'text-white' : ''}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`flex-shrink-0 transition-transform duration-200 text-white/40 ${open ? 'rotate-180' : ''}`} />
       </div>
       {open && (
-        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-md overflow-hidden py-1.5 ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`} style={{ background: 'var(--card-bg)' }}>
-          <div className="max-h-52 overflow-y-auto custom-scrollbar">
+        <div id={listId} role="listbox" ref={listRef} aria-label={ariaLabel || placeholder} className={`absolute z-[9999] w-full border border-white/10 rounded-xl shadow-2xl py-2 animate-in fade-in zoom-in-95 duration-200 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`} style={{ backgroundColor: 'var(--bg-elevated)', backdropFilter: 'blur(16px)' }}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
             {options.map((opt, i) => {
               const isSelected = String(opt.value) === String(value);
-              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest cursor-pointer transition-colors mx-1.5 rounded-xl ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
+              return (<div key={opt.value} role="option" aria-selected={isSelected} onClick={() => commit(i)} onMouseEnter={() => setActiveIdx(i)} className={`px-5 py-3 text-[13px] font-semibold tracking-wide cursor-pointer transition-colors mx-2 my-0.5 rounded-lg ${isSelected ? 'bg-indigo-500/15 text-indigo-400' : i === activeIdx ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}>{opt.label}</div>);
             })}
           </div>
         </div>
@@ -90,35 +92,28 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
   const [companies, setCompanies] = useState([]);
   const [pending,   setPending]   = useState([]);
   const [loadingCo, setLoadingCo] = useState(true);
-  const [isLight,   setIsLight]   = useState(false);
-
-  // Observe theme changes without querying the DOM on every render
-  useEffect(() => {
-    const root = document.querySelector('[data-theme]') || document.documentElement;
-    const update = () => setIsLight(root.getAttribute('data-theme') === 'light');
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
 
   const fetchGlobal = useCallback(async () => {
     setLoadingCo(true);
     try {
-      const [coRes, pendRes] = await Promise.all([
+      const [coRes, pendRes] = await Promise.allSettled([
         axios.get('/api/superadmin/companies'),
         axios.get('/api/superadmin/pending'),
       ]);
-      setCompanies(coRes.data || []);
-      setPending(pendRes.data || []);
+      if (coRes.status === 'fulfilled') {
+        setCompanies(coRes.value.data || []);
+      }
+      if (pendRes.status === 'fulfilled') {
+        setPending(pendRes.value.data || []);
+      }
     } catch { /* ignore */ }
     finally { setLoadingCo(false); }
   }, []);
 
   useEffect(() => { fetchGlobal(); }, [fetchGlobal]);
 
-  const totalBugs     = companies.reduce((s, c) => s + (c.total    || 0), 0);
-  const totalCritical = companies.reduce((s, c) => s + (c.critical || 0), 0);
+  const totalBugs     = data?.stats?.total_db ?? companies.reduce((s, c) => s + (c.total    || 0), 0);
+  const totalCritical = data?.stats?.critical  ?? companies.reduce((s, c) => s + (c.critical || 0), 0);
   const totalResolved = companies.reduce((s, c) => s + (c.resolved || 0), 0);
   const totalUsers    = companies.reduce((s, c) => s + (c.users    || 0), 0);
   const resolutionRate = totalBugs > 0 ? ((totalResolved / totalBugs) * 100).toFixed(1) : '0';
@@ -168,19 +163,18 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
             >
               <RefreshCw size={14} className={loadingCo ? 'animate-spin' : ''} />
             </button>
-            <button
+            <Button variant="outline"
               onClick={() => onNavigate('database')}
-              className="flex-1 flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
             >
               <Database size={15} className="text-white/50" /> Explorer
-            </button>
+            </Button>
             {selectedCompany && (
-              <button
+              <Button
                 onClick={() => onNavigate('submit')}
-                className="flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all "
+                className="px-5 py-2.5 font-bold"
               >
                 <Zap size={15} className="text-black" /> Triage
-              </button>
+              </Button>
             )}
           </div>
           {/* Company selector */}
@@ -240,10 +234,10 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
                 ? ((selectedCompany.resolved / selectedCompany.total) * 100).toFixed(1)
                 : '0') + '%',                                                                     color: 'text-amber-400'  },
           ].map(s => (
-            <div key={s.label} className="border border-white/10 rounded-2xl p-5" style={{ background: 'var(--card-bg)' }}>
+            <BentoCard key={s.label} className="p-5" style={{ background: 'var(--card-bg)' }}>
               <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">{s.label}</div>
               <div className={`text-2xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
-            </div>
+          </BentoCard>
           ))}
         </div>
       )}
@@ -274,13 +268,13 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               nav: null,
             },
           ].map(s => (
-            <motion.div
+            <MotionBentoCard
               key={s.label}
               whileInView={{ opacity: 1, y: 0 }}
               initial={{ opacity: 0, y: 20 }}
               viewport={{ once: true }}
               onClick={s.nav || undefined}
-              className={`border border-white/10 rounded-2xl p-6 relative overflow-hidden group transition-all duration-300 ease-out ${s.nav ? 'cursor-pointer hover:border-white/20 hover:-translate-y-1 hover:shadow-xl' : ''}`}
+              className={`p-6 ${s.nav ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl' : ''}`}
               style={{ background: 'var(--card-bg)' }}
             >
               <div className="flex justify-between items-start mb-4">
@@ -293,7 +287,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               </div>
               <div className={`text-3xl font-bold font-mono tracking-tight mb-1 ${s.valueColor}`}>{s.value}</div>
               <div className="text-xs text-white/40 font-medium uppercase tracking-widest">{s.label}</div>
-            </motion.div>
+            </MotionBentoCard>
           ))}
         </div>
       )}
@@ -317,13 +311,13 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               nav: () => onNavigate('superadmin'),
             },
           ].map(s => (
-            <motion.div
+            <MotionBentoCard
               key={s.label}
               whileInView={{ opacity: 1, y: 0 }}
               initial={{ opacity: 0, y: 20 }}
               viewport={{ once: true }}
               onClick={s.nav || undefined}
-              className={`border border-white/10 rounded-2xl p-6 relative overflow-hidden group transition-all duration-300 ease-out ${s.nav ? 'cursor-pointer hover:border-white/20 hover:-translate-y-1 hover:shadow-xl' : ''}`}
+              className={`p-6 ${s.nav ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl' : ''}`}
               style={{ background: 'var(--card-bg)' }}
             >
               <div className="flex justify-between items-start mb-4">
@@ -336,7 +330,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               </div>
               <div className={`text-3xl font-bold font-mono tracking-tight mb-1 ${s.valueColor}`}>{s.value}</div>
               <div className="text-xs text-white/40 font-medium uppercase tracking-widest">{s.label}</div>
-            </motion.div>
+            </MotionBentoCard>
           ))}
         </div>
       )}
@@ -344,11 +338,11 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
       {/* ── Live Feed + Chart ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
         {/* Live Feed — wider column */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
-          className="lg:col-span-3 border border-white/10 rounded-2xl flex flex-col overflow-hidden"
+          className="lg:col-span-3 flex flex-col overflow-hidden"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="p-5 border-b border-white/10 flex justify-between items-center rounded-t-2xl" style={{ background: 'var(--bg-elevated)' }}>
@@ -375,14 +369,14 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               </div>
             ) : (data?.recent || []).map((bug, i) => <LiveFeedRow key={i} bug={bug} />)}
           </div>
-        </motion.div>
+        </MotionBentoCard>
 
         {/* Hotspot chart — narrower column */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
-          className="lg:col-span-2 border border-white/10 rounded-2xl p-6 flex flex-col"
+          className="lg:col-span-2 p-6 flex flex-col"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="flex justify-between items-center mb-6">
@@ -392,55 +386,53 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
             <span className="text-[11px] font-bold uppercase tracking-widest text-white/30 border border-white/10 px-2 py-1 rounded-md" style={{ background: 'var(--bg-elevated)' }}>By Volume</span>
           </div>
           {data?.charts?.components?.length > 0 ? (
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1" style={{ minHeight: 260 }}>
+            <div className="w-full h-[260px] mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.charts.components} layout="vertical" margin={{ top: 8, right: 48, left: 8, bottom: 28 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={isLight ? 'rgba(15,23,42,0.07)' : 'rgba(255,255,255,0.05)'} horizontal={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                     <XAxis
                       type="number"
-                      tick={{ fontSize: 11, fill: isLight ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.55)' }}
+                      tick={{ fontSize: 11, fill: 'var(--text-dim)' }}
                       axisLine={false} tickLine={false}
-                      label={{ value: 'Open issues', position: 'insideBottom', offset: -16, fill: isLight ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+                      label={{ value: 'Open issues', position: 'insideBottom', offset: -16, fill: 'var(--text-dim)', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
                     />
                     <YAxis dataKey="name" type="category" width={120}
-                      tick={{ fontSize: 12, fill: isLight ? 'rgba(15,23,42,0.65)' : 'rgba(255,255,255,0.6)', fontWeight: 600 }}
+                      tick={{ fontSize: 12, fill: 'var(--text-sec)', fontWeight: 600 }}
                       axisLine={false} tickLine={false} />
                     <Tooltip
-                      cursor={{ fill: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{ borderRadius: '16px', border: `1px solid ${isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'}`, background: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(10,10,10,0.95)', color: isLight ? '#0f172a' : '#fff', fontSize: '13px', boxShadow: isLight ? '0 20px 40px rgba(0,0,0,0.12)' : '0 20px 40px rgba(0,0,0,0.5)', padding: '12px 16px' }}
-                      itemStyle={{ color: isLight ? '#0f172a' : '#fff', fontWeight: 700 }}
+                      cursor={{ fill: 'var(--hover-bg)' }}
+                      contentStyle={{ borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '13px', boxShadow: 'var(--shadow-md)', padding: '12px 16px' }}
+                      itemStyle={{ color: 'var(--text-main)', fontWeight: 700 }}
                       formatter={(v) => [v, 'Issues']}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={22}>
                       {data.charts.components.map((_, i) => (
                         <Cell key={i} fill={i === 0 ? HOTSPOT_AMBER : HOTSPOT_BLUE} fillOpacity={i === 0 ? 1 : 0.55} />
                       ))}
-                      <LabelList dataKey="value" position="right" fill={isLight ? 'rgba(15,23,42,0.7)' : 'rgba(255,255,255,0.75)'} fontSize={11} fontWeight={700} />
+                      <LabelList dataKey="value" position="right" fill="var(--text-sec)" fontSize={11} fontWeight={700} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-              {topComponent !== 'General' && (
-                <p className="text-xs text-white/40 pt-4 pb-1 leading-relaxed text-center border-t border-white/10 mt-4 flex-shrink-0">
-                  <strong className="text-white">{topComponent}</strong> holds the highest density of unresolved anomalies globally.
-                </p>
-              )}
             </div>
           ) : (
             <div className="flex flex-col flex-1 items-center justify-center min-h-[240px] text-white/30 text-sm font-medium">
               <ShieldCheck size={32} className="mb-4 opacity-20" />System clear — no data yet.
             </div>
           )}
-        </motion.div>
+          {data?.charts?.components?.length > 0 && topComponent !== 'General' && (
+            <p className="text-xs text-white/40 pt-4 pb-1 leading-relaxed text-center border-t border-white/10 mt-4 flex-shrink-0">
+              <strong className="text-white">{topComponent}</strong> holds the highest density of unresolved anomalies globally.
+            </p>
+          )}
+        </MotionBentoCard>
       </div>
 
       {/* ── Company breakdown table ──────────────────────────────────────────── */}
-      <motion.div
+      <MotionBentoCard
         whileInView={{ opacity: 1, y: 0 }}
         initial={{ opacity: 0, y: 20 }}
         viewport={{ once: true }}
-        className="border border-white/10 rounded-2xl overflow-hidden"
+        className="overflow-hidden"
         style={{ background: 'var(--card-bg)' }}
       >
         <div className="p-5 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
@@ -520,7 +512,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
             </tbody>
           </table>
         </div>
-      </motion.div>
+      </MotionBentoCard>
     </motion.div>
   );
 }
@@ -530,16 +522,6 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [isLight, setIsLight] = useState(false);
-
-  useEffect(() => {
-    const root = document.querySelector('[data-theme]') || document.documentElement;
-    const update = () => setIsLight(root.getAttribute('data-theme') === 'light');
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
 
   const isSystemLevel = user?.role === 'super_admin' || user?.role === 'developer';
 
@@ -633,30 +615,29 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
           </p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <button
+          <Button variant="outline"
             onClick={() => onNavigate('database')}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
           >
             <Database size={15} className="text-white/50" /> Explorer
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => onNavigate('submit')}
-            className="group flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 rounded-xl text-sm font-bold transition-all "
+            className="px-5 py-2.5 font-bold"
           >
             <Zap size={15} className="text-black group-hover:scale-110 transition-transform" /> Triage Issue
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* ── Stat Cards ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {/* Card 1 — Total Records */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
           onClick={() => onNavigate('database', '', null, null)}
-          className="border border-white/10 rounded-2xl p-6 relative overflow-hidden group cursor-pointer transition-all duration-300 ease-out hover:border-white/20 hover:-translate-y-1 hover:shadow-xl"
+          className="p-6 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="flex justify-between items-start mb-4">
@@ -667,15 +648,15 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
           </div>
           <div className="text-3xl font-bold text-white tracking-tight mb-1 font-mono">{data.stats.total_db.toLocaleString()}</div>
           <div className="text-xs text-white/40 font-medium uppercase tracking-widest">Total Records</div>
-        </motion.div>
+        </MotionBentoCard>
 
         {/* Card 2 — Processed */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
           onClick={() => onNavigate('database', '', null, { status: 'RESOLVED' })}
-          className="border border-white/10 rounded-2xl p-6 relative overflow-hidden group cursor-pointer transition-all duration-300 ease-out hover:border-white/20 hover:-translate-y-1 hover:shadow-xl"
+          className="p-6 cursor-pointer hover:-translate-y-1 hover:shadow-xl"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="flex justify-between items-start mb-4">
@@ -686,15 +667,15 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
           </div>
           <div className="text-3xl font-bold text-white tracking-tight mb-1 font-mono">{data.stats.analyzed.toLocaleString()}</div>
           <div className="text-xs text-white/40 font-medium uppercase tracking-widest">Processed</div>
-        </motion.div>
+        </MotionBentoCard>
 
         {/* Card 3 — Critical Open */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
           onClick={() => onNavigate('database', '', null, { sev: 'S1' })}
-          className="border border-red-500/20 rounded-2xl p-6 relative overflow-hidden group cursor-pointer transition-all duration-300 ease-out hover:border-red-500/30 hover:shadow-[0_12px_40px_rgba(239,68,68,0.12)] hover:-translate-y-1 bg-red-500/[0.03]"
+          className="p-6 cursor-pointer hover:shadow-[0_12px_40px_rgba(239,68,68,0.12)] hover:-translate-y-1 !bg-red-500/[0.03] !border-red-500/20 hover:!border-red-500/30"
         >
           <div className="flex justify-between items-start mb-4">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-red-500/20 bg-red-500/10">
@@ -704,17 +685,17 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
           </div>
           <div className="text-3xl font-bold text-red-500 tracking-tight mb-1 font-mono">{(data.stats.critical ?? 0).toLocaleString()}</div>
           <div className="text-xs text-red-400/60 font-medium uppercase tracking-widest">Critical Open</div>
-        </motion.div>
+        </MotionBentoCard>
       </div>
 
       {/* ── Live Feed + Chart ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Live Feed — wider column */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
-          className="lg:col-span-3 border border-white/10 rounded-2xl flex flex-col overflow-hidden"
+          className="lg:col-span-3 flex flex-col overflow-hidden"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="p-5 border-b border-white/10 flex justify-between items-center rounded-t-2xl" style={{ background: 'var(--bg-elevated)' }}>
@@ -742,14 +723,14 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
               </div>
             ) : (data.recent || []).map((bug, i) => <LiveFeedRow key={i} bug={bug} />)}
           </div>
-        </motion.div>
+        </MotionBentoCard>
 
         {/* Chart — narrower column */}
-        <motion.div
+        <MotionBentoCard
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
-          className="lg:col-span-2 border border-white/10 rounded-2xl p-6 flex flex-col"
+          className="lg:col-span-2 p-6 flex flex-col"
           style={{ background: 'var(--card-bg)' }}
         >
           <div className="flex justify-between items-center mb-6">
@@ -759,38 +740,31 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
             <span className="text-[11px] font-bold uppercase tracking-widest text-white/30 border border-white/10 px-2 py-1 rounded-md" style={{ background: 'var(--bg-elevated)' }}>By Volume</span>
           </div>
           {data.charts?.components?.length > 0 ? (
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1" style={{ minHeight: 280 }}>
+            <div className="w-full h-[280px] mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.charts.components} layout="vertical" margin={{ top: 8, right: 48, left: 8, bottom: 28 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={isLight ? 'rgba(15,23,42,0.07)' : 'rgba(255,255,255,0.05)'} horizontal={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                     <XAxis
                       type="number"
-                      tick={{ fontSize: 11, fill: isLight ? 'rgba(15,23,42,0.55)' : 'rgba(255,255,255,0.55)' }}
+                      tick={{ fontSize: 11, fill: 'var(--text-dim)' }}
                       axisLine={false} tickLine={false}
-                      label={{ value: 'Open issues', position: 'insideBottom', offset: -16, fill: isLight ? 'rgba(15,23,42,0.45)' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
+                      label={{ value: 'Open issues', position: 'insideBottom', offset: -16, fill: 'var(--text-dim)', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em' }}
                     />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fill: isLight ? 'rgba(15,23,42,0.65)' : 'rgba(255,255,255,0.6)', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12, fill: 'var(--text-sec)', fontWeight: 600 }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      cursor={{ fill: isLight ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{ borderRadius: '16px', border: `1px solid ${isLight ? 'rgba(15,23,42,0.12)' : 'rgba(255,255,255,0.1)'}`, background: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(10,10,10,0.95)', color: isLight ? '#0f172a' : '#fff', fontSize: '13px', boxShadow: isLight ? '0 20px 40px rgba(0,0,0,0.12)' : '0 20px 40px rgba(0,0,0,0.5)', padding: '12px 16px' }}
-                      itemStyle={{ color: isLight ? '#0f172a' : '#fff', fontWeight: 700 }}
+                      cursor={{ fill: 'var(--hover-bg)' }}
+                      contentStyle={{ borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-main)', fontSize: '13px', boxShadow: 'var(--shadow-md)', padding: '12px 16px' }}
+                      itemStyle={{ color: 'var(--text-main)', fontWeight: 700 }}
                       formatter={(v) => [v, 'Issues Open']}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={22}>
                       {data.charts.components.map((_, i) => (
                         <Cell key={i} fill={i === 0 ? HOTSPOT_AMBER : HOTSPOT_BLUE} fillOpacity={i === 0 ? 1 : 0.55} />
                       ))}
-                      <LabelList dataKey="value" position="right" fill={isLight ? 'rgba(15,23,42,0.7)' : 'rgba(255,255,255,0.75)'} fontSize={11} fontWeight={700} />
+                      <LabelList dataKey="value" position="right" fill="var(--text-sec)" fontSize={11} fontWeight={700} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-              {topComponent !== 'General' && (
-                <p className="text-xs text-white/40 pt-4 pb-1 leading-relaxed text-center border-t border-white/10 mt-4 flex-shrink-0">
-                  <strong className="text-white">{topComponent}</strong> currently holds the highest density of unresolved anomalies.
-                </p>
-              )}
             </div>
           ) : (
             <div className="flex flex-col flex-1 items-center justify-center min-h-[280px] text-white/30 text-sm font-medium">
@@ -798,7 +772,12 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
               System clear — no data yet.
             </div>
           )}
-        </motion.div>
+          {data.charts?.components?.length > 0 && topComponent !== 'General' && (
+            <p className="text-xs text-white/40 pt-4 pb-1 leading-relaxed text-center border-t border-white/10 mt-4 flex-shrink-0">
+              <strong className="text-white">{topComponent}</strong> currently holds the highest density of unresolved anomalies.
+            </p>
+          )}
+        </MotionBentoCard>
       </div>
     </motion.div>
   );

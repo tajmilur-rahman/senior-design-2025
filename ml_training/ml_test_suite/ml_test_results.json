@@ -1,0 +1,104 @@
+{
+  "summary": {
+    "total_test_cases": 5,
+    "passed": 2,
+    "failed": 3,
+    "skipped_rows": 0,
+    "pass_rate": 0.4,
+    "needs_review_count": 1,
+    "confusion_matrix": [
+      {
+        "actual": "S1",
+        "S1": 1,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      },
+      {
+        "actual": "S2",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      },
+      {
+        "actual": "S3",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      },
+      {
+        "actual": "S4",
+        "S1": 0,
+        "S2": 0,
+        "S3": 1,
+        "S4": 0
+      }
+    ],
+    "s2_predicted_as_s3": 1,
+    "s3_predicted_as_s2": 0
+  },
+  "results": [
+    {
+      "id": 1,
+      "summary": "Critical memory leak causes browser to crash on startup",
+      "component": "Core",
+      "platform": "Desktop",
+      "expected": "S1",
+      "predicted": "S1",
+      "confidence": 0.95,
+      "needs_review": false,
+      "review_reason": null,
+      "passed": true
+    },
+    {
+      "id": 2,
+      "summary": "Password reset email is never sent to the user",
+      "component": "Auth",
+      "platform": "All",
+      "expected": "S1",
+      "predicted": "S3",
+      "confidence": 0.781,
+      "needs_review": false,
+      "review_reason": null,
+      "passed": false
+    },
+    {
+      "id": 3,
+      "summary": "Button alignment is slightly off on the login page",
+      "component": "UI",
+      "platform": "Desktop",
+      "expected": "S4",
+      "predicted": "S3",
+      "confidence": 0.76,
+      "needs_review": false,
+      "review_reason": null,
+      "passed": false
+    },
+    {
+      "id": 4,
+      "summary": "Page takes 10 seconds to load when 5 tabs are open",
+      "component": "Performance",
+      "platform": "Desktop",
+      "expected": "S3",
+      "predicted": "S3",
+      "confidence": 0.744,
+      "needs_review": false,
+      "review_reason": null,
+      "passed": true
+    },
+    {
+      "id": 5,
+      "summary": "User cannot change their profile picture",
+      "component": "Profile",
+      "platform": "Web",
+      "expected": "S2",
+      "predicted": "S3",
+      "confidence": 0.621,
+      "needs_review": true,
+      "review_reason": "low_confidence",
+      "passed": false
+    }
+  ]
+}

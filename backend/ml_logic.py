@@ -19,11 +19,52 @@ def _save_main_brain(artifact_paths, metrics_out):
     if not os.path.exists(path):
         with open(path, "w") as f:
             json.dump({**metrics_out, "build": "main_brain"}, f)
+
 from scipy.sparse import hstack, csr_matrix
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics.pairwise import cosine_similarity
 
 _model_cache: dict = {}
+
+# ---- Review gating policy (efficient + safe) -------------------------------
+# Most efficient default: gate only low-confidence predictions and "close calls".
+REVIEW_THRESHOLD = float(os.getenv("SEVERITY_REVIEW_THRESHOLD", "0.65"))
+MARGIN_THRESHOLD = float(os.getenv("SEVERITY_REVIEW_MARGIN", "0.10"))
+# Optional: gate only when predicted label is S3
+GATE_S3_ONLY = os.getenv("SEVERITY_GATE_S3_ONLY", "0") == "1"
+
+# NEW: high-risk keyword override to catch under-triage (S1/S2 being predicted as S3).
+# This is efficient because it only triggers when the model says S3.
+HIGH_RISK_TERMS = [
+    # crash / memory
+    "crash", "crashes", "segfault", "segmentation fault", "memory corruption",
+    "use-after-free", "uaf", "heap overflow", "buffer overflow",
+
+    # security
+    "security", "vulnerability", "vuln", "cve", "exploit",
+
+    # data loss / corruption
+    "data loss", "lost data", "corrupt", "corruption",
+
+    # severe regression/outage language
+    "regression", "blocker", "unusable", "won't start", "cannot start", "can't start",
+
+    # authentication hard-fail (optional)
+    "cannot login", "can't login", "unable to login", "login fails",
+]
+
+
+def _contains_high_risk_terms(text: str) -> bool:
+    t = (text or "").lower()
+    return any(term in t for term in HIGH_RISK_TERMS)
+
+
+def _forced_severity_from_text(text: str) -> str | None:
+    """Return a hard severity override when the text clearly signals a high-risk bug."""
+    t = (text or "").lower()
+    if any(term in t for term in HIGH_RISK_TERMS):
+        return "S1"
+    return None
 
 
 def load_pack(company_id=None):
@@ -33,7 +74,7 @@ def load_pack(company_id=None):
 
     s = get_artifact_paths(company_id)
     try:
-        if not os.path.exists(s['model']):
+        if not os.path.exists(s["model"]):
             print(f"⚠️ Model not found at {s['model']}. Using fallback mode.")
             pack = (None, None, None, {})
         else:
@@ -51,64 +92,143 @@ def load_pack(company_id=None):
     return pack
 
 
+def _severity_probs_from_proba(probs: np.ndarray, encoders) -> dict:
+    """
+    Convert model predict_proba output into {label: prob} mapping.
+    Works whether encoders is a dict with 'severity' or a plain encoder.
+    """
+    sev_enc = encoders["severity"] if isinstance(encoders, dict) and "severity" in encoders else encoders
+    try:
+        labels = sev_enc.inverse_transform(np.arange(len(probs)))
+    except Exception:
+        # Last-resort fallback order
+        labels = np.array(["S1", "S2", "S3", "S4"][: len(probs)])
+
+    return {str(labels[i]): float(probs[i]) for i in range(len(probs))}
+
+
+def _review_decision(
+    pred_label: str,
+    conf: float,
+    probs: dict | None,
+    summary_text: str | None = None
+) -> tuple[bool, str | None]:
+    """
+    Efficient review gating:
+      - NEW: If model predicts S3 but summary contains high-risk terms -> force review
+      - Gate low confidence (conf < REVIEW_THRESHOLD)
+      - Gate close-calls (top1-top2 margin < MARGIN_THRESHOLD)
+      - Optionally gate only when predicted label is S3 (env SEVERITY_GATE_S3_ONLY=1)
+    """
+    if pred_label is None:
+        return True, "no_prediction"
+
+    # NEW: under-triage safety rule
+    if pred_label == "S3" and summary_text and _contains_high_risk_terms(summary_text):
+        return True, "high_risk_terms"
+
+    if GATE_S3_ONLY and pred_label != "S3":
+        return False, None
+
+    if conf is None:
+        return True, "no_confidence"
+
+    if conf < REVIEW_THRESHOLD:
+        return True, "low_confidence"
+
+    if probs:
+        items = sorted(probs.items(), key=lambda kv: kv[1], reverse=True)
+        if len(items) >= 2:
+            margin = float(items[0][1]) - float(items[1][1])
+            if margin < MARGIN_THRESHOLD:
+                return True, "ambiguous_prediction"
+
+    return False, None
+
+
 def predict_internal(sum_text, meta_inputs, m, v, e):
-    if not all([m, v, e]): return None, None
+    """
+    Returns: (label, confidence, probs_dict)
+    """
+    if not all([m, v, e]):
+        return None, None, None
 
     xt = v.transform([sum_text]).toarray()
+
     xm_list = []
     for c in META:
         val = meta_inputs.get(c, "UNKNOWN")
         encoder = e[c] if isinstance(e, dict) and c in e else e
-        if hasattr(encoder, 'classes_'):
+        if hasattr(encoder, "classes_"):
             encoded_val = encoder.transform([val])[0] if val in encoder.classes_ else 0
         else:
             encoded_val = 0
         xm_list.append(encoded_val)
 
     xm = np.array(xm_list).reshape(1, -1)
+
     flags_list = []
     text_lower = sum_text.lower()
     for f in FLAGS:
         is_active = 0
-        if f == "has_crash" and ("crash" in text_lower or "segfault" in text_lower): is_active = 1
-        elif f == "is_accessibility" and "accessibility" in text_lower: is_active = 1
-        elif f == "is_regression" and "regression" in text_lower: is_active = 1
-        elif f == "is_intermittent" and "intermittent" in text_lower: is_active = 1
-        elif f == "has_patch" and "patch" in text_lower: is_active = 1
+        if f == "has_crash" and ("crash" in text_lower or "segfault" in text_lower):
+            is_active = 1
+        elif f == "is_accessibility" and "accessibility" in text_lower:
+            is_active = 1
+        elif f == "is_regression" and "regression" in text_lower:
+            is_active = 1
+        elif f == "is_intermittent" and "intermittent" in text_lower:
+            is_active = 1
+        elif f == "has_patch" and "patch" in text_lower:
+            is_active = 1
         flags_list.append(is_active)
 
     xf = np.array([flags_list])
+
+    # NOTE: This assumes the model was trained on [META + FLAGS + TFIDF] in this exact order.
     final_features = np.hstack([xm, xf, xt])
-    pro = m.predict_proba(final_features)[0]
-    sev_enc = e["severity"] if isinstance(e, dict) and "severity" in e else e
-    lab = sev_enc.inverse_transform(np.arange(len(pro)))
-    return lab[np.argmax(pro)], float(np.max(pro))
+
+    pro = m.predict_proba(final_features)[0]  # shape: (n_classes,)
+    probs = _severity_probs_from_proba(pro, e)
+
+    pred = max(probs.items(), key=lambda kv: kv[1])[0]
+    conf = float(probs[pred])
+    return pred, conf, probs
 
 
 def heuristic_predict(text):
     text = text.lower()
-    if "crash" in text or "security" in text or "data loss" in text: return "S1", 0.95
-    if "slow" in text or "performance" in text or "broken" in text: return "S2", 0.85
-    if "typo" in text or "color" in text or "align" in text: return "S4", 0.70
-    return "S3", 0.60
+    if "crash" in text or "security" in text or "data loss" in text:
+        return "S1", 0.95, {"S1": 0.95}
+    if "slow" in text or "performance" in text or "broken" in text:
+        return "S2", 0.85, {"S2": 0.85}
+    if "typo" in text or "color" in text or "align" in text:
+        return "S4", 0.70, {"S4": 0.70}
+    return "S3", 0.60, {"S3": 0.60}
 
 
 def predict_team(text, diagnosis):
     t = text.lower()
     d = diagnosis.lower()
-    if "security" in t or "auth" in t or "login" in t: return "🛡️ Security Ops"
-    if "database" in d or "sql" in t or "query" in t: return "💾 Data Infrastructure"
-    if "ui" in t or "css" in t or "align" in t or "color" in t: return "🎨 Frontend/UX"
-    if "crash" in t or "memory" in t or "leak" in t: return "⚡ Core Performance"
+    if "security" in t or "auth" in t or "login" in t:
+        return "🛡️ Security Ops"
+    if "database" in d or "sql" in t or "query" in t:
+        return "💾 Data Infrastructure"
+    if "ui" in t or "css" in t or "align" in t or "color" in t:
+        return "🎨 Frontend/UX"
+    if "crash" in t or "memory" in t or "leak" in t:
+        return "⚡ Core Performance"
     return "🔧 General Maintenance"
 
 
 def extract_keywords(text):
-    triggers = ["crash", "leak", "security", "fail", "slow", "broken", "error", "exception", "timeout", "freeze",
-                "database", "login", "api"]
+    triggers = [
+        "crash", "leak", "security", "fail", "slow", "broken", "error", "exception",
+        "timeout", "freeze", "database", "login", "api",
+    ]
     found = []
     for word in text.split():
-        clean_word = re.sub(r'\W+', '', word).lower()
+        clean_word = re.sub(r"\W+", "", word).lower()
         if clean_word in triggers:
             found.append(word)
     return list(set(found))
@@ -117,6 +237,7 @@ def extract_keywords(text):
 def predict_severity(summary: str, component: str = "General", platform: str = "All", company_id=None):
     used_source = "global"
     fallback = False
+    forced_severity = _forced_severity_from_text(summary)
 
     if company_id is not None and company_model_exists(company_id):
         m, v, e, _ = load_pack(company_id)
@@ -130,41 +251,67 @@ def predict_severity(summary: str, component: str = "General", platform: str = "
         if company_id is not None:
             fallback = True
 
-    label, conf = None, 0.0
+    label, conf, probs = None, 0.0, None
 
     if m:
         try:
             user_meta = {
-                "component": component, "platform": platform, "product": "Firefox",
-                "priority": "--", "status": "NEW", "op_sys": "Windows",
-                "type": "defect", "resolution": "---"
+                "component": component,
+                "platform": platform,
+                "product": "Firefox",
+                "priority": "--",
+                "status": "NEW",
+                "op_sys": "Windows",
+                "type": "defect",
+                "resolution": "---",
             }
-            label, conf = predict_internal(summary, user_meta, m, v, e)
+            label, conf, probs = predict_internal(summary, user_meta, m, v, e)
         except Exception as err:
             print(f"Prediction Error: {err}. Falling back.")
 
     if not label:
-        label, conf = heuristic_predict(summary)
+        label, conf, probs = heuristic_predict(summary)
+
+    if forced_severity:
+        label = forced_severity
+        conf = max(float(conf or 0.0), 0.95)
+        probs = {forced_severity: conf}
+
+    needs_review, review_reason = _review_decision(label, conf, probs, summary_text=summary)
 
     s = summary.lower()
     diagnosis = "Standard Logic Defect"
-    if "database" in s or "sql" in s: diagnosis = "Database Contention"
-    elif "ui" in s or "css" in s: diagnosis = "Frontend Rendering"
-    elif "auth" in s: diagnosis = "Access Control Failure"
-    elif "crash" in s: diagnosis = "Critical Memory Corruption"
+    if "database" in s or "sql" in s:
+        diagnosis = "Database Contention"
+    elif "ui" in s or "css" in s:
+        diagnosis = "Frontend Rendering"
+    elif "auth" in s:
+        diagnosis = "Access Control Failure"
+    elif "crash" in s:
+        diagnosis = "Critical Memory Corruption"
 
     team = predict_team(summary, diagnosis)
     keywords = extract_keywords(summary)
 
     return {
-        "prediction":   label,
-        "confidence":   conf,
-        "diagnosis":    diagnosis,
-        "team":         team,
-        "keywords":     keywords,
-        "model_source": used_source,
-        "fallback":     fallback,
+        "prediction":    label,
+        "confidence":    conf,
+        "needs_review":  needs_review,
+        "review_reason": review_reason,
+        "probs":         probs,
+        "diagnosis":     diagnosis,
+        "team":          team,
+        "keywords":      keywords,
+        "model_source":  used_source,
+        "fallback":      fallback,
+        "review_policy": {
+            "threshold": REVIEW_THRESHOLD,
+            "margin": MARGIN_THRESHOLD,
+            "gate_s3_only": GATE_S3_ONLY,
+            "high_risk_terms": HIGH_RISK_TERMS,
+        },
     }
+
 
 # Seed corpus — always available so similar bugs show even on a fresh install.
 # These mirror the sample bugs shown in the Analytics UI plus common Firefox bug patterns.
@@ -438,7 +585,7 @@ def full_train_from_dataset(records: list, company_id=None, progress_cb=None, da
 
 
 def safe_transform(encoder, values):
-    if not hasattr(encoder, 'classes_'):
+    if not hasattr(encoder, "classes_"):
         return np.zeros(len(values))
     safe_vals = [x if x in encoder.classes_ else encoder.classes_[0] for x in values]
     return encoder.transform(safe_vals)

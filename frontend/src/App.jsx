@@ -4,7 +4,7 @@ import axios from 'axios';
 import BugAnalysis     from './Pages/BugAnalysis';
 import Overview        from './Pages/Overview';
 import Explorer        from './Pages/Explorer';
-import SubmitTab       from './Pages/Submit';
+import SubmitTab from './Pages/Submit';
 import Login           from './Pages/Login';
 import Directory       from './Pages/Directory';
 import Landing         from './Pages/Landing';
@@ -18,8 +18,9 @@ import CodeWall          from './Pages/CodeWall';
 import ProfileSettings   from './Pages/ProfileSettings';
 import CompanyProfile    from './Pages/CompanyProfile';
 import { LogOut, Crown, Users, ChevronDown, ChevronLeft, ChevronUp, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon, Menu, PanelLeft, PanelTop, LayoutDashboard, FlaskConical, Gauge, BarChart3, BookUser, Database, ShieldCheck, Building2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
+import { AnimatedNavFramer } from './navigation-menu';
 
 axios.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -29,7 +30,7 @@ axios.interceptors.request.use(async (config) => {
 
 const NAV_TABS = [
   { id: 'overview',    label: 'Overview',          icon: LayoutDashboard },
-  { id: 'submit',      label: 'Severity Analysis', icon: FlaskConical },
+  { id: 'submit',      label: 'Bug Ingestion', icon: FlaskConical },
   { id: 'performance', label: 'Performance',       icon: Gauge,          adminOnly: true },
   { id: 'analysis',    label: 'Analytics',         icon: BarChart3 },
   { id: 'directory',   label: 'Directory',         icon: BookUser },
@@ -38,6 +39,15 @@ const NAV_TABS = [
   { id: 'company',     label: 'Company',           icon: Building2,      adminOnly: true, hideForSystemLevel: true },
 ];
 
+const sidebarVariants = {
+  expanded: { width: "14rem", transition: { type: "spring", damping: 20, stiffness: 250, staggerChildren: 0.05 } },
+  collapsed: { width: "4rem", transition: { type: "spring", damping: 20, stiffness: 250, staggerChildren: 0.05, staggerDirection: -1, when: "afterChildren" } }
+};
+
+const sidebarTextVariants = {
+  expanded: { opacity: 1, width: "auto", display: "block", transition: { duration: 0.2 } },
+  collapsed: { opacity: 0, width: 0, transition: { duration: 0.2 }, transitionEnd: { display: "none" } }
+};
 
 async function fetchUserRowWithRetry(uuid, maxAttempts = 6, delayMs = 600) {
   for (let i = 0; i < maxAttempts; i++) {
@@ -119,6 +129,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const [extFilters,    setExtFilters] = useState(null);
   const [trainingJob,   setTrainingJob] = useState({ key: null, step: '', pct: 0, done: false, error: null });
   const [perfRefreshKey, setPerfRefreshKey] = useState(0);
+  const [isSidebarExpanded, setSidebarExpanded] = useState(true);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const pollRef = useRef(null);
 
@@ -148,10 +159,14 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   // Click-based avatar menu (replaces hover-only). Closes on ESC / outside click.
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const avatarMenuRef = useRef(null);
+  const mobileAvatarMenuRef = useRef(null);
+  
   useEffect(() => {
     if (!avatarMenuOpen) return;
     const onDown = (e) => {
-      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target)) {
+      const clickedDesktop = avatarMenuRef.current && avatarMenuRef.current.contains(e.target);
+      const clickedMobile  = mobileAvatarMenuRef.current && mobileAvatarMenuRef.current.contains(e.target);
+      if (!clickedDesktop && !clickedMobile) {
         setAvatarMenuOpen(false);
       }
     };
@@ -245,6 +260,13 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const isSystemLevel = isSuperAdmin || isDeveloper;
   const isAdmin       = isSystemLevel || user?.role === 'admin';
 
+  const visibleTabs = NAV_TABS.filter(t => {
+    if (t.superAdminOnly && !isSuperAdmin)  return false;
+    if (t.adminOnly      && !isAdmin)       return false;
+    if (t.hideForSystemLevel && isSystemLevel) return false;
+    return true;
+  });
+
   // Pending approval notifications
   const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
@@ -277,26 +299,218 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     return () => clearInterval(iv);
   }, [isAdmin, isSystemLevel]);
 
+  const renderAnimatedAvatarMenu = (closeMenu, positionClass = "right-0 top-full pt-4") => {
+    const isBottom = positionClass.includes('bottom');
+    const startY = isBottom ? 10 : -10;
+    
+    const initials = (user?.username || user?.email || 'U')[0].toUpperCase();
+
+    const getStatusColor = (status) => {
+      const s = status?.toLowerCase();
+      if (s === 'active') return "text-emerald-500 bg-emerald-500/10 border-emerald-500/30";
+      if (s === 'pending') return "text-amber-500 bg-amber-500/10 border-amber-500/30";
+      return "text-slate-400 bg-slate-500/10 border-slate-500/20";
+    };
+
+    const adminItems = [
+      { label: 'Admin Panel', icon: <Users size={18} />, onClick: () => { closeMenu(); navigate('users'); }, show: isAdmin && !isSuperAdmin },
+      { label: 'Super Admin Panel', icon: <Crown size={18} />, onClick: () => { closeMenu(); navigate('superadmin'); }, show: isSuperAdmin, color: 'text-amber-400' },
+      { label: 'System Panel', icon: <Crown size={18} />, onClick: () => { closeMenu(); navigate('superadmin'); }, show: isDeveloper, color: 'text-sky-500' },
+    ].filter(i => i.show);
+
+    const prefItems = [
+      { label: 'Your Profile', icon: <UserCog size={18} />, onClick: () => { closeMenu(); navigate('profile'); }, show: true },
+      { 
+        label: 'Appearance', 
+        rightLabel: theme === 'dark' ? 'Dark' : 'Light', 
+        icon: (
+          <div className="relative w-[18px] h-[18px] flex items-center justify-center">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+                key={theme}
+                initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                transition={{ duration: 0.2 }}
+                className="absolute flex"
+              >
+                {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ),
+        onClick: () => { toggleTheme(); }, show: true 
+      },
+      { 
+        label: 'Navigation', 
+        rightLabel: navOrientation === 'horizontal' ? 'Left' : 'Top', 
+        icon: (
+          <div className="relative w-[18px] h-[18px] flex items-center justify-center">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+                key={navOrientation}
+                initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                transition={{ duration: 0.2 }}
+                className="absolute flex"
+              >
+                {navOrientation === 'horizontal' ? <PanelLeft size={18} /> : <PanelTop size={18} />}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ),
+        onClick: () => { toggleNavOrientation(); closeMenu(); }, show: true 
+      },
+    ].filter(i => i.show);
+
+    const accountItems = [
+      { label: 'Log out', icon: <LogOut size={18} />, onClick: () => { closeMenu(); onLogout(); }, show: true, color: 'text-red-500', hoverBg: 'hover:bg-red-500/10 hover:text-red-600' }
+    ].filter(i => i.show);
+
+    const renderMenuItem = (item, index) => (
+      <motion.button
+        key={item.label}
+        initial={{ opacity: 0, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.2, delay: index * 0.03 }}
+        role="menuitem"
+        onClick={(e) => { e.stopPropagation(); item.onClick(); }}
+        className={`w-full flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-[13px] font-semibold transition-colors ${item.hoverBg || 'hover:bg-[var(--hover-bg)] hover:text-[var(--text-main)]'} ${item.color || 'text-[var(--text-sec)]'}`}
+      >
+        <span className="flex items-center gap-3">
+          <span className="opacity-70">{item.icon}</span>
+          {item.label}
+        </span>
+        {item.rightLabel && (
+          <span className="text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded border" style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-dim)' }}>
+            {item.rightLabel}
+          </span>
+        )}
+      </motion.button>
+    );
+
+    let animIndex = 0;
+
+    return (
+      <motion.div
+        key="avatar-menu"
+        initial={{ opacity: 0, y: startY, filter: "blur(10px)", scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)", scale: 1 }}
+        exit={{ opacity: 0, y: startY, filter: "blur(10px)", scale: 0.95 }}
+        transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 25 }}
+        className={`absolute ${positionClass} z-[100]`}
+        role="menu"
+      >
+        <div className="w-[310px] rounded-2xl shadow-2xl p-0" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+          <section className="rounded-2xl p-1.5 shadow-inner border m-1" style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}>
+            {/* Profile Header */}
+            <div className="flex items-center p-2.5 gap-3 mb-1">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md flex-shrink-0" style={{ background: 'var(--accent)' }}>
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm truncate leading-tight" style={{ color: 'var(--text-main)' }}>{user?.username || 'User'}</h3>
+                <p className="text-xs truncate leading-tight mt-0.5" style={{ color: 'var(--text-sec)' }}>{user?.email || 'email@example.com'}</p>
+              </div>
+              <div className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-md border ${getStatusColor(user?.status)}`}>
+                {user?.status || 'Active'}
+              </div>
+            </div>
+
+            {adminItems.length > 0 && (
+              <>
+                <div className="h-px my-1.5 mx-2" style={{ background: 'var(--border)' }} />
+                <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>Administration</div>
+                <div className="flex flex-col gap-0.5">
+                  {adminItems.map(item => renderMenuItem(item, animIndex++))}
+                </div>
+              </>
+            )}
+
+            <div className="h-px my-1.5 mx-2" style={{ background: 'var(--border)' }} />
+            <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>Preferences</div>
+            <div className="flex flex-col gap-0.5">
+              {prefItems.map(item => renderMenuItem(item, animIndex++))}
+            </div>
+          </section>
+
+          <section className="p-1 mt-1">
+            <div className="flex flex-col gap-0.5 px-1 pb-1">
+              {accountItems.map(item => renderMenuItem(item, animIndex++))}
+            </div>
+          </section>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const desktopRightActions = (
+    <div className="flex items-center gap-1.5 sm:gap-2">
+      {isAdmin && (
+        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-8 h-8 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white" title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}>
+          <Bell size={14} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
+          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
+        </button>
+      )}
+      <div ref={avatarMenuRef} className="relative">
+        <button onClick={(e) => { e.stopPropagation(); setAvatarMenuOpen(o => !o); }} className="flex items-center gap-1.5 px-1 pr-2 py-1 rounded-full transition-all border" style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
+          <div className="w-6 h-6 text-xs font-bold flex items-center justify-center rounded-full" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
+            {(user?.username || 'U')[0].toUpperCase()}
+          </div>
+          <ChevronDown size={14} className={`transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-main)' }} />
+        </button>
+        <AnimatePresence>
+          {avatarMenuOpen && renderAnimatedAvatarMenu(() => setAvatarMenuOpen(false))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+
+  const mobileRightActions = (
+    <div className="flex-shrink-0 flex items-center gap-2">
+      {isAdmin && (
+        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white">
+          <Bell size={15} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
+          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
+        </button>
+      )}
+      <div ref={mobileAvatarMenuRef} className="relative">
+        <button onClick={(e) => { e.stopPropagation(); setAvatarMenuOpen(o => !o); }} className="flex items-center gap-2 px-1 pr-3 py-1 rounded-full transition-all border" style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
+          <div className="w-7 h-7 text-xs font-bold flex items-center justify-center rounded-full" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
+            {(user?.username || 'U')[0].toUpperCase()}
+          </div>
+          <ChevronDown size={14} className={`transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-main)' }} />
+        </button>
+        <AnimatePresence>
+          {avatarMenuOpen && renderAnimatedAvatarMenu(() => setAvatarMenuOpen(false))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+
   return (
     <div className="app-container text-white min-h-screen font-sans relative" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-main)' }} data-theme={theme}>
       
       {/* Vertical sidebar — desktop only, when orientation === 'vertical' */}
       {navOrientation === 'vertical' && (
-        <aside
-          className="hidden md:flex fixed top-0 left-0 bottom-0 w-56 z-40 flex-col backdrop-blur-xl border-r"
+        <motion.aside
+          initial={false}
+          animate={isSidebarExpanded ? "expanded" : "collapsed"}
+          variants={sidebarVariants}
+          className="hidden md:flex fixed top-0 left-0 bottom-0 z-40 flex-col backdrop-blur-xl border-r"
           style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
           aria-label="Primary navigation"
         >
-          <div className="px-5 h-16 flex items-center border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-            <button
-              onClick={() => navigate('overview')}
-              className="text-lg font-bold tracking-tight text-white"
-              aria-label="Spotfixes home"
-            >
-              Spot<span className="text-zinc-500">fixes</span>
+          <div className="px-4 h-16 flex items-center border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+            <button onClick={() => setSidebarExpanded(!isSidebarExpanded)} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 text-white/70">
+              <Menu size={18} />
             </button>
+            <motion.button variants={sidebarTextVariants} onClick={() => navigate('overview')} className="ml-3 text-xl font-extrabold tracking-tight text-white whitespace-nowrap overflow-hidden transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
+              Spot<span className="text-indigo-400">fixes</span>
+            </motion.button>
           </div>
-          <nav className="flex-1 py-4 px-3 space-y-1.5 overflow-y-auto" aria-label="Sections">
+          <nav className="flex-1 py-4 px-2 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar" aria-label="Sections">
             {NAV_TABS.map(t => {
               if (t.superAdminOnly && !isSuperAdmin)  return null;
               if (t.adminOnly      && !isAdmin)       return null;
@@ -308,9 +522,10 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                   key={t.id}
                   onClick={() => navigate(t.id)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`relative group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-left ${
+                  title={!isSidebarExpanded ? t.label : undefined}
+                  className={`relative group w-full flex items-center px-2 py-2.5 rounded-lg text-sm font-semibold text-left ${
                     !isActive && 'hover:bg-white/5'
-                  }`}
+                  } ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}
                 >
                   {isActive && (
                     <motion.div
@@ -320,12 +535,12 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                       transition={{ type: 'spring', stiffness: 380, damping: 35 }}
                     />
                   )}
-                  {isActive && (
+                  {isActive && isSidebarExpanded && (
                     <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full" style={{ background: 'var(--accent)' }} />
                   )}
                   
-                  {Icon && <Icon size={16} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'opacity-50 group-hover:opacity-100'}`} style={isActive ? { color: 'var(--text-main)' } : {}} />}
-                  <span className={`relative z-10 truncate transition-colors duration-200 ${isActive ? 'font-semibold' : 'opacity-60 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }}>{t.label}</span>
+                  {Icon && <Icon size={18} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'opacity-50 group-hover:opacity-100'}`} style={isActive ? { color: 'var(--text-main)' } : {}} />}
+                  <motion.span variants={sidebarTextVariants} className={`relative z-10 ml-3 truncate transition-colors duration-200 ${isActive ? 'font-semibold' : 'opacity-60 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }}>{t.label}</motion.span>
                 </button>
               );
             })}
@@ -333,23 +548,16 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           
           {/* Vertical Sidebar Bottom Actions (User, Theme, Notifications) */}
           <div className="p-3 border-t flex-shrink-0 flex flex-col gap-2" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex items-center justify-between px-2">
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">System</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={toggleTheme}
-                  className="flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-white/10 text-white/50 hover:text-white transition-all"
-                  title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                >
-                  {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
-                </button>
+            <div className={`flex ${isSidebarExpanded ? 'items-center justify-between px-2' : 'flex-col items-center gap-3 pt-2'}`}>
+              <motion.span variants={sidebarTextVariants} className="text-[10px] font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">System</motion.span>
+              <div className={`flex ${isSidebarExpanded ? 'items-center gap-1' : 'flex-col items-center gap-2'}`}>
                 {isAdmin && (
                   <button
                     onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')}
                     className="relative flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-white/10 text-white/50 hover:text-white transition-all"
                     title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
                   >
-                    <Bell size={13} className={pendingCount > 0 ? 'text-amber-400' : ''} />
+                    <Bell size={13} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
                     {pendingCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">
                         {pendingCount > 9 ? '9+' : pendingCount}
@@ -360,231 +568,54 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
               </div>
             </div>
 
-            <div ref={sidebarAvatarMenuRef} className="relative">
+            <div ref={sidebarAvatarMenuRef} className="relative mt-2">
               <button
                 type="button"
                 onClick={() => setSidebarAvatarMenuOpen(o => !o)}
-                className="w-full flex items-center gap-2.5 px-2 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl transition-all"
+                className={`w-full flex items-center ${isSidebarExpanded ? 'gap-2.5 px-2 py-1.5' : 'justify-center py-2'} rounded-xl transition-all border`}
+                style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)' }}
               >
-                <div className="w-8 h-8 bg-white text-black text-xs font-bold flex items-center justify-center rounded-full flex-shrink-0">
+                <div className="w-8 h-8 text-xs font-bold flex items-center justify-center rounded-full flex-shrink-0" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
                   {(user?.username || 'U')[0].toUpperCase()}
                 </div>
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="text-sm font-bold text-white truncate leading-tight">
+                <motion.div variants={sidebarTextVariants} className="flex-1 min-w-0 text-left">
+                  <div className="text-sm font-bold truncate leading-tight" style={{ color: 'var(--text-main)' }}>
                     {user?.username || 'User'}
                   </div>
-                  <div className="text-[10px] text-white/50 truncate leading-tight capitalize">
+                  <div className="text-[10px] truncate leading-tight capitalize" style={{ color: 'var(--text-sec)' }}>
                     {user?.role?.replace('_', ' ') || 'User'}
                   </div>
-                </div>
-                <ChevronUp size={14} className={`text-white/50 transition-transform flex-shrink-0 ${sidebarAvatarMenuOpen ? 'rotate-180' : ''}`} />
+                </motion.div>
+                <motion.div variants={sidebarTextVariants}>
+                  <ChevronUp size={14} className={`transition-transform flex-shrink-0 ${sidebarAvatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-sec)' }} />
+                </motion.div>
               </button>
 
               {/* Sidebar popup menu */}
-              {sidebarAvatarMenuOpen && (
-                <div className="absolute left-0 bottom-full mb-2 z-50 w-full" role="menu">
-                  <div className="w-full backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden p-1" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
-                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => { navigate('profile'); setSidebarAvatarMenuOpen(false); }}>
-                      <UserCog size={14} /> Profile Settings
-                    </button>
-                    {isAdmin && !isSuperAdmin && (
-                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => { navigate('users'); setSidebarAvatarMenuOpen(false); }}>
-                        <Users size={14} /> Admin Panel
-                      </button>
-                    )}
-                    {isSuperAdmin && (
-                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-amber-500 hover:bg-white/10 rounded-xl transition-colors" onClick={() => { navigate('superadmin'); setSidebarAvatarMenuOpen(false); }}>
-                        <Crown size={14} /> Super Admin Panel
-                      </button>
-                    )}
-                    <div className="h-px bg-white/10 my-1 mx-2" />
-                    <button
-                      role="menuitem"
-                      onClick={() => { toggleNavOrientation(); setSidebarAvatarMenuOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors"
-                    >
-                      <PanelTop size={14} />
-                      <span className="flex-1 text-left">Navigation</span>
-                      <span className="text-white/40 text-xs">Top</span>
-                    </button>
-                    <div className="h-px bg-white/10 my-1 mx-2" />
-                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
-                      <LogOut size={14} /> Sign out
-                    </button>
-                  </div>
-                </div>
-              )}
+              <AnimatePresence>
+                {sidebarAvatarMenuOpen && renderAnimatedAvatarMenu(() => setSidebarAvatarMenuOpen(false), isSidebarExpanded ? 'left-0 bottom-full mb-2 w-full' : 'left-full bottom-0 ml-2 w-56')}
+              </AnimatePresence>
             </div>
           </div>
-        </aside>
+        </motion.aside>
       )}
 
-      {/* Top bar — always rendered; shifted right when sidebar is active */}
+      {/* Mobile Top bar */}
       <nav
-        className={`fixed top-0 right-0 z-50 backdrop-blur-xl border-b transition-all ${
-          navOrientation === 'vertical' ? 'left-0 md:hidden' : 'left-0'
-        }`}
+        className="fixed top-0 right-0 left-0 z-50 backdrop-blur-xl border-b transition-all md:hidden"
         style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
-        aria-label="Top bar"
+        aria-label="Mobile Top bar"
       >
-        <div className={navOrientation === 'vertical' ? 'px-4 lg:px-6' : 'mx-auto max-w-7xl px-6 lg:px-8'}>
-          <div className="flex h-16 items-center gap-3">
-
-          {/* Mobile hamburger — below md */}
-          <button
-            onClick={() => setMobileNavOpen(true)}
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-            aria-label="Open navigation menu"
-          >
-            <Menu size={16} className="text-white/70" />
-          </button>
-
-          {/* Brand + back */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={goBack}
-              disabled={!previousTab}
-              aria-label={previousTab ? `Back to ${previousTab}` : 'No previous page'}
-              className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
-                previousTab
-                  ? 'bg-white/5 border-white/10 hover:bg-white/15 hover:border-white/20 cursor-pointer'
-                  : 'bg-transparent border-white/5 cursor-not-allowed opacity-30'
-              }`}
-              title={previousTab ? `Back to ${previousTab}` : 'No previous page'}
-            >
-              <ChevronLeft size={15} className="text-white/70" />
+        <div className="px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+              <Menu size={16} className="text-white/70" />
             </button>
-            {/* Brand text — hidden on md+ when vertical sidebar shows it */}
-            <div
-              className={`flex items-center cursor-pointer ${navOrientation === 'vertical' ? 'md:hidden' : ''}`}
-              onClick={() => navigate('overview')}
-            >
-              <span className="text-xl font-bold tracking-tight text-white">
-                Spot<span className="text-zinc-500">fixes</span>
-              </span>
+            <div className="flex items-center cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => navigate('overview')}>
+              <span className="text-2xl font-extrabold tracking-tight text-white hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">Spot<span className="text-indigo-400">fixes</span></span>
             </div>
           </div>
-
-          {/* Horizontal nav pills — only when horizontal orientation */}
-          {navOrientation === 'horizontal' ? (
-            <div className="flex-1 flex justify-center">
-              <div className="hidden md:flex items-center gap-2">
-                {NAV_TABS.map(t => {
-                  if (t.superAdminOnly && !isSuperAdmin)  return null;
-                  if (t.adminOnly      && !isAdmin)       return null;
-                  if (t.hideForSystemLevel && isSystemLevel) return null;
-                  const Icon = t.icon;
-                  const isActive = tab === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      aria-current={isActive ? 'page' : undefined}
-                      onClick={() => navigate(t.id)}
-                      className={`relative group rounded-full px-3.5 py-1.5 text-sm font-medium flex items-center gap-1.5 whitespace-nowrap ${
-                        !isActive && 'hover:bg-white/5'
-                      }`}
-                    >
-                      {isActive && (
-                        <motion.div layoutId="active-horizontal-nav-pill" className="absolute inset-0 rounded-lg" style={{ background: 'var(--hover-bg)' }} transition={{ type: 'spring', stiffness: 380, damping: 35 }} />
-                      )}
-                      {Icon && <Icon size={14} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? '' : 'opacity-50 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }} />}
-                      <span className={`relative z-10 transition-colors duration-200 ${isActive ? 'font-semibold' : 'opacity-60 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }}>{t.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1" />
-          )}
-
-          {/* Right actions */}
-          <div className={`flex-shrink-0 items-center gap-2 ${navOrientation === 'vertical' ? 'flex md:hidden' : 'flex'}`}>
-            {/* Theme toggle */}
-            <button
-              onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.5)' }}
-            >
-              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
-            {/* Notification bell — admins only */}
-            {isAdmin && (
-              <button
-                onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')}
-                className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-                aria-label={pendingCount > 0 ? `Notifications: ${pendingCount} pending` : 'Notifications'}
-                title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
-              >
-                <Bell size={15} className={pendingCount > 0 ? 'text-amber-400' : 'text-white/50'} />
-                {pendingCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">
-                    {pendingCount > 9 ? '9+' : pendingCount}
-                  </span>
-                )}
-              </button>
-            )}
-            <div ref={avatarMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setAvatarMenuOpen(o => !o)}
-                aria-haspopup="menu"
-                aria-expanded={avatarMenuOpen}
-                aria-label="User menu"
-                className="flex items-center gap-2 px-1 pr-3 py-1 bg-white/5 border border-white/10 rounded-full cursor-pointer hover:bg-white/10 transition-all"
-              >
-                <div className="w-7 h-7 bg-white text-black text-xs font-bold flex items-center justify-center rounded-full">
-                  {(user?.username || 'U')[0].toUpperCase()}
-                </div>
-                <span className="text-sm font-medium text-white hidden sm:block truncate max-w-[8rem]">
-                  {user?.username || 'User'}
-                </span>
-                <ChevronDown size={14} className={`text-white/50 transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {avatarMenuOpen && (
-                <div className="absolute right-0 top-full pt-2 z-50" role="menu">
-                  <div className="w-60 max-w-[calc(100vw-1rem)] backdrop-blur-2xl rounded-2xl shadow-2xl overflow-hidden p-1" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
-                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('profile')}>
-                      <UserCog size={14} /> Profile Settings
-                    </button>
-                    {isAdmin && !isSuperAdmin && (
-                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors" onClick={() => navigate('users')}>
-                        <Users size={14} /> Admin Panel
-                      </button>
-                    )}
-                    {isSuperAdmin && (
-                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-amber-500 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
-                        <Crown size={14} /> Super Admin Panel
-                      </button>
-                    )}
-                    {isDeveloper && (
-                      <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-sky-400 hover:bg-white/10 rounded-xl transition-colors" onClick={() => navigate('superadmin')}>
-                        <Crown size={14} /> System Panel
-                      </button>
-                    )}
-                    <div className="h-px bg-white/10 my-1 mx-2" />
-                    <button
-                      role="menuitem"
-                      onClick={() => { toggleNavOrientation(); setAvatarMenuOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white rounded-xl transition-colors"
-                    >
-                      {navOrientation === 'horizontal' ? <PanelLeft size={14} /> : <PanelTop size={14} />}
-                      <span className="flex-1 text-left">Navigation</span>
-                      <span className="text-white/40 text-xs">{navOrientation === 'horizontal' ? 'Top' : 'Side'}</span>
-                    </button>
-                    <div className="h-px bg-white/10 my-1 mx-2" />
-                    <button role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors" onClick={onLogout}>
-                      <LogOut size={14} /> Sign out
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          </div>
+          {mobileRightActions}
         </div>
       </nav>
 
@@ -598,8 +629,8 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           />
           <aside className="absolute left-0 top-0 bottom-0 w-64 max-w-[80%] border-r flex flex-col" style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}>
             <div className="h-16 px-5 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-              <span className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
-                Spot<span className="text-zinc-500">fixes</span>
+              <span className="text-xl font-extrabold tracking-tight" style={{ color: 'var(--text-main)' }}>
+                Spot<span className="text-indigo-400">fixes</span>
               </span>
               <button
                 onClick={() => setMobileNavOpen(false)}
@@ -636,15 +667,17 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         </div>
       )}
 
-      <main className={`main-scroll relative z-10 ${navOrientation === 'vertical' ? 'pt-24 md:pt-8 md:pl-56' : 'pt-24'}`}>
+      {navOrientation === 'horizontal' && <AnimatedNavFramer navItems={visibleTabs} currentTab={tab} onNavigate={navigate} rightActions={desktopRightActions} onBack={goBack} canGoBack={!!previousTab} />}
+
+      <main className={`main-scroll relative z-10 transition-all duration-300 ${navOrientation === 'vertical' ? (isSidebarExpanded ? 'pt-24 md:pt-8 md:pl-56' : 'pt-24 md:pt-8 md:pl-16') : 'pt-24'}`}>
         {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
-        {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
+        {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} onNavigate={navigate} />}
         {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
         {tab === 'analysis'    && <BugAnalysis  user={user} />}
         {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
         {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
         {tab === 'resolution'  && <ResolutionSupport />}
-        {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} />}
+        {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} initialQuery={externalQuery} />}
         {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin user={user} canManage={true} canApprove={true} canDelete={true} />}
         {tab === 'superadmin'  && isDeveloper   && <SuperAdmin user={user} canManage={false} canApprove={true} canDelete={false} />}
         {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
@@ -882,32 +915,39 @@ export default function App() {
   );
 
   if (!user) {
-    if (showLogin) {
+    if (showLogin || forceRecoveryReset || forceInviteSetPassword) {
       return (
         <Login
-           onLogin={handleLogin}
-           forceResetRecovery={forceRecoveryReset}
-           onResetDone={() => setForceRecoveryReset(false)}
-           onBack={() => setShowLogin(false)}
+          onLogin={(u) => {
+            setForceInviteSetPassword(false);
+            setForceRecoveryReset(false);
+            handleLogin(u);
+          }}
+          forceInviteSetup={forceInviteSetPassword}
+          onInviteSetupDone={() => setForceInviteSetPassword(false)}
+          forceResetRecovery={forceRecoveryReset}
+          onResetDone={() => setForceRecoveryReset(false)}
+          onBack={() => setShowLogin(false)}
         />
       );
     }
     return <Landing onEnterWorkspace={() => setShowLogin(true)} />;
   }
-  if (forceRecoveryReset) return (
-    <Login
-      onLogin={handleLogin}
-      forceResetRecovery={true}
-      onResetDone={() => setForceRecoveryReset(false)}
-    />
-  );
-  if (forceInviteSetPassword) return (
-    <Login
-      onLogin={(u) => { setForceInviteSetPassword(false); handleLogin(u); }}
-      forceInviteSetup={true}
-      onInviteSetupDone={() => setForceInviteSetPassword(false)}
-    />
-  );
+  if (forceRecoveryReset || forceInviteSetPassword) {
+    return (
+      <Login
+        onLogin={(u) => {
+          setForceInviteSetPassword(false);
+          setForceRecoveryReset(false);
+          handleLogin(u);
+        }}
+        forceInviteSetup={forceInviteSetPassword}
+        onInviteSetupDone={() => setForceInviteSetPassword(false)}
+        forceResetRecovery={forceRecoveryReset}
+        onResetDone={() => setForceRecoveryReset(false)}
+      />
+    );
+  }
   if (['pending', 'inactive', 'invite_requested'].includes(user.status)) return (
     <PendingApproval user={user} onLogout={handleLogout} status={user.status} />
   );

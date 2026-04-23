@@ -6,6 +6,8 @@ import {
   BrainCircuit, Database
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { LiquidButton as Button } from '../liquid-glass-button';
+import { BentoCard } from '../bento-card';
 
 const ROLE_LABELS = {
   super_admin: 'Super Admin',
@@ -101,15 +103,15 @@ export default function ProfileSettings({ user, onUpdate }) {
 
       {/* Activity stats strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+        <BentoCard className="p-5 hover:-translate-y-1 hover:shadow-xl hover:!bg-white/[0.04]">
           <div className="flex items-center gap-2 mb-3">
             <Bug size={14} className="text-indigo-500" />
             <span className="text-[11px] font-bold text-white/60 uppercase tracking-widest">Bugs in DB</span>
           </div>
           <div className="text-2xl font-bold font-mono text-white">{profileData?.bug_count?.toLocaleString() ?? '…'}</div>
           <div className="text-[11px] text-white/30 mt-1">Total workspace records</div>
-        </div>
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+        </BentoCard>
+        <BentoCard className="p-5 hover:-translate-y-1 hover:shadow-xl hover:!bg-white/[0.04]">
           <div className="flex items-center gap-2 mb-3">
             <BrainCircuit size={14} className="text-purple-400" />
             <span className="text-[11px] font-bold text-white/60 uppercase tracking-widest">Active Model</span>
@@ -120,8 +122,8 @@ export default function ProfileSettings({ user, onUpdate }) {
           <div className="text-[11px] text-white/30 mt-1">
             {profileData?.has_own_model ? 'Company-specific weights' : 'Firefox baseline dataset'}
           </div>
-        </div>
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+        </BentoCard>
+        <BentoCard className="p-5 hover:-translate-y-1 hover:shadow-xl hover:!bg-white/[0.04]">
           <div className="flex items-center gap-2 mb-3">
             <Building2 size={14} className="text-emerald-400" />
             <span className="text-[11px] font-bold text-white/60 uppercase tracking-widest">Tenant Space</span>
@@ -132,8 +134,8 @@ export default function ProfileSettings({ user, onUpdate }) {
           <div className="text-[11px] text-white/30 mt-1">
             {user?.role === 'super_admin' ? 'Global administration' : 'Dedicated environment'}
           </div>
-        </div>
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
+        </BentoCard>
+        <BentoCard className="p-5 hover:-translate-y-1 hover:shadow-xl hover:!bg-white/[0.04]">
           <div className="flex items-center gap-2 mb-3">
             <Database size={14} className="text-amber-400" />
             <span className="text-[11px] font-bold text-white/60 uppercase tracking-widest">Data Isolation</span>
@@ -144,11 +146,11 @@ export default function ProfileSettings({ user, onUpdate }) {
           <div className="text-[11px] text-white/30 mt-1">
             {user?.role === 'super_admin' ? 'Cross-workspace visibility' : 'Row-level security active'}
           </div>
-        </div>
+        </BentoCard>
       </div>
 
       {/* Account context */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl relative overflow-hidden mb-6">
+      <BentoCard className="p-6 lg:p-8 shadow-2xl mb-6">
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         <div className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2 mb-6">
           <ShieldCheck size={14} className="text-white/60" /> Account Context
@@ -173,11 +175,11 @@ export default function ProfileSettings({ user, onUpdate }) {
             </div>
           ))}
         </div>
-      </div>
+      </BentoCard>
 
       {/* Name + Password */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl relative overflow-hidden">
+        <BentoCard className="p-6 lg:p-8 shadow-2xl">
           <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(59,130,246,0.5), transparent)' }} />
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Display Name</div>
           <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
@@ -192,19 +194,16 @@ export default function ProfileSettings({ user, onUpdate }) {
                   {profileMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={savingProfile || !username.trim() || username.trim() === user?.username}
-                className={`w-full font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
-                  savingProfile || !username.trim() || username.trim() === user?.username
-                    ? 'bg-white/5 text-white/25 border border-white/[0.08] cursor-not-allowed'
-                    : 'bg-white text-black hover:bg-zinc-200 cursor-pointer shadow-sm'
-                }`}>
+              <Button type="submit" disabled={savingProfile || !username.trim() || username.trim() === user?.username}
+                className="w-full font-bold py-3"
+              >
                 <Save size={16} /> {savingProfile ? 'Saving…' : 'Save Name'}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </BentoCard>
 
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 lg:p-8 shadow-2xl relative overflow-hidden">
+        <BentoCard className="p-6 lg:p-8 shadow-2xl">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent opacity-50" />
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Change Password</div>
           <form onSubmit={handleChangePassword} className="flex flex-col gap-6">
@@ -227,17 +226,14 @@ export default function ProfileSettings({ user, onUpdate }) {
                   {passwordMsg.text}
                 </div>
               )}
-              <button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
-                className={`w-full font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
-                  savingPassword || !currentPassword || !newPassword || !confirmPassword
-                    ? 'bg-white/5 text-white/25 border border-white/[0.08] cursor-not-allowed'
-                    : 'bg-white text-black hover:bg-zinc-200 cursor-pointer shadow-sm'
-                }`}>
+              <Button type="submit" disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+                className="w-full font-bold py-3"
+              >
                 <Lock size={16} /> {savingPassword ? 'Updating…' : 'Update Password'}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </BentoCard>
       </div>
     </motion.div>
   );

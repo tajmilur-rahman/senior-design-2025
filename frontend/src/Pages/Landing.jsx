@@ -1,9 +1,12 @@
-import React, { forwardRef, useImperativeHandle, useEffect, useRef, useMemo, useState } from "react"
-import * as THREE from "three"
-import { Canvas, useFrame } from "@react-three/fiber"
-import { PerspectiveCamera } from "@react-three/drei"
-import { degToRad } from "three/src/math/MathUtils.js"
-import { ArrowRight, ShieldCheck, Brain, BrainCircuit, CheckCircle, Star, GitFork, ExternalLink, Database, Layers } from "lucide-react"
+import React, { useEffect, useRef, useState } from "react"
+import { motion, useInView, AnimatePresence } from "framer-motion"
+import { ArrowRight, ShieldCheck, Brain, BrainCircuit, CheckCircle, Star, GitFork, ExternalLink, Database, Layers, ArrowUp } from "lucide-react"
+import { LiquidButton as Button } from "../liquid-glass-button"
+import TechStackCarousel from "../tech-stack-carousel"
+import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 
 const GITHUB_REPO = "https://github.com/tajmilur-rahman/senior-design-2025"
 
@@ -15,381 +18,160 @@ function GithubIcon({ size = 20, className = "" }) {
   )
 }
 
+// Lightweight utility to merge classes 
+export function cn(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
 // ============================================================================
-// BEAMS COMPONENT (3D Background)
+// SCROLL GLITCH ANIMATION (From Reference Code)
 // ============================================================================
 
-function extendMaterial(BaseMaterial, cfg) {
-  const physical = THREE.ShaderLib.physical
-  const { vertexShader: baseVert, fragmentShader: baseFrag, uniforms: baseUniforms } = physical
-  const baseDefines = physical.defines ?? {}
+function AnimatedScrollHeader({ title, subtitle, className, subtitleClassName }) {
+  const lines = title.split('<br/>');
+  let wordIndex = 0;
 
-  const uniforms = THREE.UniformsUtils.clone(baseUniforms)
-
-  const defaults = new BaseMaterial(cfg.material || {})
-
-  if (defaults.color) uniforms.diffuse.value = defaults.color
-  if ("roughness" in defaults) uniforms.roughness.value = defaults.roughness
-  if ("metalness" in defaults) uniforms.metalness.value = defaults.metalness
-  if ("envMap" in defaults) uniforms.envMap.value = defaults.envMap
-  if ("envMapIntensity" in defaults) uniforms.envMapIntensity.value = defaults.envMapIntensity
-
-  Object.entries(cfg.uniforms ?? {}).forEach(([key, u]) => {
-    uniforms[key] =
-      u !== null && typeof u === "object" && "value" in u
-        ? u
-        : { value: u }
-  })
-
-  let vert = `${cfg.header}
-${cfg.vertexHeader ?? ""}
-${baseVert}`
-  let frag = `${cfg.header}
-${cfg.fragmentHeader ?? ""}
-${baseFrag}`
-
-  for (const [inc, code] of Object.entries(cfg.vertex ?? {})) {
-    vert = vert.replace(inc, `${inc}
-${code}`)
-  }
-
-  for (const [inc, code] of Object.entries(cfg.fragment ?? {})) {
-    frag = frag.replace(inc, `${inc}
-${code}`)
-  }
-
-  const mat = new THREE.ShaderMaterial({
-    defines: { ...baseDefines },
-    uniforms,
-    vertexShader: vert,
-    fragmentShader: frag,
-    lights: true,
-    fog: !!cfg.material?.fog,
-  })
-
-  return mat
+  return (
+    <div>
+      <h2 className={className}>
+        {lines.map((line, lineIndex) => (
+          <span key={lineIndex} className="block">
+            {line.split(' ').map((word, wIndex) => {
+              const currentIndex = wordIndex++;
+              return (
+                <motion.span
+                  key={wIndex}
+                  initial={{ opacity: 0, y: 15, filter: 'blur(4px)' }}
+                  whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  viewport={{ once: true, margin: "0px 0px -15% 0px" }}
+                  transition={{ duration: 0.6, delay: currentIndex * 0.06 + (currentIndex % 3) * 0.02, ease: "easeOut" }}
+                  className="inline-block mr-[0.22em]"
+                >
+                  {word}
+                </motion.span>
+              );
+            })}
+          </span>
+        ))}
+      </h2>
+      {subtitle && (
+        <motion.p
+          initial={{ opacity: 0, y: 15, filter: 'blur(4px)' }}
+          whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          viewport={{ once: true, margin: "0px 0px -15% 0px" }}
+          transition={{ duration: 0.8, delay: wordIndex * 0.06 + 0.1, ease: "easeOut" }}
+          className={subtitleClassName}
+        >
+          {subtitle}
+        </motion.p>
+      )}
+    </div>
+  );
 }
 
-const CanvasWrapper = ({ children }) => (
-  <Canvas dpr={[1, 2]} frameloop="always" className="w-full h-full relative">
-    {children}
-  </Canvas>
-)
+// ============================================================================
+// BUTTON & UTILS (Hoisted to prevent TDZ React crashes)
+// ============================================================================
 
-const hexToNormalizedRGB = (hex) => {
-  const clean = hex.replace("#", "")
-  const r = Number.parseInt(clean.substring(0, 2), 16)
-  const g = Number.parseInt(clean.substring(2, 4), 16)
-  const b = Number.parseInt(clean.substring(4, 6), 16)
-  return [r / 255, g / 255, b / 255]
-}
+const SECTION_IDS = ['hero', 'platform', 'capabilities', 'architecture', 'documentation'];
 
-const noise = `
-float random (in vec2 st) {
-    return fract(sin(dot(st.xy,
-                         vec2(12.9898,78.233)))*
-        43758.5453123);
-}
+const scrollTo = (id) => {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
-float noise (in vec2 st) {
-    vec2 i = floor(st);
-    vec2 f = fract(st);
+// ============================================================================
+// ANIMATED LANDING NAVBAR (Framer Motion)
+// ============================================================================
 
-    float a = random(i);
-    float b = random(i + vec2(1.0, 0.0));
-    float c = random(i + vec2(0.0, 1.0));
-    float d = random(i + vec2(1.0, 1.0));
+const navContainerVariants = {
+  expanded: { y: 0, opacity: 1, width: "auto", transition: { y: { type: "spring", damping: 18, stiffness: 250 }, opacity: { duration: 0.3 }, type: "spring", damping: 20, stiffness: 300, staggerChildren: 0.07, delayChildren: 0.2 } },
+  collapsed: { y: 0, opacity: 1, width: "3.5rem", transition: { type: "spring", damping: 20, stiffness: 300, when: "afterChildren", staggerChildren: 0.05, staggerDirection: -1 } },
+};
+const navItemVariants = {
+  expanded: { opacity: 1, x: 0, scale: 1, transition: { type: "spring", damping: 15 } },
+  collapsed: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
+};
+const navLogoVariants = {
+  expanded: { opacity: 1, x: 0, rotate: 0, transition: { type: "spring", damping: 15 } },
+  collapsed: { opacity: 0, x: -25, rotate: -180, transition: { duration: 0.3 } },
+};
 
-    vec2 u = f * f * (3.0 - 2.0 * f);
-
-    return mix(a, b, u.x) +
-           (c - a)* u.y * (1.0 - u.x) +
-           (d - b) * u.x * u.y;
-}
-
-vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
-
-vec3 fade(vec3 t) {return t*t*t*(t*(t*6.0-15.0)+10.0);}
-
-float cnoise(vec3 P){
-  vec3 Pi0 = floor(P);
-  vec3 Pi1 = Pi0 + vec3(1.0);
-  Pi0 = mod(Pi0, 289.0);
-  Pi1 = mod(Pi1, 289.0);
-  vec3 Pf0 = fract(P);
-  vec3 Pf1 = Pf0 - vec3(1.0);
-  vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
-  vec4 iy = vec4(Pi0.yy, Pi1.yy);
-  vec4 iz0 = Pi0.zzzz;
-  vec4 iz1 = Pi1.zzzz;
-
-  vec4 ixy = permute(permute(ix) + iy);
-  vec4 ixy0 = permute(ixy + iz0);
-  vec4 ixy1 = permute(ixy + iz1);
-
-  vec4 gx0 = ixy0 / 7.0;
-  vec4 gy0 = fract(floor(gx0) / 7.0) - 0.5;
-  gx0 = fract(gx0);
-  vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
-  vec4 sz0 = step(gz0, vec4(0.0));
-  gx0 -= sz0 * (step(0.0, gx0) - 0.5);
-  gy0 -= sz0 * (step(0.0, gy0) - 0.5);
-
-  vec4 gx1 = ixy1 / 7.0;
-  vec4 gy1 = fract(floor(gx1) / 7.0) - 0.5;
-  gx1 = fract(gx1);
-  vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
-  vec4 sz1 = step(gz1, vec4(0.0));
-  gx1 -= sz1 * (step(0.0, gx1) - 0.5);
-  gy1 -= sz1 * (step(0.0, gy1) - 0.5);
-
-  vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
-  vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
-  vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
-  vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
-  vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
-  vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
-  vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
-  vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
-
-  vec4 norm0 = taylorInvSqrt(vec4(dot(g000,g000),dot(g010,g010),dot(g100,g100),dot(g110,g110)));
-  g000 *= norm0.x; g010 *= norm0.y; g100 *= norm0.z; g110 *= norm0.w;
-  vec4 norm1 = taylorInvSqrt(vec4(dot(g001,g001),dot(g011,g011),dot(g101,g101),dot(g111,g111)));
-  g001 *= norm1.x; g011 *= norm1.y; g101 *= norm1.z; g111 *= norm1.w;
-
-  float n000 = dot(g000, Pf0);
-  float n100 = dot(g100, vec3(Pf1.x,Pf0.yz));
-  float n010 = dot(g010, vec3(Pf0.x,Pf1.y,Pf0.z));
-  float n110 = dot(g110, vec3(Pf1.xy,Pf0.z));
-  float n001 = dot(g001, vec3(Pf0.xy,Pf1.z));
-  float n101 = dot(g101, vec3(Pf1.x,Pf0.y,Pf1.z));
-  float n011 = dot(g011, vec3(Pf0.x,Pf1.yz));
-  float n111 = dot(g111, Pf1);
-
-  vec3 fade_xyz = fade(Pf0);
-  vec4 n_z = mix(vec4(n000,n100,n010,n110),vec4(n001,n101,n011,n111),fade_xyz.z);
-  vec2 n_yz = mix(n_z.xy,n_z.zw,fade_xyz.y);
-  float n_xyz = mix(n_yz.x,n_yz.y,fade_xyz.x);
-  return 2.2 * n_xyz;
-}
-`
-
-function createStackedPlanesBufferGeometry(
-  n,
-  width,
-  height,
-  spacing,
-  heightSegments,
-) {
-  const geometry = new THREE.BufferGeometry()
-  const numVertices = n * (heightSegments + 1) * 2
-  const numFaces = n * heightSegments * 2
-
-  const positions = new Float32Array(numVertices * 3)
-  const indices = new Uint32Array(numFaces * 3)
-  const uvs = new Float32Array(numVertices * 2)
-
-  let vertexOffset = 0
-  let indexOffset = 0
-  let uvOffset = 0
-
-  const totalWidth = n * width + (n - 1) * spacing
-  const xOffsetBase = -totalWidth / 2
-
-  for (let i = 0; i < n; i++) {
-    const xOffset = xOffsetBase + i * (width + spacing)
-    const uvXOffset = Math.random() * 300
-    const uvYOffset = Math.random() * 300
-
-    for (let j = 0; j <= heightSegments; j++) {
-      const y = height * (j / heightSegments - 0.5)
-      const v0 = [xOffset, y, 0]
-      const v1 = [xOffset + width, y, 0]
-
-      positions.set([...v0, ...v1], vertexOffset * 3)
-
-      const uvY = j / heightSegments
-      uvs.set([uvXOffset, uvY + uvYOffset, uvXOffset + 1, uvY + uvYOffset], uvOffset)
-
-      if (j < heightSegments) {
-        const a = vertexOffset,
-          b = vertexOffset + 1,
-          c = vertexOffset + 2,
-          d = vertexOffset + 3
-        indices.set([a, b, c, c, b, d], indexOffset)
-        indexOffset += 6
-      }
-
-      vertexOffset += 2
-      uvOffset += 4
-    }
-  }
-
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2))
-  geometry.setIndex(new THREE.BufferAttribute(indices, 1))
-  geometry.computeVertexNormals()
-
-  return geometry
-}
-
-const MergedPlanes = forwardRef(({ material, width, count, height }, ref) => {
-  const mesh = useRef(null)
-
-  useImperativeHandle(ref, () => mesh.current)
-
-  const geometry = useMemo(
-    () => createStackedPlanesBufferGeometry(count, width, height, 0, 100),
-    [count, width, height],
-  )
-
-  useFrame((_, delta) => {
-    if (mesh.current) {
-        mesh.current.material.uniforms.time.value += 0.1 * delta
-    }
-  })
-
-  return <mesh ref={mesh} geometry={geometry} material={material} />
-})
-
-MergedPlanes.displayName = "MergedPlanes"
-
-const PlaneNoise = forwardRef((props, ref) => (
-  <MergedPlanes ref={ref} material={props.material} width={props.width} count={props.count} height={props.height} />
-))
-
-PlaneNoise.displayName = "PlaneNoise"
-
-const DirLight = ({ position, color }) => {
-  const dir = useRef(null)
+function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
+  const [isExpanded, setExpanded] = useState(true);
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
-    if (!dir.current) return
-    const cam = dir.current.shadow.camera
-    cam.top = 24
-    cam.bottom = -24
-    cam.left = -24
-    cam.right = 24
-    cam.far = 64
-    dir.current.shadow.bias = -0.004
-  }, [])
+    const handleScroll = () => {
+      const latest = window.scrollY;
+      const previous = lastScrollY.current;
+      if (isExpanded && latest > previous && latest > 150) setExpanded(false);
+      else if (!isExpanded && latest < previous) setExpanded(true);
+      lastScrollY.current = latest;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isExpanded]);
 
-  return <directionalLight ref={dir} color={color} intensity={1} position={position} />
-}
-
-export const Beams = ({
-  beamWidth = 2,
-  beamHeight = 15,
-  beamNumber = 12,
-  lightColor = "#ffffff",
-  speed = 2,
-  noiseIntensity = 1.75,
-  scale = 0.2,
-  rotation = 0,
-}) => {
-  const meshRef = useRef(null)
-
-  const beamMaterial = useMemo(
-    () =>
-      extendMaterial(THREE.MeshStandardMaterial, {
-        header: `
-  varying vec3 vEye;
-  varying float vNoise;
-  varying vec2 vUv;
-  varying vec3 vPosition;
-  uniform float time;
-  uniform float uSpeed;
-  uniform float uNoiseIntensity;
-  uniform float uScale;
-  ${noise}`,
-        vertexHeader: `
-  float getPos(vec3 pos) {
-    vec3 noisePos =
-      vec3(pos.x * 0., pos.y - uv.y, pos.z + time * uSpeed * 3.) * uScale;
-    return cnoise(noisePos);
-  }
-
-  vec3 getCurrentPos(vec3 pos) {
-    vec3 newpos = pos;
-    newpos.z += getPos(pos);
-    return newpos;
-  }
-
-  vec3 getNormal(vec3 pos) {
-    vec3 curpos = getCurrentPos(pos);
-    vec3 nextposX = getCurrentPos(pos + vec3(0.01, 0.0, 0.0));
-    vec3 nextposZ = getCurrentPos(pos + vec3(0.0, -0.01, 0.0));
-    vec3 tangentX = normalize(nextposX - curpos);
-    vec3 tangentZ = normalize(nextposZ - curpos);
-    return normalize(cross(tangentZ, tangentX));
-  }`,
-        fragmentHeader: "",
-        vertex: {
-          "#include <begin_vertex>": `transformed.z += getPos(transformed.xyz);`,
-          "#include <beginnormal_vertex>": `objectNormal = getNormal(position.xyz);`,
-        },
-        fragment: {
-          "#include <dithering_fragment>": `
-    float randomNoise = noise(gl_FragCoord.xy);
-    gl_FragColor.rgb -= randomNoise / 15. * uNoiseIntensity;`,
-        },
-        material: { fog: true },
-        uniforms: {
-          diffuse: new THREE.Color(...hexToNormalizedRGB("#000000")),
-          time: { shared: true, mixed: true, linked: true, value: 0 },
-          roughness: 0.3,
-          metalness: 0.3,
-          uSpeed: { shared: true, mixed: true, linked: true, value: speed },
-          envMapIntensity: 10,
-          uNoiseIntensity: noiseIntensity,
-          uScale: scale,
-        },
-      }),
-    [speed, noiseIntensity, scale],
-  )
+  const sections = [
+    { label: 'Platform',      id: 'platform',      section: 2 },
+    { label: 'Capabilities',  id: 'capabilities',  section: 3 },
+    { label: 'Architecture',  id: 'architecture',  section: 4 },
+    { label: 'Documentation', id: 'documentation', section: 5 },
+  ];
 
   return (
-    <CanvasWrapper>
-      <group rotation={[0, 0, degToRad(rotation)]}>
-        <PlaneNoise ref={meshRef} material={beamMaterial} count={beamNumber} width={beamWidth} height={beamHeight} />
-        <DirLight color={lightColor} position={[0, 3, 10]} />
-      </group>
-      <ambientLight intensity={1} />
-      <color attach="background" args={["#000000"]} />
-      <PerspectiveCamera makeDefault position={[0, 0, 20]} fov={30} />
-    </CanvasWrapper>
-  )
-}
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] hidden md:block">
+      <motion.nav
+        initial={{ y: -80, opacity: 0 }}
+        animate={isExpanded ? "expanded" : "collapsed"}
+        variants={navContainerVariants}
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => { if (lastScrollY.current > 150) setExpanded(false); }}
+        whileTap={!isExpanded ? { scale: 0.95 } : {}}
+        onClick={(e) => { if (!isExpanded) { e.preventDefault(); setExpanded(true); } }}
+        className={cn(
+          "flex items-center overflow-hidden rounded-full border shadow-lg backdrop-blur-xl h-14",
+          !isExpanded && "cursor-pointer justify-center"
+        )}
+        style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+      >
+        <motion.div
+          variants={navLogoVariants}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="flex-shrink-0 flex items-center text-xl font-extrabold tracking-tight pl-5 pr-4 text-white cursor-pointer transition-all hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+          onClick={(e) => { e.stopPropagation(); scrollTo('hero'); }}
+        >
+          Spot<span className="text-indigo-400">fixes</span>
+        </motion.div>
+        
+        <motion.div className={cn("flex items-center gap-1 sm:gap-2 pr-4", !isExpanded && "pointer-events-none")}>
+          {sections.map(({ label, id, section }) => {
+            const isActive = currentSection === section;
+            return (
+              <motion.button key={id} variants={navItemVariants} onClick={(e) => { e.stopPropagation(); scrollTo(id); }} className={cn("relative group rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors", isActive ? "text-white" : "text-white/60 hover:text-white hover:bg-white/5")}>
+                {isActive && <motion.div layoutId="active-landing-nav-pill" className="absolute inset-0 rounded-full bg-white/15" transition={{ type: 'spring', stiffness: 380, damping: 35 }} />}
+                <span className="relative z-10">{label}</span>
+              </motion.button>
+            );
+          })}
+        </motion.div>
 
-// ============================================================================
-// BUTTON COMPONENT
-// ============================================================================
+        <motion.div variants={navItemVariants} className={cn("flex items-center pl-1 pr-2", !isExpanded && "pointer-events-none hidden")}>
+          <div className="w-px h-6 mx-2 bg-white/10" />
+          <Button size="sm" onClick={(e) => { e.stopPropagation(); onEnterWorkspace(); }}>
+            Workspace <ArrowRight className="ml-1 h-3 w-3" />
+          </Button>
+        </motion.div>
 
-const Button = ({ variant = "default", size = "sm", className = "", children, ...props }) => {
-  const baseClasses =
-    "inline-flex items-center justify-center font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:pointer-events-none disabled:opacity-50"
-
-  const variants = {
-    default: "bg-white text-black hover:bg-gray-100",
-    outline: "border border-white/20 bg-white/5 backdrop-blur-xl text-white hover:bg-white/10 hover:border-white/30",
-    ghost: "text-white/90 hover:text-white hover:bg-white/10",
-  }
-
-  const sizes = {
-    sm: "h-9 px-4 py-2 text-sm",
-    lg: "px-8 py-6 text-lg",
-  }
-
-  return (
-    <button
-      className={`group relative overflow-hidden rounded-full ${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
-      {...props}
-    >
-      <span className="relative z-10 flex items-center">{children}</span>
-      <div className="absolute inset-0 -top-2 -bottom-2 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out" />
-    </button>
-  )
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white">
+          <motion.div variants={{ expanded: { opacity: 0 }, collapsed: { opacity: 1 } }} animate={isExpanded ? "expanded" : "collapsed"}>
+            <BrainCircuit className="h-5 w-5" />
+          </motion.div>
+        </div>
+      </motion.nav>
+    </div>
+  );
 }
 
 // ============================================================================
@@ -492,17 +274,178 @@ function ArchitectureModal({ onClose }) {
   );
 }
 
-const SECTION_IDS = ['hero', 'platform', 'capabilities', 'architecture', 'documentation'];
-
-const scrollTo = (id) => {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
-
 export default function Landing({ onEnterWorkspace }) {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [currentSection, setCurrentSection] = useState(1);
   const [showArch, setShowArch] = useState(false);
   const totalSections = 5;
+
+  // --- THREE.JS & GSAP REFS ---
+  const canvasRef = useRef(null);
+  const titleRef = useRef(null);
+  const subtitleRef = useRef(null);
+  const threeRefs = useRef({
+    scene: null, camera: null, renderer: null, composer: null,
+    stars: [], nebula: null, mountains: [], animationId: null,
+    targetCameraX: 0, targetCameraY: 20, targetCameraZ: 300
+  });
+
+  // --- THREE.JS INITIALIZATION ---
+  useEffect(() => {
+    const initThree = () => {
+      const refs = threeRefs.current;
+      
+      refs.scene = new THREE.Scene();
+      refs.scene.fog = new THREE.FogExp2(0x000000, 0.00025);
+
+      refs.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+      refs.camera.position.set(0, 20, 300);
+
+      refs.renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true, alpha: true });
+      refs.renderer.setSize(window.innerWidth, window.innerHeight);
+      refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      refs.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      refs.renderer.toneMappingExposure = 0.5;
+
+      refs.composer = new EffectComposer(refs.renderer);
+      refs.composer.addPass(new RenderPass(refs.scene, refs.camera));
+      refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.4, 0.85));
+
+      // Stars
+      const starCount = 4000;
+      for (let i = 0; i < 3; i++) {
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(starCount * 3);
+        const colors = new Float32Array(starCount * 3);
+        const sizes = new Float32Array(starCount);
+        for (let j = 0; j < starCount; j++) {
+          const r = 200 + Math.random() * 1000;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(Math.random() * 2 - 1);
+          pos[j*3] = r * Math.sin(phi) * Math.cos(theta);
+          pos[j*3+1] = r * Math.sin(phi) * Math.sin(theta);
+          pos[j*3+2] = r * Math.cos(phi);
+          
+          const c = new THREE.Color();
+          const choice = Math.random();
+          if (choice < 0.7) c.setHSL(0, 0, 0.8 + Math.random()*0.2);
+          else if (choice < 0.9) c.setHSL(0.6, 0.5, 0.8);
+          else c.setHSL(0.08, 0.5, 0.8);
+          
+          colors[j*3] = c.r; colors[j*3+1] = c.g; colors[j*3+2] = c.b;
+          sizes[j] = Math.random() * 2 + 0.5;
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        
+        const mat = new THREE.ShaderMaterial({
+          uniforms: { time: { value: 0 }, depth: { value: i } },
+          vertexShader: `
+            attribute float size; attribute vec3 color; varying vec3 vColor;
+            uniform float time; uniform float depth;
+            void main() {
+              vColor = color; vec3 p = position;
+              float angle = time * 0.05 * (1.0 - depth * 0.3);
+              mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+              p.xy = rot * p.xy;
+              vec4 mvP = modelViewMatrix * vec4(p, 1.0);
+              gl_PointSize = size * (300.0 / -mvP.z);
+              gl_Position = projectionMatrix * mvP;
+            }`,
+          fragmentShader: `
+            varying vec3 vColor;
+            void main() {
+              float d = length(gl_PointCoord - vec2(0.5));
+              if (d > 0.5) discard;
+              gl_FragColor = vec4(vColor, 1.0 - smoothstep(0.0, 0.5, d));
+            }`,
+          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        const stars = new THREE.Points(geo, mat);
+        refs.scene.add(stars);
+        refs.stars.push(stars);
+      }
+
+      // Mountains
+      const layers = [
+        { distance: 0, height: 60, color: 0x1a1a2e, opacity: 1 },
+        { distance: -400, height: 80, color: 0x16213e, opacity: 0.8 },
+        { distance: -800, height: 100, color: 0x0f3460, opacity: 0.6 },
+        { distance: -1200, height: 120, color: 0x0a4668, opacity: 0.4 },
+        { distance: -1600, height: 140, color: 0x072a44, opacity: 0.3 }
+      ];
+      layers.forEach((layer) => {
+        const pts = [];
+        for (let i = 0; i <= 50; i++) {
+          const x = (i / 50 - 0.5) * 4000;
+          const y = Math.sin(i * 0.1) * layer.height + Math.sin(i * 0.05) * layer.height * 0.5 + Math.random() * layer.height * 0.2 - 100;
+          pts.push(new THREE.Vector2(x, y));
+        }
+        pts.push(new THREE.Vector2(2000, -500), new THREE.Vector2(-2000, -500));
+        const mtn = new THREE.Mesh(
+          new THREE.ShapeGeometry(new THREE.Shape(pts)),
+          new THREE.MeshBasicMaterial({ color: layer.color, transparent: true, opacity: layer.opacity, side: THREE.DoubleSide })
+        );
+        mtn.position.z = layer.distance;
+        refs.scene.add(mtn);
+        refs.mountains.push(mtn);
+      });
+
+      const animate = () => {
+        refs.animationId = requestAnimationFrame(animate);
+        const t = Date.now() * 0.001;
+        refs.stars.forEach(s => { if (s.material.uniforms) s.material.uniforms.time.value = t; });
+        
+        if (refs.camera) {
+          refs.camera.position.x += (refs.targetCameraX - refs.camera.position.x) * 0.05 + Math.sin(t * 0.1) * 0.1;
+          refs.camera.position.y += (refs.targetCameraY - refs.camera.position.y) * 0.05 + Math.cos(t * 0.15) * 0.05;
+          refs.camera.position.z += (refs.targetCameraZ - refs.camera.position.z) * 0.05;
+          refs.camera.lookAt(0, 10, -1000);
+        }
+        
+        refs.mountains.forEach((m, i) => {
+          m.position.x = Math.sin(t * 0.1) * 2 * (1 + i * 0.5);
+        });
+        if (refs.composer) refs.composer.render();
+      };
+      animate();
+    };
+
+    initThree();
+    const handleResize = () => {
+      const refs = threeRefs.current;
+      if (refs.camera && refs.renderer && refs.composer) {
+        refs.camera.aspect = window.innerWidth / window.innerHeight;
+        refs.camera.updateProjectionMatrix();
+        refs.renderer.setSize(window.innerWidth, window.innerHeight);
+        refs.composer.setSize(window.innerWidth, window.innerHeight);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      const refs = threeRefs.current;
+      if (refs.animationId) cancelAnimationFrame(refs.animationId);
+      window.removeEventListener('resize', handleResize);
+      refs.stars.forEach(s => { s.geometry.dispose(); s.material.dispose(); });
+      refs.mountains.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
+      if (refs.renderer) refs.renderer.dispose();
+    };
+  }, []);
+
+  const splitTitle = (text) => text.split('').map((char, i) => (
+    <motion.span
+      key={i}
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      whileHover={{ scale: 1.15, color: '#818cf8', textShadow: '0 0 25px rgba(129,140,248,0.6)' }}
+      transition={{ duration: 0.8, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+      className="inline-block title-char whitespace-pre cursor-pointer"
+    >
+      {char}
+    </motion.span>
+  ));
 
   // Scroll progress bar
   useEffect(() => {
@@ -513,6 +456,11 @@ export default function Landing({ onEnterWorkspace }) {
       const maxScroll = documentHeight - windowHeight;
       const progress = maxScroll > 0 ? Math.min(Math.max(scrollY / maxScroll, 0), 1) : 0;
       setScrollProgress(progress);
+      // Move camera deep into mountains based on scroll
+      if (threeRefs.current.camera) {
+        threeRefs.current.targetCameraZ = 300 - (progress * 1800);
+        threeRefs.current.targetCameraY = 20 + (progress * 40);
+      }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
@@ -537,56 +485,20 @@ export default function Landing({ onEnterWorkspace }) {
   return (
     <div className="relative w-full bg-black text-white selection:bg-white/20 font-sans">
       {showArch && <ArchitectureModal onClose={() => setShowArch(false)} />}
-      {/* Beams Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <Beams
-          beamWidth={2.5}
-          beamHeight={18}
-          beamNumber={15}
-          lightColor="#ffffff"
-          speed={2.5}
-          noiseIntensity={2}
-          scale={0.15}
-          rotation={43}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/90 pointer-events-none" />
-      </div>
 
-      {/* Glassmorphic Navbar */}
+      <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-0 pointer-events-none" style={{ background: '#030712' }} />
+
+      <AnimatedLandingNav currentSection={currentSection} onEnterWorkspace={onEnterWorkspace} />
+
+      {/* Mobile Navbar Fallback */}
       <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-black/10 backdrop-blur-xl border-b border-white/10 transition-all">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8 md:hidden">
           <div className="relative flex h-16 items-center justify-between">
-
-            {/* Brand — left */}
-            <div className="flex items-center cursor-pointer flex-shrink-0" onClick={() => scrollTo('hero')}>
-              <span className="text-xl font-bold tracking-tight text-white">
-                Spot<span className="text-zinc-500">fixes</span>
+            <div className="flex items-center cursor-pointer flex-shrink-0 transition-transform hover:scale-105 active:scale-95" onClick={() => scrollTo('hero')}>
+              <span className="text-2xl font-extrabold tracking-tight text-white hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all">
+                Spot<span className="text-indigo-400">fixes</span>
               </span>
             </div>
-
-            {/* Nav pills — absolutely centred so brand + CTA stay at edges */}
-            <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center space-x-1 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 p-1">
-              {[
-                { label: 'Platform',      id: 'platform',      section: 2 },
-                { label: 'Capabilities',  id: 'capabilities',  section: 3 },
-                { label: 'Architecture',  id: 'architecture',  section: 4 },
-                { label: 'Documentation', id: 'documentation', section: 5 },
-              ].map(({ label, id, section }) => (
-                <button
-                  key={id}
-                  onClick={() => scrollTo(id)}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                    currentSection === section
-                      ? 'bg-white/15 text-white shadow-sm'
-                      : 'text-white/60 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* CTA — right */}
             <div className="flex-shrink-0">
               <Button size="sm" onClick={onEnterWorkspace}>
                 Enter Workspace
@@ -621,21 +533,33 @@ export default function Landing({ onEnterWorkspace }) {
               {"Enterprise Bug Triage Engine"}
             </div>
 
-            {/* Main Heading */}
-            <h1 className="mb-6 text-5xl font-bold tracking-tight text-white sm:text-7xl lg:text-8xl">
-              Predict. Classify.{" "}
-              <span className="bg-gradient-to-r from-white via-zinc-300 to-zinc-600 bg-clip-text text-transparent">
-                Resolve.
-              </span>
+            {/* Main Heading (Animated by Framer Motion) */}
+            <h1 className="mb-6 text-5xl font-bold tracking-tighter text-white sm:text-7xl lg:text-8xl flex flex-wrap justify-center overflow-hidden">
+              {splitTitle("SPOTFIXES")}
             </h1>
 
             {/* Subtitle */}
-            <p className="mb-10 text-xl leading-relaxed text-white/70 sm:text-2xl max-w-2xl mx-auto">
-              Automated severity classification and duplicate detection — so your team ships fixes faster.
-            </p>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
+              className="mb-10 text-center"
+            >
+              <p className="subtitle-line text-xl leading-relaxed text-white/70 sm:text-2xl max-w-2xl mx-auto">
+                Predict. Classify. Resolve.
+              </p>
+              <p className="subtitle-line text-lg leading-relaxed text-white/50 max-w-2xl mx-auto mt-2">
+                Automated severity classification & duplicate detection.
+              </p>
+            </motion.div>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.9, type: "spring", stiffness: 200, damping: 15 }}
+              className="hero-btn flex flex-col sm:flex-row items-center justify-center gap-4 mb-12"
+            >
               <Button size="lg" className="shadow-2xl shadow-white/25 font-semibold" onClick={onEnterWorkspace}>
                 Enter Workspace
                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -643,7 +567,7 @@ export default function Landing({ onEnterWorkspace }) {
               <Button variant="outline" size="lg" className="font-semibold bg-transparent" onClick={() => setShowArch(true)}>
                 View Architecture
               </Button>
-            </div>
+            </motion.div>
 
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-2xl mx-auto">
@@ -671,10 +595,12 @@ export default function Landing({ onEnterWorkspace }) {
               <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-blue-400 font-bold uppercase tracking-widest">
                 Platform
               </div>
-              <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">The bug triage workspace<br/>for product teams.</h2>
-              <p className="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto">
-                Submit, classify, and resolve — in one place.
-              </p>
+              <AnimatedScrollHeader
+                title="The bug triage workspace<br/>for product teams."
+                subtitle="Submit, classify, and resolve — in one place."
+                className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
+                subtitleClassName="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto"
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
@@ -703,10 +629,12 @@ export default function Landing({ onEnterWorkspace }) {
                  <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-purple-400 font-bold uppercase tracking-widest">
                    Capabilities
                  </div>
-                 <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">A model that learns from your team.</h2>
-                 <p className="text-xl text-white/60 leading-relaxed mb-8">
-                   Corrections feed back into training. Accuracy improves every review cycle.
-                 </p>
+                 <AnimatedScrollHeader
+                   title="A model that learns from your team."
+                   subtitle="Corrections feed back into training. Accuracy improves every review cycle."
+                   className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
+                   subtitleClassName="text-xl text-white/60 leading-relaxed mb-8"
+                 />
                  <ul className="space-y-4">
                    <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> TF-IDF n-gram feature extraction</li>
                    <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> Vector RAG duplicate detection</li>
@@ -721,19 +649,26 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 4: ARCHITECTURE */}
-        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-6 lg:px-8 border-t border-white/5 relative">
+        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-0 border-t border-white/5 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/5 to-transparent pointer-events-none" />
-          <div className="max-w-4xl w-full text-center relative z-10">
+          <div className="w-full text-center relative z-10 py-24">
              <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-emerald-400 font-bold uppercase tracking-widest">
-               Architecture
+               Architecture & Stack
              </div>
-             <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Multi-tenant by default.<br/>Secure by design.</h2>
-             <p className="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto mb-10">
-               FastAPI and Supabase Postgres. Row-Level Security enforced per tenant.
-             </p>
-             <Button size="lg" className="shadow-2xl shadow-white/10 font-semibold" onClick={() => scrollTo('documentation')}>
-               View on GitHub <ArrowRight className="ml-2 h-5 w-5" />
-             </Button>
+             <AnimatedScrollHeader
+               title="Built with enterprise tools."
+               subtitle="FastAPI and Supabase Postgres. Row-Level Security enforced per tenant."
+               className="text-4xl md:text-6xl font-bold tracking-tight mb-6 px-6"
+               subtitleClassName="text-xl text-white/60 leading-relaxed max-w-2xl mx-auto mb-16 px-6"
+             />
+             
+             <TechStackCarousel />
+
+             <div className="mt-16 px-6">
+                 <Button size="lg" className="shadow-2xl shadow-white/10 font-semibold" onClick={() => scrollTo('documentation')}>
+                   View Documentation <ArrowRight className="ml-2 h-5 w-5" />
+                 </Button>
+             </div>
           </div>
         </section>
 
@@ -745,10 +680,12 @@ export default function Landing({ onEnterWorkspace }) {
                <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/50 font-bold uppercase tracking-widest">
                  Open Source
                </div>
-               <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">Read the source.</h2>
-               <p className="text-xl text-white/60 leading-relaxed max-w-xl mx-auto">
-                 ML pipeline, backend, and frontend — all in one repository.
-               </p>
+               <AnimatedScrollHeader
+                 title="Read the source."
+                 subtitle="ML pipeline, backend, and frontend — all in one repository."
+                 className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
+                 subtitleClassName="text-xl text-white/60 leading-relaxed max-w-xl mx-auto"
+               />
              </div>
 
              {/* GitHub Open Source Banner */}
@@ -829,14 +766,18 @@ export default function Landing({ onEnterWorkspace }) {
 
             {/* Header — Gannon emblem + title */}
             <div className="text-center mb-16">
-<div className="mb-3 text-xs font-bold uppercase tracking-widest text-indigo-400">Senior Design Project · 2025</div>
-              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">Gannon University</h2>
-              <p className="text-white/40 text-base">Erie, Pennsylvania</p>
+<div className="mb-3 text-xs font-bold uppercase tracking-widest text-indigo-400">Senior Design Project · 2025-26</div>
+              <AnimatedScrollHeader
+                title="Gannon University"
+                subtitle="Erie, Pennsylvania"
+                className="text-4xl md:text-5xl font-bold tracking-tight mb-3"
+                subtitleClassName="text-white/40 text-base"
+              />
             </div>
 
             {/* Team Members */}
             <div className="mb-10">
-              <p className="text-xs font-bold uppercase tracking-widest text-white/30 text-center mb-6">Built by</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/30 text-center mb-6">Built and developed by</p>
               <div className="flex flex-wrap justify-center gap-4">
                 {['Amartuvshin Ganzorig', 'Anunjin Batdelger', 'Koshi Yuasa'].map((name) => (
                   <div key={name} className="bg-white/[0.04] border border-white/10 rounded-2xl px-7 py-4 text-center backdrop-blur-sm">
@@ -877,6 +818,22 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
       </div>
+
+      {/* Back to Top Button */}
+      <AnimatePresence>
+        {scrollProgress > 0.15 && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            onClick={() => scrollTo('hero')}
+            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white backdrop-blur-xl shadow-2xl transition-all hover:-translate-y-1"
+            title="Back to top"
+          >
+            <ArrowUp size={20} />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
