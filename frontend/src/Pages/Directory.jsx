@@ -256,7 +256,7 @@ export default function Directory({ onNavigate, user }) {
               onClick={() => onNavigate('submit')}
               className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 rounded-xl text-sm font-bold transition-all"
             >
-              Submit a bug <ArrowRight size={14} />
+              Open Severity Analysis <ArrowRight size={14} />
             </button>
           </div>
         ) : (

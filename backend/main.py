@@ -100,6 +100,29 @@ def _normalize_company_id(raw_company_id):
         return None
 
 
+def _infer_component_from_summary(summary: str) -> str:
+    text = (summary or "").lower()
+    if not text:
+        return "General"
+
+    rules = [
+        ("Security", ["security", "vulnerability", "xss", "csrf", "sql injection", "auth bypass", "unauthorized", "token leak"]),
+        ("Authentication", ["login", "logout", "signin", "sign in", "signup", "password", "oauth", "mfa", "session", "jwt", "sso"]),
+        ("Database", ["database", "db", "sql", "postgres", "query", "migration", "deadlock", "constraint", "connection pool"]),
+        ("API", ["api", "endpoint", "request", "response", "http", "rest", "graphql", "timeout", "500", "404"]),
+        ("Networking", ["network", "dns", "socket", "latency", "packet", "proxy", "gateway", "tls", "ssl"]),
+        ("Frontend", ["ui", "frontend", "layout", "css", "button", "modal", "dropdown", "render", "react", "page"]),
+        ("Performance", ["slow", "performance", "lag", "latency spike", "high cpu", "memory leak", "throughput", "optimize"]),
+        ("Crash", ["crash", "freeze", "hang", "segfault", "panic", "fatal", "unresponsive"]),
+        ("Data Processing", ["import", "export", "csv", "json", "parser", "transform", "etl", "batch"]),
+    ]
+
+    for component_name, keywords in rules:
+        if any(k in text for k in keywords):
+            return component_name
+    return "General"
+
+
 def _all_active_data_tables() -> list:
     """Return every unique company data table, always including 'bugs', never 'firefox_table'."""
     try:
@@ -790,10 +813,15 @@ async def create_bug(request: BugPayload, current_user: dict = Depends(auth.requ
     else:
         cid = current_user.get("company_id")
 
+    raw_component = (request.component or "").strip()
+    component_value = raw_component
+    if not raw_component or raw_component.lower() in ("general", "none", "n/a", "na"):
+        component_value = _infer_component_from_summary(request.summary)
+
     table = get_company_table(cid)
     payload = {
         "summary":   request.summary,
-        "component": request.component,
+        "component": component_value,
         "severity":  request.severity,
         "status":    "NEW",
     }
@@ -1129,9 +1157,12 @@ async def bulk_submit(
 
     rows = []
     for _, row in df.iterrows():
+        summary_text = str(row.get("summary", ""))
+        raw_component = str(row.get("component", "")).strip()
+        component_value = raw_component if raw_component else _infer_component_from_summary(summary_text)
         bug_row = {
-            "summary":   str(row.get("summary", "")),
-            "component": str(row.get("component", "General")),
+            "summary":   summary_text,
+            "component": component_value,
             "severity":  str(row.get("severity", "S3")).upper(),
             "status":    str(row.get("status", "PROCESSED")),
         }
@@ -2255,6 +2286,15 @@ def admin_list_pending(current_user: dict = Depends(auth.require_admin)):
     res = supabase.table("users").select(
         "uuid, username, email, role, status"
     ).eq("company_id", cid).eq("status", "pending").execute()
+    return res.data or []
+
+
+@app.get("/api/admin/users/pending/all")
+def admin_list_pending_all(current_user: dict = Depends(auth.require_admin)):
+    cid = current_user.get("company_id")
+    res = supabase.table("users").select(
+        "uuid, username, email, role, status"
+    ).eq("company_id", cid).in_("status", ["pending", "invite_requested", "pending_code"]).execute()
     return res.data or []
 
 

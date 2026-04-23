@@ -195,7 +195,7 @@ function SevPillBadge({ sev }) {
   );
 }
 
-export default function SubmitTab({ user, prefill, onClearPrefill }) {
+export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate }) {
   const [mode,             setMode]             = useState('manual');
   const [component,        setComponent]        = useState('');
   const [summary,          setSummary]          = useState('');
@@ -300,6 +300,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
   const handleManualSubmit = async () => {
     if (!summary) { showMsg('Please enter a bug summary.', 'error'); return; }
     if (isSuperAdmin && !selectedCompanyId) { showMsg('Super Admin: please select a company.', 'error'); return; }
+    const hadExistingBugs = bugs.some(b => !String(b.id).startsWith('pending-'));
     setLoading(true);
     const tempId = `pending-${Date.now()}`;
     const finalComponent = component || 'General';
@@ -308,15 +309,23 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
       const payload = { summary, component: finalComponent, severity, status: 'NEW' };
       if (isSuperAdmin && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
       const response = await axios.post('/api/bug', payload);
+      const savedRow = response.data?.[0] || {};
+      const savedComponent = savedRow.component || finalComponent;
       const realId = response.data?.[0]?.bug_id || response.data?.[0]?.id;
       if (realId) {
         newBugIdsRef.current.add(String(realId));
-        setBugs(prev => prev.map(b => b.id === tempId ? { id: realId, summary, component, severity, status: 'NEW', _isNew: true } : b));
+        setBugs(prev => prev.map(b => b.id === tempId ? { id: realId, summary, component: savedComponent, severity, status: 'NEW', _isNew: true } : b));
         setTimeout(() => { newBugIdsRef.current.delete(String(realId)); setBugs(prev => prev.map(b => String(b.id) === String(realId) ? { ...b, _isNew: false } : b)); }, 8000);
       } else { setBugs(prev => prev.filter(b => b.id !== tempId)); }
-      showMsg('Bug logged successfully');
+      showMsg(`Bug logged successfully (${savedComponent})`);
       setSummary(''); setComponent(''); setSeverity('S3');
       startFastRefresh();
+
+      // First-time flow: after the first successful bug, jump to Directory
+      // so users immediately see component discovery begin.
+      if (!hadExistingBugs && typeof onNavigate === 'function') {
+        setTimeout(() => onNavigate('directory'), 900);
+      }
     } catch { setBugs(prev => prev.filter(b => b.id !== tempId)); showMsg('Failed to save. Please try again.', 'error'); }
     finally { setLoading(false); }
   };
@@ -385,6 +394,26 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
       await fetchBatches(); await fetchBugs();
     } catch (err) { showMsg(err.response?.data?.detail || 'Upload failed', 'error'); }
     finally { setLoading(false); }
+  };
+
+  const handleDownloadTemplate = () => {
+    const csvTemplate = [
+      'summary,component,severity,status',
+      'Database connection timeout causing complete system crash,Database,S1,NEW',
+      'Security vulnerability allows unauthorized database access,Security,S1,NEW',
+      'Login page button misaligned on mobile,Frontend,S3,NEW',
+      'Example without component (auto-detect),,S3,NEW',
+    ].join('\n');
+
+    const blob = new Blob([csvTemplate], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'bug_import_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const selectedSevDef = SEVERITY_DEFS.find(d => d.code === severity);
@@ -653,7 +682,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   {/* Submit button */}
                   <button
                     onClick={handleManualSubmit}
-                    disabled={loading || !summary || (isSuperAdmin && !selectedCompanyId)}
+                    disabled={loading}
                     className="w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                     style={{ background: 'var(--accent)', color: '#003822' }}
                   >
@@ -662,6 +691,12 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                       : <><Send size={16} /> Submit Bug</>
                     }
                   </button>
+                  {!summary && (
+                    <p className="mt-2 text-xs text-white/40">Tip: click Submit to see required-field guidance, or add a short bug summary first.</p>
+                  )}
+                  {isSuperAdmin && !selectedCompanyId && (
+                    <p className="mt-2 text-xs text-amber-400/80">Select a company to enable submit.</p>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div
@@ -671,6 +706,17 @@ export default function SubmitTab({ user, prefill, onClearPrefill }) {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                 >
+                  <div className="flex items-center justify-between mb-4 gap-3">
+                    <p className="text-xs text-white/40">First time here? Download the template and upload your bug list.</p>
+                    <button
+                      onClick={handleDownloadTemplate}
+                      type="button"
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-white/15 text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                    >
+                      Download CSV Template
+                    </button>
+                  </div>
+
                   <div
                     className={`border-2 border-dashed rounded-2xl p-12 text-center mb-8 cursor-pointer transition-all ${file ? 'bg-white/5' : 'border-white/20 hover:border-white/40 hover:bg-white/5'}`}
                     style={file ? { borderColor: 'var(--accent)50', background: 'var(--accent)08' } : {}}

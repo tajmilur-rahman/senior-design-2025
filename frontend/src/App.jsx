@@ -638,7 +638,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
       <main className={`main-scroll relative z-10 ${navOrientation === 'vertical' ? 'pt-24 md:pt-8 md:pl-56' : 'pt-24'}`}>
         {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
-        {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} />}
+        {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} onNavigate={navigate} />}
         {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
         {tab === 'analysis'    && <BugAnalysis  user={user} />}
         {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
