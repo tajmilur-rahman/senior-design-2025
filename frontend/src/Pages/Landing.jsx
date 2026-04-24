@@ -84,8 +84,8 @@ const scrollTo = (id) => {
 // ============================================================================
 
 const navContainerVariants = {
-  expanded: { y: 0, opacity: 1, width: "auto", transition: { y: { type: "spring", damping: 18, stiffness: 250 }, opacity: { duration: 0.3 }, type: "spring", damping: 20, stiffness: 300, staggerChildren: 0.07, delayChildren: 0.2 } },
-  collapsed: { y: 0, opacity: 1, width: "3.5rem", transition: { type: "spring", damping: 20, stiffness: 300, when: "afterChildren", staggerChildren: 0.05, staggerDirection: -1 } },
+  expanded: { y: 0, opacity: 1, width: "auto", transition: { y: { type: "spring", damping: 22, stiffness: 180 }, opacity: { duration: 0.4 }, type: "spring", damping: 26, stiffness: 200, staggerChildren: 0.06, delayChildren: 0.15 } },
+  collapsed: { y: 0, opacity: 1, width: "3.5rem", transition: { type: "spring", damping: 26, stiffness: 200, when: "afterChildren", staggerChildren: 0.04, staggerDirection: -1 } },
 };
 const navItemVariants = {
   expanded: { opacity: 1, x: 0, scale: 1, transition: { type: "spring", damping: 15 } },
@@ -99,17 +99,30 @@ const navLogoVariants = {
 function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
   const [isExpanded, setExpanded] = useState(true);
   const lastScrollY = useRef(0);
+  const mouseLeaveTimeout = useRef(null);
+  const clickStabilizeTimeout = useRef(null);
+  const justClicked = useRef(false);
+
+  const handleSectionClick = (id) => {
+    justClicked.current = true;
+    if (clickStabilizeTimeout.current) clearTimeout(clickStabilizeTimeout.current);
+    clickStabilizeTimeout.current = setTimeout(() => { justClicked.current = false; }, 1200);
+    scrollTo(id);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
       const latest = window.scrollY;
       const previous = lastScrollY.current;
-      if (isExpanded && latest > previous && latest > 150) setExpanded(false);
+      if (isExpanded && latest > previous && latest > 150 && !justClicked.current) setExpanded(false);
       else if (!isExpanded && latest < previous) setExpanded(true);
       lastScrollY.current = latest;
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (clickStabilizeTimeout.current) clearTimeout(clickStabilizeTimeout.current);
+    };
   }, [isExpanded]);
 
   const sections = [
@@ -125,8 +138,15 @@ function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
         initial={{ y: -80, opacity: 0 }}
         animate={isExpanded ? "expanded" : "collapsed"}
         variants={navContainerVariants}
-        onMouseEnter={() => setExpanded(true)}
-        onMouseLeave={() => { if (lastScrollY.current > 150) setExpanded(false); }}
+        onMouseEnter={() => {
+          if (mouseLeaveTimeout.current) clearTimeout(mouseLeaveTimeout.current);
+          setExpanded(true);
+        }}
+        onMouseLeave={() => {
+          mouseLeaveTimeout.current = setTimeout(() => {
+            if (lastScrollY.current > 150) setExpanded(false);
+          }, 700);
+        }}
         whileTap={!isExpanded ? { scale: 0.95 } : {}}
         onClick={(e) => { if (!isExpanded) { e.preventDefault(); setExpanded(true); } }}
         className={cn(
@@ -149,7 +169,7 @@ function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
           {sections.map(({ label, id, section }) => {
             const isActive = currentSection === section;
             return (
-              <motion.button key={id} variants={navItemVariants} onClick={(e) => { e.stopPropagation(); scrollTo(id); }} className={cn("relative group rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors", isActive ? "text-white" : "text-white/60 hover:text-white hover:bg-white/5")}>
+              <motion.button key={id} variants={navItemVariants} onClick={(e) => { e.stopPropagation(); handleSectionClick(id); }} className={cn("relative group rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors", isActive ? "text-white" : "text-white/60 hover:text-white hover:bg-white/5")}>
                 {isActive && <motion.div layoutId="active-landing-nav-pill" className="absolute inset-0 rounded-full bg-white/15" transition={{ type: 'spring', stiffness: 380, damping: 35 }} />}
                 <span className="relative z-10">{label}</span>
               </motion.button>
@@ -307,9 +327,13 @@ export default function Landing({ onEnterWorkspace }) {
       refs.renderer.toneMapping = THREE.ACESFilmicToneMapping;
       refs.renderer.toneMappingExposure = 0.5;
 
-      refs.composer = new EffectComposer(refs.renderer);
-      refs.composer.addPass(new RenderPass(refs.scene, refs.camera));
-      refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.4, 0.85));
+      try {
+        refs.composer = new EffectComposer(refs.renderer);
+        refs.composer.addPass(new RenderPass(refs.scene, refs.camera));
+        refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.4, 0.85));
+      } catch {
+        refs.composer = null;
+      }
 
       // Stars
       const starCount = 4000;
@@ -408,6 +432,7 @@ export default function Landing({ onEnterWorkspace }) {
           m.position.x = Math.sin(t * 0.1) * 2 * (1 + i * 0.5);
         });
         if (refs.composer) refs.composer.render();
+        else if (refs.renderer) refs.renderer.render(refs.scene, refs.camera);
       };
       animate();
     };
@@ -415,11 +440,11 @@ export default function Landing({ onEnterWorkspace }) {
     initThree();
     const handleResize = () => {
       const refs = threeRefs.current;
-      if (refs.camera && refs.renderer && refs.composer) {
+      if (refs.camera && refs.renderer) {
         refs.camera.aspect = window.innerWidth / window.innerHeight;
         refs.camera.updateProjectionMatrix();
         refs.renderer.setSize(window.innerWidth, window.innerHeight);
-        refs.composer.setSize(window.innerWidth, window.innerHeight);
+        if (refs.composer) refs.composer.setSize(window.innerWidth, window.innerHeight);
       }
     };
     window.addEventListener('resize', handleResize);
@@ -525,7 +550,7 @@ export default function Landing({ onEnterWorkspace }) {
       <div className="relative z-10 flex flex-col w-full">
         
         {/* SECTION 1: HERO */}
-        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-6 lg:px-8 pt-20">
+        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-20">
           <div className="max-w-4xl text-center w-full">
             {/* Badge */}
             <div className="mb-8 inline-flex items-center rounded-full bg-white/5 backdrop-blur-xl border border-white/10 px-4 py-2 text-sm text-white/90">
@@ -534,7 +559,7 @@ export default function Landing({ onEnterWorkspace }) {
             </div>
 
             {/* Main Heading (Animated by Framer Motion) */}
-            <h1 className="mb-6 text-5xl font-bold tracking-tighter text-white sm:text-7xl lg:text-8xl flex flex-wrap justify-center overflow-hidden">
+            <h1 className="mb-6 text-4xl font-bold tracking-tighter text-white sm:text-7xl lg:text-8xl flex flex-wrap justify-center overflow-hidden">
               {splitTitle("SPOTFIXES")}
             </h1>
 
@@ -588,7 +613,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 2: PLATFORM */}
-        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-6 lg:px-8 border-t border-white/5 relative py-24">
+        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative py-24">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/5 to-transparent pointer-events-none" />
           <div className="max-w-5xl w-full relative z-10">
             <div className="text-center mb-16">
@@ -622,7 +647,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 3: CAPABILITIES */}
-        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-6 lg:px-8 border-t border-white/5 relative">
+        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative">
            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/5 to-transparent pointer-events-none" />
            <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-16 items-center relative z-10">
               <div className="text-left">
@@ -673,7 +698,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 5: DOCUMENTATION */}
-        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-6 lg:px-8 border-t border-white/5 relative pb-24">
+        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative pb-24">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/5 to-transparent pointer-events-none" />
           <div className="max-w-4xl w-full relative z-10">
              <div className="text-center mb-14">
@@ -760,7 +785,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 6: TEAM CREDITS */}
-        <section className="w-full flex flex-col items-center justify-center px-6 lg:px-8 border-t border-white/5 relative py-24">
+        <section className="w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative py-24">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-900/5 to-transparent pointer-events-none" />
           <div className="max-w-4xl w-full relative z-10">
 

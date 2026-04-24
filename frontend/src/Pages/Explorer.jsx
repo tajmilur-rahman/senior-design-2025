@@ -395,7 +395,9 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
 
             {/* Main Table Card */}
             <BentoCard className="overflow-hidden flex flex-col" style={{ background: 'var(--card-bg)' }}>
-                <div className="overflow-x-auto">
+
+                {/* ── Desktop table (hidden on mobile) ── */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[800px]">
                         <thead>
                             <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
@@ -468,6 +470,45 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                             })}
                         </tbody>
                     </table>
+                </div>
+
+                {/* ── Mobile card list (hidden on desktop) ── */}
+                <div className="block md:hidden">
+                    {loading && (
+                        <div className="py-16 text-center">
+                            <Loader size={24} className="animate-spin text-white/20 mx-auto mb-3" />
+                            <div className="text-sm text-white/40 font-medium">Querying database…</div>
+                        </div>
+                    )}
+                    {!loading && bugs.length === 0 && (
+                        <div className="py-16 text-center text-white/30 text-sm px-6">
+                            No telemetry records match your filters.
+                        </div>
+                    )}
+                    {!loading && bugs.map(b => {
+                        const sColorClass = statusColor(b.status);
+                        return (
+                            <button
+                                key={b.id}
+                                onClick={() => setSelectedBug(b)}
+                                className="w-full text-left px-4 py-4 border-b border-white/5 hover:bg-white/[0.03] active:bg-white/[0.05] transition-colors flex flex-col gap-2"
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-[11px] text-white/40 font-bold">#{b.id}</span>
+                                        <SevBadge sev={b.severity} />
+                                    </div>
+                                    <span className={`text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${sColorClass}`}>
+                                        {b.status || 'NEW'}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-white/80 font-medium leading-snug line-clamp-2">{b.summary}</p>
+                                {b.component && (
+                                    <span className="text-[11px] text-white/40">{b.component}</span>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* Pagination Footer */}

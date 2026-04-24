@@ -154,7 +154,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 w-full md:w-auto min-w-[340px]">
+        <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[340px]">
           {/* Action buttons row */}
           <div className="flex items-center gap-2">
             <button
@@ -442,7 +442,8 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
             {companies.length} org{companies.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
@@ -511,6 +512,58 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="block md:hidden divide-y divide-white/5">
+          {loadingCo ? (
+            <div className="py-12 text-center">
+              <RefreshCw size={20} className="animate-spin text-white/30 mx-auto" />
+            </div>
+          ) : companies.length === 0 ? (
+            <div className="py-10 text-center text-white/30 text-sm font-medium">No companies found.</div>
+          ) : companies.map(co => {
+            const rate = co.total > 0 ? ((co.resolved / co.total) * 100).toFixed(1) : '0';
+            return (
+              <div key={co.id} className="p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
+                      <Building2 size={13} className="text-white" />
+                    </div>
+                    <span className="font-bold text-sm text-white truncate">{co.name}</span>
+                  </div>
+                  <button
+                    onClick={() => onSelectCompany && onSelectCompany(selectedCompany?.id === co.id ? null : co)}
+                    className={`text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 px-2.5 py-1 rounded flex-shrink-0 ${
+                      selectedCompany?.id === co.id
+                        ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                        : 'text-white/30 border border-white/10'
+                    }`}
+                  >
+                    {selectedCompany?.id === co.id ? 'Selected' : 'Select'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Total</div>
+                    <div className="text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Critical</div>
+                    <div className="text-sm font-bold text-red-400 font-mono">{co.critical || 0}</div>
+                  </div>
+                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Rate</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: 'var(--accent)' }}>{rate}%</div>
+                  </div>
+                </div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: rate + '%', background: 'var(--accent)' }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </MotionBentoCard>
     </motion.div>
@@ -614,15 +667,16 @@ export default function Overview({ user, onNavigate, selectedCompany, onSelectCo
             Live incoming bugs, AI severity, and the components slowing you down.
           </p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-shrink-0">
           <Button variant="outline"
             onClick={() => onNavigate('database')}
+            className="flex-1 sm:flex-none justify-center"
           >
             <Database size={15} className="text-white/50" /> Explorer
           </Button>
           <Button
             onClick={() => onNavigate('submit')}
-            className="px-5 py-2.5 font-bold"
+            className="flex-1 sm:flex-none justify-center px-5 py-2.5 font-bold"
           >
             <Zap size={15} className="text-black group-hover:scale-110 transition-transform" /> Triage Issue
           </Button>

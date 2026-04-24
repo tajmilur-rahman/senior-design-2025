@@ -15,13 +15,13 @@ const containerVariants = {
     opacity: 1,
     width: "auto",
     transition: {
-      y: { type: "spring", damping: 18, stiffness: 250 },
-      opacity: { duration: 0.3 },
+      y: { type: "spring", damping: 22, stiffness: 180 },
+      opacity: { duration: 0.4 },
       type: "spring",
-      damping: 20,
-      stiffness: 300,
-      staggerChildren: 0.07,
-      delayChildren: 0.2,
+      damping: 26,
+      stiffness: 200,
+      staggerChildren: 0.06,
+      delayChildren: 0.15,
     },
   },
   collapsed: {
@@ -30,10 +30,10 @@ const containerVariants = {
     width: "auto",
     transition: {
       type: "spring",
-      damping: 20,
-      stiffness: 300,
+      damping: 26,
+      stiffness: 200,
       when: "afterChildren",
-      staggerChildren: 0.05,
+      staggerChildren: 0.04,
       staggerDirection: -1,
     },
   },
@@ -53,9 +53,19 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
   const [isExpanded, setExpanded] = useState(false);
   const isHovered = useRef(false);
   const collapseTimeout = useRef(null);
-  
+  const mouseLeaveTimeout = useRef(null);
+  const clickStabilizeTimeout = useRef(null);
+  const justClicked = useRef(false);
+
   const lastScrollY = useRef(0);
   const scrollPositionOnCollapse = useRef(0);
+
+  const handleNavClick = (cb) => {
+    justClicked.current = true;
+    if (clickStabilizeTimeout.current) clearTimeout(clickStabilizeTimeout.current);
+    clickStabilizeTimeout.current = setTimeout(() => { justClicked.current = false; }, 1400);
+    cb();
+  };
 
   useEffect(() => {
     const scrollContainer = document.querySelector('.main-scroll');
@@ -68,13 +78,15 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
       if (collapseTimeout.current) clearTimeout(collapseTimeout.current);
 
       if (latest > previous && latest > 50) {
-        if (!isHovered.current) setExpanded(false);
-        scrollPositionOnCollapse.current = latest; 
+        if (!isHovered.current && !justClicked.current) setExpanded(false);
+        scrollPositionOnCollapse.current = latest;
       } else if (latest < previous && (scrollPositionOnCollapse.current - latest > EXPAND_SCROLL_THRESHOLD)) {
-        setExpanded(true);
-        collapseTimeout.current = setTimeout(() => {
-          if (!isHovered.current) setExpanded(false);
-        }, 2000);
+        if (!justClicked.current) {
+          setExpanded(true);
+          collapseTimeout.current = setTimeout(() => {
+            if (!isHovered.current) setExpanded(false);
+          }, 2500);
+        }
       }
       lastScrollY.current = latest;
     };
@@ -83,6 +95,8 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
     return () => {
       scrollContainer.removeEventListener('scroll', handleScroll);
       if (collapseTimeout.current) clearTimeout(collapseTimeout.current);
+      if (mouseLeaveTimeout.current) clearTimeout(mouseLeaveTimeout.current);
+      if (clickStabilizeTimeout.current) clearTimeout(clickStabilizeTimeout.current);
     };
   }, []);
 
@@ -94,11 +108,14 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
         variants={containerVariants}
         onMouseEnter={() => {
           isHovered.current = true;
+          if (mouseLeaveTimeout.current) clearTimeout(mouseLeaveTimeout.current);
           setExpanded(true);
         }}
-        onMouseLeave={() => { 
+        onMouseLeave={() => {
           isHovered.current = false;
-          setExpanded(false); 
+          mouseLeaveTimeout.current = setTimeout(() => {
+            if (!isHovered.current) setExpanded(false);
+          }, 700);
         }}
         whileTap={!isExpanded ? { scale: 0.95 } : {}}
         className={cn(
@@ -108,14 +125,14 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
       >
         <motion.div variants={itemVariants} className="flex-shrink-0 flex items-center gap-2 font-semibold pl-3 pr-2" style={{ color: 'var(--text-main)' }}>
           <button
-            onClick={(e) => { e.stopPropagation(); onBack(); }}
+            onClick={(e) => { e.stopPropagation(); handleNavClick(onBack); }}
             disabled={!canGoBack}
             className={cn("flex items-center justify-center w-7 h-7 rounded-full border transition-all", canGoBack ? "bg-white/5 border-white/10 hover:bg-white/15 cursor-pointer" : "bg-transparent border-transparent opacity-30 cursor-not-allowed")}
           >
             <ChevronLeft size={14} />
           </button>
           <motion.div variants={labelVariants} className="overflow-hidden whitespace-nowrap flex items-center">
-            <span className="text-lg font-extrabold tracking-tight cursor-pointer transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" onClick={(e) => { e.stopPropagation(); onNavigate('overview'); }}>Spot<span className="text-indigo-400">fixes</span></span>
+            <span className="text-lg font-extrabold tracking-tight cursor-pointer transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" onClick={(e) => { e.stopPropagation(); handleNavClick(() => onNavigate('overview')); }}>Spot<span className="text-indigo-400">fixes</span></span>
           </motion.div>
         </motion.div>
         
@@ -124,7 +141,7 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
             const Icon = item.icon;
             const isActive = currentTab === item.id;
             return (
-              <motion.button key={item.id} variants={itemVariants} onClick={(e) => { e.stopPropagation(); onNavigate(item.id); }} className={cn("relative group rounded-full px-3 py-1.5 text-sm font-medium flex items-center whitespace-nowrap transition-colors", isActive ? "" : "hover:bg-white/5 opacity-70 hover:opacity-100")} style={{ color: 'var(--text-main)' }}>
+              <motion.button key={item.id} variants={itemVariants} onClick={(e) => { e.stopPropagation(); handleNavClick(() => onNavigate(item.id)); }} className={cn("relative group rounded-full px-3 py-1.5 text-sm font-medium flex items-center whitespace-nowrap transition-colors", isActive ? "" : "hover:bg-white/5 opacity-70 hover:opacity-100")} style={{ color: 'var(--text-main)' }}>
                 {isActive && <motion.div layoutId="active-framer-nav-pill" className="absolute inset-0 rounded-full" style={{ background: 'var(--hover-bg)' }} transition={{ type: 'spring', stiffness: 380, damping: 35 }} />}
                 {Icon && <Icon size={14} className="relative z-10 flex-shrink-0" />}
                 <motion.div variants={labelVariants} className="relative z-10 overflow-hidden flex items-center">

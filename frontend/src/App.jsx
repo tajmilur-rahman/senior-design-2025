@@ -470,7 +470,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const mobileRightActions = (
     <div className="flex-shrink-0 flex items-center gap-2">
       {isAdmin && (
-        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white">
+        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 active:bg-white/15 transition-all text-white/70 hover:text-white">
           <Bell size={15} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
           {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
         </button>
@@ -608,8 +608,8 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
       >
         <div className="px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
-              <Menu size={16} className="text-white/70" />
+            <button onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 active:bg-white/15 transition-all">
+              <Menu size={18} className="text-white/70" />
             </button>
             <div className="flex items-center cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => navigate('overview')}>
               <span className="text-2xl font-extrabold tracking-tight text-white hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">Spot<span className="text-indigo-400">fixes</span></span>
@@ -669,7 +669,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
       {navOrientation === 'horizontal' && <AnimatedNavFramer navItems={visibleTabs} currentTab={tab} onNavigate={navigate} rightActions={desktopRightActions} onBack={goBack} canGoBack={!!previousTab} />}
 
-      <main className={`main-scroll relative z-10 transition-all duration-300 ${navOrientation === 'vertical' ? (isSidebarExpanded ? 'pt-24 md:pt-8 md:pl-56' : 'pt-24 md:pt-8 md:pl-16') : 'pt-24'}`}>
+      <main className={`main-scroll relative z-10 transition-all duration-300 ${navOrientation === 'vertical' ? (isSidebarExpanded ? 'pt-16 md:pt-8 md:pl-56' : 'pt-16 md:pt-8 md:pl-16') : 'pt-16 md:pt-24'}`}>
         {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
         {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} onNavigate={navigate} />}
         {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
