@@ -282,9 +282,9 @@ function ArchitectureModal({ onClose }) {
           </div>
 
           {/* Multi-tenancy — one tight callout */}
-          <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
+          <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-6">
             <p className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-3">Multi-Tenant by Default</p>
-            <p className="text-sm text-white/65 leading-relaxed">
+            <p className="text-sm text-white/75 leading-relaxed">
               Every company runs on its own isolated Postgres table with Row-Level Security. The universal model trains on aggregate data; per-company models fine-tune on proprietary bugs.
             </p>
           </div>
@@ -306,7 +306,7 @@ export default function Landing({ onEnterWorkspace }) {
   const subtitleRef = useRef(null);
   const threeRefs = useRef({
     scene: null, camera: null, renderer: null, composer: null,
-    stars: [], nebula: null, mountains: [], animationId: null,
+    stars: [], nebula: null, mountains: [], aurora: null, animationId: null,
     targetCameraX: 0, targetCameraY: 20, targetCameraZ: 300
   });
 
@@ -316,7 +316,7 @@ export default function Landing({ onEnterWorkspace }) {
       const refs = threeRefs.current;
       
       refs.scene = new THREE.Scene();
-      refs.scene.fog = new THREE.FogExp2(0x000000, 0.00025);
+      refs.scene.fog = new THREE.FogExp2(0x03040f, 0.00022);
 
       refs.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
       refs.camera.position.set(0, 20, 300);
@@ -325,18 +325,18 @@ export default function Landing({ onEnterWorkspace }) {
       refs.renderer.setSize(window.innerWidth, window.innerHeight);
       refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       refs.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      refs.renderer.toneMappingExposure = 0.5;
+      refs.renderer.toneMappingExposure = 0.7;
 
       try {
         refs.composer = new EffectComposer(refs.renderer);
         refs.composer.addPass(new RenderPass(refs.scene, refs.camera));
-        refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.4, 0.85));
+        refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.4, 0.5, 0.55));
       } catch {
         refs.composer = null;
       }
 
-      // Stars
-      const starCount = 4000;
+      // Stars — halve particle count on mobile for performance
+      const starCount = window.innerWidth < 768 ? 2000 : 4000;
       for (let i = 0; i < 3; i++) {
         const geo = new THREE.BufferGeometry();
         const pos = new Float32Array(starCount * 3);
@@ -391,13 +391,13 @@ export default function Landing({ onEnterWorkspace }) {
         refs.stars.push(stars);
       }
 
-      // Mountains
+      // Mountains — distinct silhouette layers from near-black to deep indigo-blue
       const layers = [
-        { distance: 0, height: 60, color: 0x1a1a2e, opacity: 1 },
-        { distance: -400, height: 80, color: 0x16213e, opacity: 0.8 },
-        { distance: -800, height: 100, color: 0x0f3460, opacity: 0.6 },
-        { distance: -1200, height: 120, color: 0x0a4668, opacity: 0.4 },
-        { distance: -1600, height: 140, color: 0x072a44, opacity: 0.3 }
+        { distance: 0,     height: 60,  color: 0x05050d, opacity: 1.0  },
+        { distance: -400,  height: 80,  color: 0x0b0e22, opacity: 0.95 },
+        { distance: -800,  height: 100, color: 0x0e1840, opacity: 0.85 },
+        { distance: -1200, height: 120, color: 0x112054, opacity: 0.65 },
+        { distance: -1600, height: 140, color: 0x0d1a42, opacity: 0.45 },
       ];
       layers.forEach((layer) => {
         const pts = [];
@@ -416,10 +416,47 @@ export default function Landing({ onEnterWorkspace }) {
         refs.mountains.push(mtn);
       });
 
+      // Aurora — horizon glow sitting just above the mountain ridges
+      const auroraGeo = new THREE.PlaneGeometry(4000, 200, 1, 1);
+      const auroraMat = new THREE.ShaderMaterial({
+        uniforms: {
+          time: { value: 0 },
+          color1: { value: new THREE.Color(0x2255ff) },
+          color2: { value: new THREE.Color(0x7722ff) },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+        `,
+        fragmentShader: `
+          varying vec2 vUv; uniform float time; uniform vec3 color1; uniform vec3 color2;
+          void main() {
+            float alpha = sin(vUv.y * 3.14159) * 0.45;
+            float hFade = smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x);
+            alpha *= hFade;
+            float w1 = sin(vUv.x * 5.0 + time * 0.35) * 0.07;
+            float w2 = sin(vUv.x * 11.0 - time * 0.25) * 0.04;
+            alpha = max(0.0, alpha * (1.0 + w1 + w2));
+            float colorShift = sin(time * 0.18) * 0.3;
+            vec3 color = mix(color1, color2, clamp(vUv.x + colorShift, 0.0, 1.0));
+            gl_FragColor = vec4(color, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const auroraPlane = new THREE.Mesh(auroraGeo, auroraMat);
+      auroraPlane.position.set(0, 5, -850);
+      refs.scene.add(auroraPlane);
+      refs.aurora = auroraPlane;
+
       const animate = () => {
         refs.animationId = requestAnimationFrame(animate);
         const t = Date.now() * 0.001;
         refs.stars.forEach(s => { if (s.material.uniforms) s.material.uniforms.time.value = t; });
+        if (refs.aurora) refs.aurora.material.uniforms.time.value = t;
         
         if (refs.camera) {
           refs.camera.position.x += (refs.targetCameraX - refs.camera.position.x) * 0.05 + Math.sin(t * 0.1) * 0.1;
@@ -438,6 +475,7 @@ export default function Landing({ onEnterWorkspace }) {
     };
 
     initThree();
+
     const handleResize = () => {
       const refs = threeRefs.current;
       if (refs.camera && refs.renderer) {
@@ -447,14 +485,23 @@ export default function Landing({ onEnterWorkspace }) {
         if (refs.composer) refs.composer.setSize(window.innerWidth, window.innerHeight);
       }
     };
+
+    const handleMouseMove = (e) => {
+      const refs = threeRefs.current;
+      refs.targetCameraX = ((e.clientX / window.innerWidth) - 0.5) * 45;
+    };
+
     window.addEventListener('resize', handleResize);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
 
     return () => {
       const refs = threeRefs.current;
       if (refs.animationId) cancelAnimationFrame(refs.animationId);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mousemove', handleMouseMove);
       refs.stars.forEach(s => { s.geometry.dispose(); s.material.dispose(); });
       refs.mountains.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
+      if (refs.aurora) { refs.aurora.geometry.dispose(); refs.aurora.material.dispose(); }
       if (refs.renderer) refs.renderer.dispose();
     };
   }, []);
@@ -483,7 +530,7 @@ export default function Landing({ onEnterWorkspace }) {
       setScrollProgress(progress);
       // Move camera deep into mountains based on scroll
       if (threeRefs.current.camera) {
-        threeRefs.current.targetCameraZ = 300 - (progress * 1800);
+        threeRefs.current.targetCameraZ = 300 - (progress * 1100);
         threeRefs.current.targetCameraY = 20 + (progress * 40);
       }
     };
@@ -511,7 +558,7 @@ export default function Landing({ onEnterWorkspace }) {
     <div className="relative w-full bg-black text-white selection:bg-white/20 font-sans">
       {showArch && <ArchitectureModal onClose={() => setShowArch(false)} />}
 
-      <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-0 pointer-events-none" style={{ background: '#030712' }} />
+      <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-0 pointer-events-none" style={{ background: '#03040f' }} />
 
       <AnimatedLandingNav currentSection={currentSection} onEnterWorkspace={onEnterWorkspace} />
 
@@ -550,12 +597,16 @@ export default function Landing({ onEnterWorkspace }) {
       <div className="relative z-10 flex flex-col w-full">
         
         {/* SECTION 1: HERO */}
-        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-20">
-          <div className="max-w-4xl text-center w-full">
+        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-20 relative">
+          {/* Radial vignette so hero text reads cleanly over the 3D scene */}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 90% 70% at 50% 50%, transparent 35%, rgba(0,0,0,0.6) 100%)' }} />
+          {/* Bottom fade into next section */}
+          <div className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="max-w-4xl text-center w-full relative z-10">
             {/* Badge */}
-            <div className="mb-8 inline-flex items-center rounded-full bg-white/5 backdrop-blur-xl border border-white/10 px-4 py-2 text-sm text-white/90">
-              <ShieldCheck className="mr-2 h-4 w-4 text-zinc-300" />
-              {"Enterprise Bug Triage Engine"}
+            <div className="mb-8 inline-flex items-center rounded-full bg-white/[0.10] backdrop-blur-xl border border-white/20 px-5 py-2.5 text-sm font-semibold text-white/95">
+              <ShieldCheck className="mr-2 h-4 w-4 text-indigo-300" />
+              Enterprise Bug Triage Engine
             </div>
 
             {/* Main Heading (Animated by Framer Motion) */}
@@ -570,10 +621,10 @@ export default function Landing({ onEnterWorkspace }) {
               transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
               className="mb-10 text-center"
             >
-              <p className="subtitle-line text-xl leading-relaxed text-white/70 sm:text-2xl max-w-2xl mx-auto">
+              <p className="subtitle-line text-xl leading-relaxed text-white/85 sm:text-2xl max-w-2xl mx-auto font-medium">
                 Predict. Classify. Resolve.
               </p>
-              <p className="subtitle-line text-lg leading-relaxed text-white/50 max-w-2xl mx-auto mt-2">
+              <p className="subtitle-line text-lg leading-relaxed text-white/60 max-w-2xl mx-auto mt-3">
                 Automated severity classification & duplicate detection.
               </p>
             </motion.div>
@@ -595,51 +646,50 @@ export default function Landing({ onEnterWorkspace }) {
             </motion.div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-2xl mx-auto">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">222k+</div>
-                <div className="text-white/60 text-sm">Training Records</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">{'<'} 1s</div>
-                <div className="text-white/60 text-sm">Prediction Latency</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">S1–S4</div>
-                <div className="text-white/60 text-sm">Auto-Classification</div>
-              </div>
+            <div className="grid grid-cols-3 max-w-2xl mx-auto rounded-2xl overflow-hidden border border-white/10 bg-white/[0.04] backdrop-blur-sm divide-x divide-white/10">
+              {[
+                { value: '222k+', label: 'Training Records' },
+                { value: '< 1s',  label: 'Prediction Latency' },
+                { value: 'S1–S4', label: 'Auto-Classification' },
+              ].map((s) => (
+                <div key={s.label} className="text-center px-4 py-6 sm:px-8 sm:py-7">
+                  <div className="text-3xl sm:text-4xl font-bold text-white mb-1.5">{s.value}</div>
+                  <div className="text-white/55 text-xs sm:text-sm font-medium">{s.label}</div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
         {/* SECTION 2: PLATFORM */}
-        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative py-24">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/5 to-transparent pointer-events-none" />
+        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative py-24">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent pointer-events-none" />
           <div className="max-w-5xl w-full relative z-10">
             <div className="text-center mb-16">
-              <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-blue-400 font-bold uppercase tracking-widest">
+              <div className="mb-5 inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/25 px-4 py-1.5 text-xs text-blue-300 font-bold uppercase tracking-widest">
                 Platform
               </div>
               <AnimatedScrollHeader
                 title="The bug triage workspace<br/>for product teams."
                 subtitle="Submit, classify, and resolve — in one place."
-                className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
-                subtitleClassName="text-xl md:text-2xl text-white/60 leading-relaxed max-w-2xl mx-auto"
+                className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
+                subtitleClassName="text-xl md:text-2xl text-white/70 leading-relaxed max-w-2xl mx-auto"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
-                { badge: 'Severity Analysis', title: 'ML Classification', desc: 'S1–S4 predictions in under a second. Trained on 222k+ real Firefox reports.', color: 'text-blue-400', border: 'hover:border-blue-500/30' },
-                { badge: 'Duplicate Detection', title: 'Semantic Search', desc: 'Vector embeddings check every new report against your full bug history.', color: 'text-purple-400', border: 'hover:border-purple-500/30' },
-                { badge: 'Multi-Tenancy', title: 'Tenant Isolation', desc: 'Each company runs on its own Postgres table with Row-Level Security.', color: 'text-emerald-400', border: 'hover:border-emerald-500/30' },
-                { badge: 'Access Control', title: 'Role-Based Permissions', desc: 'User, Admin, and Super Admin tiers with invite flows and approval queues.', color: 'text-amber-400', border: 'hover:border-amber-500/30' },
-                { badge: 'Bulk Ingestion', title: 'CSV & JSON Import', desc: 'Upload thousands of records at once. Each entry classified on arrival.', color: 'text-pink-400', border: 'hover:border-pink-500/30' },
-                { badge: 'Resolution', title: 'Fix Surfacing', desc: 'Retrieve resolved duplicates and the fixes that shipped with them.', color: 'text-cyan-400', border: 'hover:border-cyan-500/30' },
+                { badge: 'Severity Analysis',   title: 'ML Classification',      desc: 'S1–S4 predictions in under a second. Trained on 222k+ real Firefox reports.',  color: 'text-blue-300',   hoverBorder: 'hover:border-blue-400/40',   glow: 'group-hover:from-blue-500/8'   },
+                { badge: 'Duplicate Detection', title: 'Semantic Search',         desc: 'Vector embeddings check every new report against your full bug history.',       color: 'text-purple-300', hoverBorder: 'hover:border-purple-400/40', glow: 'group-hover:from-purple-500/8' },
+                { badge: 'Multi-Tenancy',       title: 'Tenant Isolation',        desc: 'Each company runs on its own Postgres table with Row-Level Security.',          color: 'text-emerald-300',hoverBorder: 'hover:border-emerald-400/40',glow: 'group-hover:from-emerald-500/8'},
+                { badge: 'Access Control',      title: 'Role-Based Permissions',  desc: 'User, Admin, and Super Admin tiers with invite flows and approval queues.',     color: 'text-amber-300',  hoverBorder: 'hover:border-amber-400/40',  glow: 'group-hover:from-amber-500/8'  },
+                { badge: 'Bulk Ingestion',      title: 'CSV & JSON Import',       desc: 'Upload thousands of records at once. Each entry classified on arrival.',        color: 'text-pink-300',   hoverBorder: 'hover:border-pink-400/40',   glow: 'group-hover:from-pink-500/8'   },
+                { badge: 'Resolution',          title: 'Fix Surfacing',           desc: 'Retrieve resolved duplicates and the fixes that shipped with them.',            color: 'text-cyan-300',   hoverBorder: 'hover:border-cyan-400/40',   glow: 'group-hover:from-cyan-500/8'   },
               ].map((f, i) => (
-                <div key={i} className={`bg-white/[0.02] border border-white/8 rounded-2xl p-6 transition-all duration-200 hover:bg-white/[0.04] ${f.border}`}>
-                  <div className={`text-xs font-bold uppercase tracking-widest mb-3 ${f.color}`}>{f.badge}</div>
-                  <h3 className="text-white font-bold text-lg mb-2 tracking-tight leading-snug">{f.title}</h3>
-                  <p className="text-white/45 text-sm leading-relaxed">{f.desc}</p>
+                <div key={i} className={`group relative bg-white/[0.06] backdrop-blur-sm border border-white/[0.12] rounded-2xl p-7 transition-all duration-300 hover:bg-white/[0.10] hover:-translate-y-0.5 hover:shadow-xl ${f.hoverBorder}`}>
+                  <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br from-transparent to-transparent ${f.glow} transition-all duration-300 pointer-events-none`} />
+                  <div className={`text-xs font-bold uppercase tracking-widest mb-4 ${f.color}`}>{f.badge}</div>
+                  <h3 className="text-white font-bold text-xl mb-3 tracking-tight leading-snug">{f.title}</h3>
+                  <p className="text-white/65 text-sm leading-relaxed">{f.desc}</p>
                 </div>
               ))}
             </div>
@@ -647,44 +697,55 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 3: CAPABILITIES */}
-        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative">
-           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/5 to-transparent pointer-events-none" />
+        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative py-24">
+           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/10 to-transparent pointer-events-none" />
            <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-16 items-center relative z-10">
               <div className="text-left">
-                 <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-purple-400 font-bold uppercase tracking-widest">
+                 <div className="mb-5 inline-flex items-center rounded-full bg-purple-500/10 border border-purple-500/25 px-4 py-1.5 text-xs text-purple-300 font-bold uppercase tracking-widest">
                    Capabilities
                  </div>
                  <AnimatedScrollHeader
                    title="A model that learns from your team."
                    subtitle="Corrections feed back into training. Accuracy improves every review cycle."
-                   className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
-                   subtitleClassName="text-xl text-white/60 leading-relaxed mb-8"
+                   className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
+                   subtitleClassName="text-xl text-white/70 leading-relaxed mb-10"
                  />
-                 <ul className="space-y-4">
-                   <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> TF-IDF n-gram feature extraction</li>
-                   <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> Vector RAG duplicate detection</li>
-                   <li className="flex items-center gap-3 text-lg text-white/80"><CheckCircle size={20} className="text-purple-400 flex-shrink-0" /> Feedback-driven model retraining</li>
+                 <ul className="space-y-5">
+                   {[
+                     'TF-IDF n-gram feature extraction',
+                     'Vector RAG duplicate detection',
+                     'Feedback-driven model retraining',
+                   ].map((item) => (
+                     <li key={item} className="flex items-center gap-4 text-lg text-white/85 bg-white/[0.04] border border-white/[0.10] rounded-xl px-5 py-4 backdrop-blur-sm">
+                       <CheckCircle size={20} className="text-purple-400 flex-shrink-0" />
+                       {item}
+                     </li>
+                   ))}
                  </ul>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-3xl aspect-square flex items-center justify-center p-8 relative overflow-hidden backdrop-blur-md shadow-2xl">
-                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-500/10 via-transparent to-transparent pointer-events-none" />
-                 <Brain size={120} className="text-white/20" />
+              <div className="bg-white/[0.06] border border-white/[0.15] rounded-3xl aspect-square flex items-center justify-center relative overflow-hidden backdrop-blur-md shadow-2xl p-10">
+                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-500/20 via-purple-900/5 to-transparent pointer-events-none" />
+                 {/* Decorative rings */}
+                 <div className="absolute w-48 h-48 rounded-full border border-purple-500/15 pointer-events-none" />
+                 <div className="absolute w-64 h-64 rounded-full border border-purple-500/10 pointer-events-none" />
+                 <div className="absolute w-80 h-80 rounded-full border border-purple-500/5 pointer-events-none" />
+                 <Brain size={120} className="text-purple-400/60 relative z-10" />
               </div>
            </div>
         </section>
 
         {/* SECTION 4: ARCHITECTURE */}
-        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-0 border-t border-white/5 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/5 to-transparent pointer-events-none" />
+        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-0 border-t border-white/[0.08] relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/10 to-transparent pointer-events-none" />
           <div className="w-full text-center relative z-10 py-24">
-             <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-emerald-400 font-bold uppercase tracking-widest">
+             <div className="mb-5 inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/25 px-4 py-1.5 text-xs text-emerald-300 font-bold uppercase tracking-widest">
                Architecture & Stack
              </div>
              <AnimatedScrollHeader
                title="Built with enterprise tools."
                subtitle="FastAPI and Supabase Postgres. Row-Level Security enforced per tenant."
-               className="text-4xl md:text-6xl font-bold tracking-tight mb-6 px-6"
-               subtitleClassName="text-xl text-white/60 leading-relaxed max-w-2xl mx-auto mb-16 px-6"
+               className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 px-6"
+               subtitleClassName="text-xl text-white/70 leading-relaxed max-w-2xl mx-auto mb-16 px-6"
              />
              
              <TechStackCarousel />
@@ -698,57 +759,57 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 5: DOCUMENTATION */}
-        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative pb-24">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/5 to-transparent pointer-events-none" />
+        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative pb-24 pt-24">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent pointer-events-none" />
           <div className="max-w-4xl w-full relative z-10">
              <div className="text-center mb-14">
-               <div className="mb-4 inline-flex items-center rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/50 font-bold uppercase tracking-widest">
+               <div className="mb-5 inline-flex items-center rounded-full bg-white/[0.08] border border-white/15 px-4 py-1.5 text-xs text-white/70 font-bold uppercase tracking-widest">
                  Open Source
                </div>
                <AnimatedScrollHeader
                  title="Read the source."
                  subtitle="ML pipeline, backend, and frontend — all in one repository."
-                 className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
-                 subtitleClassName="text-xl text-white/60 leading-relaxed max-w-xl mx-auto"
+                 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
+                 subtitleClassName="text-xl text-white/70 leading-relaxed max-w-xl mx-auto"
                />
              </div>
 
              {/* GitHub Open Source Banner */}
              <div className="mt-16 relative group">
-               <div className="absolute -inset-px rounded-[2rem] bg-gradient-to-r from-white/10 via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-               <div className="relative bg-white/[0.02] border border-white/10 rounded-[2rem] p-8 lg:p-12 overflow-hidden">
+               <div className="absolute -inset-px rounded-[2rem] bg-gradient-to-r from-white/15 via-white/8 to-white/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+               <div className="relative bg-white/[0.07] border border-white/[0.15] rounded-[2rem] p-8 lg:p-12 overflow-hidden backdrop-blur-sm">
 
                  {/* Background glow */}
-                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-white/5 via-transparent to-transparent pointer-events-none" />
-                 <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-white/8 via-transparent to-transparent pointer-events-none" />
+                 <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
                  <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
 
                    {/* Left — text */}
                    <div className="flex items-start gap-5 flex-1">
-                     <div className="w-12 h-12 rounded-2xl bg-white/8 border border-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                       <GithubIcon size={22} className="text-white" />
+                     <div className="w-14 h-14 rounded-2xl bg-white/[0.10] border border-white/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                       <GithubIcon size={24} className="text-white" />
                      </div>
                      <div>
-                       <div className="flex items-center gap-3 mb-2">
-                         <span className="text-[11px] font-bold uppercase tracking-widest text-white/40 border border-white/10 px-2.5 py-1 rounded-full">Open Source</span>
+                       <div className="flex items-center gap-3 mb-3">
+                         <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 border border-white/15 bg-white/[0.06] px-3 py-1 rounded-full">Open Source</span>
                        </div>
-                       <h3 className="text-xl font-bold text-white tracking-tight mb-2">Built in the open.</h3>
-                       <p className="text-sm text-white/50 leading-relaxed max-w-lg">
+                       <h3 className="text-2xl font-bold text-white tracking-tight mb-2">Built in the open.</h3>
+                       <p className="text-base text-white/65 leading-relaxed max-w-lg">
                          Full source — ML pipeline, backend, frontend. Fork and contribute.
                        </p>
-                       <div className="flex items-center gap-4 mt-4">
-                         <div className="flex items-center gap-1.5 text-white/40 text-xs font-medium">
-                           <Star size={13} className="text-amber-400/70" />
+                       <div className="flex flex-wrap items-center gap-4 mt-5">
+                         <div className="flex items-center gap-1.5 text-white/55 text-xs font-medium">
+                           <Star size={13} className="text-amber-400" />
                            <span className="font-mono">Open Source</span>
                          </div>
-                         <div className="w-px h-3 bg-white/10" />
-                         <div className="flex items-center gap-1.5 text-white/40 text-xs font-medium">
-                           <GitFork size={13} className="text-blue-400/70" />
+                         <div className="w-px h-3 bg-white/15" />
+                         <div className="flex items-center gap-1.5 text-white/55 text-xs font-medium">
+                           <GitFork size={13} className="text-blue-400" />
                            <span className="font-mono">Fork &amp; Contribute</span>
                          </div>
-                         <div className="w-px h-3 bg-white/10" />
-                         <div className="flex items-center gap-1.5 text-white/40 text-xs font-mono">
+                         <div className="w-px h-3 bg-white/15" />
+                         <div className="flex items-center gap-1.5 text-white/55 text-xs font-mono">
                            tajmilur-rahman / senior-design-2025
                          </div>
                        </div>
@@ -761,7 +822,7 @@ export default function Landing({ onEnterWorkspace }) {
                        href={GITHUB_REPO}
                        target="_blank"
                        rel="noopener noreferrer"
-                       className="flex items-center justify-center gap-2.5 bg-white text-black hover:bg-zinc-100 font-bold text-sm px-6 py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+                       className="flex items-center justify-center gap-2.5 bg-white text-black hover:bg-zinc-100 font-bold text-sm px-7 py-3.5 rounded-2xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:shadow-[0_0_35px_rgba(255,255,255,0.25)] hover:-translate-y-0.5"
                      >
                        <GithubIcon size={16} />
                        View on GitHub
@@ -770,7 +831,7 @@ export default function Landing({ onEnterWorkspace }) {
                        href={`${GITHUB_REPO}/archive/refs/heads/main.zip`}
                        target="_blank"
                        rel="noopener noreferrer"
-                       className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/70 hover:text-white font-semibold text-sm px-6 py-3 rounded-2xl transition-all"
+                       className="flex items-center justify-center gap-2 bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 hover:border-white/25 text-white/75 hover:text-white font-semibold text-sm px-7 py-3.5 rounded-2xl transition-all hover:-translate-y-0.5"
                      >
                        <ExternalLink size={14} />
                        Download ZIP
@@ -785,28 +846,30 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* SECTION 6: TEAM CREDITS */}
-        <section className="w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/5 relative py-24">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-900/5 to-transparent pointer-events-none" />
+        <section className="w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative py-24">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-900/10 to-transparent pointer-events-none" />
           <div className="max-w-4xl w-full relative z-10">
 
-            {/* Header — Gannon emblem + title */}
+            {/* Header */}
             <div className="text-center mb-16">
-<div className="mb-3 text-xs font-bold uppercase tracking-widest text-indigo-400">Senior Design Project · 2025-26</div>
+              <div className="mb-5 inline-flex items-center rounded-full bg-indigo-500/10 border border-indigo-500/25 px-4 py-1.5 text-xs text-indigo-300 font-bold uppercase tracking-widest">
+                Senior Design Project · 2025-26
+              </div>
               <AnimatedScrollHeader
                 title="Gannon University"
                 subtitle="Erie, Pennsylvania"
                 className="text-4xl md:text-5xl font-bold tracking-tight mb-3"
-                subtitleClassName="text-white/40 text-base"
+                subtitleClassName="text-white/55 text-lg"
               />
             </div>
 
             {/* Team Members */}
             <div className="mb-10">
-              <p className="text-xs font-bold uppercase tracking-widest text-white/30 text-center mb-6">Built and developed by</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-white/40 text-center mb-7">Built and developed by</p>
               <div className="flex flex-wrap justify-center gap-4">
                 {['Amartuvshin Ganzorig', 'Anunjin Batdelger', 'Koshi Yuasa'].map((name) => (
-                  <div key={name} className="bg-white/[0.04] border border-white/10 rounded-2xl px-7 py-4 text-center backdrop-blur-sm">
-                    <div className="text-white font-bold text-lg tracking-tight">{name}</div>
+                  <div key={name} className="bg-white/[0.08] border border-white/[0.15] rounded-2xl px-8 py-5 text-center backdrop-blur-sm hover:bg-white/[0.12] hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="text-white font-bold text-xl tracking-tight">{name}</div>
                   </div>
                 ))}
               </div>
@@ -814,27 +877,24 @@ export default function Landing({ onEnterWorkspace }) {
 
             {/* Faculty + Advisors — 3-column grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Mentor */}
-              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-                <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-4">Faculty Mentor</p>
-                <div className="text-white font-bold text-lg">Dr. Tajmilur Rahman</div>
+              <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-7 hover:bg-white/[0.09] transition-all duration-200">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-5">Faculty Mentor</p>
+                <div className="text-white font-bold text-xl">Dr. Tajmilur Rahman</div>
               </div>
 
-              {/* Senior Design Professors */}
-              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-                <p className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-4">Senior Design Professors</p>
-                <div className="space-y-2">
-                  <div className="text-white font-bold text-lg">Dr. Mei-Huei Tang</div>
-                  <div className="text-white font-bold text-lg">Dr. Richard Matovu</div>
+              <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-7 hover:bg-white/[0.09] transition-all duration-200">
+                <p className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-5">Senior Design Professors</p>
+                <div className="space-y-3">
+                  <div className="text-white font-bold text-xl">Dr. Mei-Huei Tang</div>
+                  <div className="text-white font-bold text-xl">Dr. Richard Matovu</div>
                 </div>
               </div>
 
-              {/* Mozilla guidance */}
-              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-4">Mozilla Firefox · Guidance</p>
-                <div className="space-y-2">
-                  <div className="text-white font-bold text-lg">Marco Castelluccio</div>
-                  <div className="text-white font-bold text-lg">Suhaib Mujahid</div>
+              <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-7 hover:bg-white/[0.09] transition-all duration-200">
+                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-5">Mozilla Firefox · Guidance</p>
+                <div className="space-y-3">
+                  <div className="text-white font-bold text-xl">Marco Castelluccio</div>
+                  <div className="text-white font-bold text-xl">Suhaib Mujahid</div>
                 </div>
               </div>
             </div>
