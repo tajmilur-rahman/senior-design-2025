@@ -507,16 +507,52 @@ export default function Performance({ user, onTrainStart }) {
       {showTrainModal && <TrainModal onClose={() => setShowTrainModal(false)} onDone={fetchMetrics} isSuperAdmin={user?.role === 'super_admin'} onTrainStart={onTrainStart} />}
       {showResetModal && <ResetModal isSuperAdmin={isSuperAdmin} companies={companies} onClose={() => setShowResetModal(false)} onReset={handleReset} resettingKey={resettingKey} />}
       {!isSuperAdmin && <GlobalModelBanner />}
+
+      {/* Super admin keeps company selector so they can switch without being stuck */}
+      {isSuperAdmin && (
+        <div className="flex items-center gap-4 mb-6 p-4 rounded-2xl border border-white/10" style={{ background: 'var(--card-bg)' }}>
+          <Building2 size={15} className="text-amber-400 flex-shrink-0" />
+          <span className="text-[11px] font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">Viewing model for</span>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => { setSelectedCompanyId(''); fetchMetrics(''); }}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${selectedCompanyId === '' ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}
+            >
+              <Globe size={11} className="inline mr-1.5" />Universal
+            </button>
+            {companies.map(co => (
+              <button
+                key={co.id}
+                onClick={() => { setSelectedCompanyId(String(co.id)); fetchMetrics(String(co.id)); }}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${String(selectedCompanyId) === String(co.id) ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}
+              >
+                {co.name}
+                {co.has_own_model && <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />}
+              </button>
+            ))}
+          </div>
+          {meta.company_name && (
+            <span className="ml-auto text-[11px] font-bold text-white/30 whitespace-nowrap">{meta.company_name}</span>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-6 text-center">
         <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-t from-white/5 to-transparent" />
           <BrainCircuit size={32} className="text-white/20 relative z-10" />
         </div>
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">{isSuperAdmin ? 'No Universal Model Trained Yet' : 'No Company Model Trained Yet'}</h2>
+          <h2 className="text-3xl font-bold text-white mb-2">
+            {isSuperAdmin
+              ? (selectedCompanyId === '' ? 'No Universal Model Trained Yet' : `No Model Trained for ${meta.company_name || 'This Company'}`)
+              : 'No Company Model Trained Yet'}
+          </h2>
           <p className="text-white/40 text-sm max-w-sm leading-relaxed">
-            {isSuperAdmin 
-              ? 'Train the universal baseline model on the aggregated dataset to unlock global severity predictions and analytics.' 
+            {isSuperAdmin
+              ? (selectedCompanyId === ''
+                  ? 'Train the universal baseline model on the aggregated dataset to unlock global severity predictions and analytics.'
+                  : 'This company has not trained a model yet. You can train one on their behalf using the button below.')
               : "Train a model on your company's bug data to unlock isolated severity predictions, performance metrics, and the confusion matrix."}
           </p>
         </div>
@@ -570,7 +606,7 @@ export default function Performance({ user, onTrainStart }) {
         </div>
       </div>
 
-      <ModelShowcase liveDataProp={modelData} isSuperAdmin={isSuperAdmin} />
+      <ModelShowcase liveDataProp={modelData} isSuperAdmin={isSuperAdmin} selectedCompanyId={selectedCompanyId} />
 
       {/* Super admin: company selector to act on behalf of a tenant */}
       {isSuperAdmin && (

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { Cpu } from 'lucide-react';
+import { Cpu, Globe } from 'lucide-react';
 
-export function ModelShowcase({ liveDataProp, isSuperAdmin }) {
+export function ModelShowcase({ liveDataProp, isSuperAdmin, selectedCompanyId }) {
   const [localData, setLocalData] = useState(null);
 
   useEffect(() => {
@@ -16,8 +16,10 @@ export function ModelShowcase({ liveDataProp, isSuperAdmin }) {
 
   const liveData = liveDataProp || localData;
 
-  const accent   = '#10b981';
-  const accentFg = '#6ee7b7';
+  // Super admin on universal view uses indigo; company-specific view uses emerald
+  const isGlobalView = isSuperAdmin && selectedCompanyId === '';
+  const accent   = isGlobalView ? '#6366f1' : '#10b981';
+  const accentFg = isGlobalView ? '#a5b4fc' : '#6ee7b7';
 
   let status   = 'Learning';
   let metadata = ['Algorithm','Estimators','Volume','Features','Top Weakness','Updated']
@@ -26,7 +28,9 @@ export function ModelShowcase({ liveDataProp, isSuperAdmin }) {
   if (liveData) {
     const curr    = liveData.current || {};
     const fb      = liveData.feedback_stats || {};
-    const trained = curr.model_source === 'company' || curr.model_status === 'ready';
+    const trained = isGlobalView
+      ? (curr.model_source === 'global' || curr.model_status === 'ready')
+      : (curr.model_source === 'company' || curr.model_status === 'ready');
     status = trained ? 'Active' : 'Learning';
     metadata = [
       { label: 'Algorithm',    value: trained ? 'Random Forest'                                   : '—' },
@@ -55,14 +59,16 @@ export function ModelShowcase({ liveDataProp, isSuperAdmin }) {
         <div className="flex items-center gap-3.5 px-5 py-4 sm:w-60 flex-shrink-0">
           <div className="w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0"
             style={{ background: `${accent}1a`, borderColor: `${accent}40` }}>
-            <Cpu size={17} style={{ color: accentFg }} strokeWidth={1.6} />
+            {isGlobalView
+              ? <Globe size={17} style={{ color: accentFg }} strokeWidth={1.6} />
+              : <Cpu   size={17} style={{ color: accentFg }} strokeWidth={1.6} />}
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: accentFg }}>
-              Company Model
+              {isGlobalView ? 'Global Model' : 'Company Model'}
             </div>
             <div className="text-sm font-bold leading-tight" style={{ color: 'var(--text-main)' }}>
-              Company Fine-Tuned
+              {isGlobalView ? 'Universal Baseline' : 'Company Fine-Tuned'}
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isActive ? 'animate-pulse' : ''}`}

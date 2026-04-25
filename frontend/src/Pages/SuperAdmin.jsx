@@ -343,25 +343,8 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
         </div>
       </div>
 
-      {/* Global stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 mb-8">
-        {[
-          { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={16} className="text-indigo-400" />,         sub: 'Across all orgs' },
-          { label: 'Critical open',  value: total_critical.toLocaleString(), icon: <AlertTriangle size={16} className="text-red-400" />, sub: 'Needs attention' },
-          { label: 'Active users',   value: total_users,                     icon: <Users size={16} className="text-emerald-400" />,     sub: 'All organisations' },
-          { label: 'Avg model acc.', value: avg_acc + '%',                   icon: <TrendingUp size={16} className="text-indigo-400" />, sub: 'Cross-org average' },
-        ].map(s => (
-          <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 lg:p-6 shadow-2xl relative overflow-hidden group transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:bg-white/[0.04]">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="flex items-center gap-2 mb-4 relative z-10">{s.icon}<span className="text-[11px] font-bold text-white/60 uppercase tracking-widest">{s.label}</span></div>
-            <div className="text-3xl font-bold text-white font-mono tracking-tight mb-2 relative z-10">{s.value}</div>
-            <div className="text-xs text-white/40 font-medium relative z-10">{s.sub}</div>
-          </div>
-        ))}
-      </div>
-
       {/* Tabs */}
-      <div className="flex gap-1 p-1.5 bg-white/5 border border-white/10 rounded-2xl mb-8 w-fit backdrop-blur-md">
+      <div className="flex gap-1 p-1.5 bg-white/5 border border-white/10 rounded-2xl mb-6 w-fit backdrop-blur-md">
         {[{ id: 'orgs', label: 'Organizations', icon: <Globe size={14} /> }, { id: 'users', label: 'Users', icon: <Users size={14} /> }].map(t => {
           const isActive = activeTab === t.id;
           return (
@@ -383,8 +366,8 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
             </div>
           )}
 
-          {/* Registered Organizations — shown first */}
-          <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden mb-8">
+          {/* Registered Organizations — at the top */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-2xl overflow-hidden mb-6">
             <div className="p-6 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
               <Globe size={16} className="text-indigo-400" />
               <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
@@ -434,7 +417,23 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
             </div>
           </div>
 
-          {/* Pending Approvals — shown below organizations */}
+          {/* Global stats — compact summary strip */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            {[
+              { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={14} className="text-indigo-400" />,        sub: 'Across all orgs' },
+              { label: 'Critical open',  value: total_critical.toLocaleString(), icon: <AlertTriangle size={14} className="text-red-400" />, sub: 'Needs attention' },
+              { label: 'Active users',   value: total_users,                     icon: <Users size={14} className="text-emerald-400" />,    sub: 'All organisations' },
+              { label: 'Avg model acc.', value: avg_acc + '%',                   icon: <TrendingUp size={14} className="text-indigo-400" />, sub: 'Cross-org average' },
+            ].map(s => (
+              <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-xl p-4 relative overflow-hidden group transition-all duration-200 hover:bg-white/[0.04]">
+                <div className="flex items-center gap-2 mb-2">{s.icon}<span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{s.label}</span></div>
+                <div className="text-xl font-bold text-white font-mono tracking-tight mb-0.5">{s.value}</div>
+                <div className="text-[11px] text-white/30 font-medium">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pending Approvals — shown below stats */}
           {(pending.length > 0 || actionMsg) && (
             <div className="bg-amber-500/[0.03] border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden mb-8 animate-in fade-in">
               <div className="p-5 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-3">
@@ -524,6 +523,22 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
       {/* ── USERS TAB ── */}
       {activeTab === 'users' && (
         <>
+          {/* Compact stats strip for users tab context */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            {[
+              { label: 'Total records',  value: total_bugs.toLocaleString(),     icon: <Bug size={14} className="text-indigo-400" />,        sub: 'Across all orgs' },
+              { label: 'Critical open',  value: total_critical.toLocaleString(), icon: <AlertTriangle size={14} className="text-red-400" />, sub: 'Needs attention' },
+              { label: 'Active users',   value: total_users,                     icon: <Users size={14} className="text-emerald-400" />,    sub: 'All organisations' },
+              { label: 'Avg model acc.', value: avg_acc + '%',                   icon: <TrendingUp size={14} className="text-indigo-400" />, sub: 'Cross-org average' },
+            ].map(s => (
+              <div key={s.label} className="bg-white/[0.02] border border-white/10 rounded-xl p-4 relative overflow-hidden transition-all duration-200 hover:bg-white/[0.04]">
+                <div className="flex items-center gap-2 mb-2">{s.icon}<span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{s.label}</span></div>
+                <div className="text-xl font-bold text-white font-mono tracking-tight mb-0.5">{s.value}</div>
+                <div className="text-[11px] text-white/30 font-medium">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
           <div className="mb-6 relative">
             <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
             <input

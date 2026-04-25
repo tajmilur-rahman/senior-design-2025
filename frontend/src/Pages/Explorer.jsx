@@ -174,7 +174,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
     const [sevFilter,       setSevFilter]       = useState(initialFilters?.sev || '');
     const [statusFilter,    setStatusFilter]    = useState(initialFilters?.status || '');
     const [compFilter,      setCompFilter]      = useState(initialFilters?.comp || '');
-    const [companyFilter,   setCompanyFilter]   = useState('');  // company_id for system users
+    const [companyFilter,   setCompanyFilter]   = useState(initialFilters?.company_id ? String(initialFilters.company_id) : '');  // company_id for system users
     const [companies,       setCompanies]       = useState([]);
     const [sortConfig,      setSortConfig]      = useState({ key: 'id', direction: 'desc' });
     const [page,            setPage]            = useState(1);
@@ -191,6 +191,9 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
     }, [isSystemLevel]);
 
     useEffect(() => { setSearch(initialQuery); setPage(1); }, [initialQuery]);
+    useEffect(() => {
+        if (initialFilters?.company_id) setCompanyFilter(String(initialFilters.company_id));
+    }, [initialFilters?.company_id]);
     useEffect(() => {
         const handler = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 350);
         return () => clearTimeout(handler);

@@ -218,119 +218,184 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
         </div>
       )}
 
-      {/* ── Per-company stat override ────────────────────────────────────────── */}
-      {selectedCompany && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8 border border-amber-500/20 rounded-2xl p-1 bg-amber-500/[0.02]">
+      {/* ── Registered Organizations — top of page ──────────────────────────── */}
+      <MotionBentoCard
+        whileInView={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 20 }}
+        viewport={{ once: true }}
+        className="overflow-hidden mb-6"
+        style={{ background: 'var(--card-bg)' }}
+      >
+        <div className="p-5 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
+          <Globe size={15} className="text-indigo-400" />
+          <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
+          <span className="ml-auto text-[11px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded-lg" style={{ background: 'var(--bg)' }}>
+            {companies.length} org{companies.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[700px]">
+            <thead>
+              <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
+                {['Organisation', 'Total Bugs', 'Critical', 'Resolved', 'Users', 'Resolution Rate', '', ''].map((h, i) => (
+                  <th key={i} className="px-6 py-3 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {loadingCo ? (
+                <tr><td colSpan={8} className="py-16 text-center">
+                  <RefreshCw size={22} className="animate-spin text-white/30 mx-auto" />
+                </td></tr>
+              ) : companies.length === 0 ? (
+                <tr><td colSpan={8} className="py-12 text-center text-white/30 text-sm font-medium">No companies found.</td></tr>
+              ) : companies.map(co => {
+                const rate = co.total > 0 ? ((co.resolved / co.total) * 100).toFixed(1) : '0';
+                return (
+                  <tr key={co.id} className="transition-colors hover:bg-white/[0.02]">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
+                          <Building2 size={14} className="text-white" />
+                        </div>
+                        <span className="font-bold text-sm text-white truncate max-w-[160px]">{co.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      <span className="text-[11px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded border border-red-500/20">
+                        {co.critical || 0}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-[var(--accent)] font-bold">{(co.resolved || 0).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-white/50">{co.users || 0}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: rate + '%' }} />
+                        </div>
+                        <span className="text-xs font-bold text-white/60 font-mono">{rate}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => onNavigate('database', '', null, { company_id: co.id })}
+                        className="text-[11px] font-bold text-white/30 hover:text-white uppercase tracking-widest transition-colors flex items-center gap-1"
+                      >
+                        Explore <ArrowRight size={10} />
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <button
+                        onClick={() => onSelectCompany && onSelectCompany(selectedCompany?.id === co.id ? null : co)}
+                        className={`text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 px-2.5 py-1 rounded ${
+                          selectedCompany?.id === co.id
+                            ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                            : 'text-white/30 hover:text-amber-400 hover:bg-amber-500/10'
+                        }`}
+                      >
+                        {selectedCompany?.id === co.id ? 'Selected' : 'Select'} <Building2 size={10} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* Mobile card list */}
+        <div className="block md:hidden divide-y divide-white/5">
+          {loadingCo ? (
+            <div className="py-12 text-center">
+              <RefreshCw size={20} className="animate-spin text-white/30 mx-auto" />
+            </div>
+          ) : companies.length === 0 ? (
+            <div className="py-10 text-center text-white/30 text-sm font-medium">No companies found.</div>
+          ) : companies.map(co => {
+            const rate = co.total > 0 ? ((co.resolved / co.total) * 100).toFixed(1) : '0';
+            return (
+              <div key={co.id} className="p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
+                      <Building2 size={13} className="text-white" />
+                    </div>
+                    <span className="font-bold text-sm text-white truncate">{co.name}</span>
+                  </div>
+                  <button
+                    onClick={() => onSelectCompany && onSelectCompany(selectedCompany?.id === co.id ? null : co)}
+                    className={`text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 px-2.5 py-1 rounded flex-shrink-0 ${
+                      selectedCompany?.id === co.id
+                        ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                        : 'text-white/30 border border-white/10'
+                    }`}
+                  >
+                    {selectedCompany?.id === co.id ? 'Selected' : 'Select'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Total</div>
+                    <div className="text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</div>
+                  </div>
+                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Critical</div>
+                    <div className="text-sm font-bold text-red-400 font-mono">{co.critical || 0}</div>
+                  </div>
+                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Rate</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: 'var(--accent)' }}>{rate}%</div>
+                  </div>
+                </div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: rate + '%', background: 'var(--accent)' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </MotionBentoCard>
+
+      {/* ── Compact stat strip ───────────────────────────────────────────────── */}
+      {selectedCompany ? (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 border border-amber-500/20 rounded-2xl p-1 bg-amber-500/[0.02]">
           <div className="col-span-2 md:col-span-5 px-4 pt-3 pb-1 flex items-center gap-2">
-            <Building2 size={14} className="text-amber-400" />
+            <Building2 size={13} className="text-amber-400" />
             <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">{selectedCompany.name} — Stats</span>
           </div>
           {[
-            { label: 'Total Records',   value: (selectedCompany.total    || 0).toLocaleString(), color: 'text-white'       },
-            { label: 'Critical Open',   value: (selectedCompany.critical || 0).toLocaleString(), color: 'text-red-400'     },
-            { label: 'Resolved',        value: (selectedCompany.resolved || 0).toLocaleString(), color: 'text-[var(--accent)]'   },
-            { label: 'Active Users',    value:  selectedCompany.users    || 0,                   color: 'text-white'       },
+            { label: 'Total Records',   value: (selectedCompany.total    || 0).toLocaleString(), color: 'text-white'            },
+            { label: 'Critical Open',   value: (selectedCompany.critical || 0).toLocaleString(), color: 'text-red-400'          },
+            { label: 'Resolved',        value: (selectedCompany.resolved || 0).toLocaleString(), color: 'text-[var(--accent)]'  },
+            { label: 'Active Users',    value:  selectedCompany.users    || 0,                   color: 'text-white'            },
             { label: 'Resolution Rate', value: (selectedCompany.total > 0
-                ? ((selectedCompany.resolved / selectedCompany.total) * 100).toFixed(1)
-                : '0') + '%',                                                                     color: 'text-amber-400'  },
+                ? ((selectedCompany.resolved / selectedCompany.total) * 100).toFixed(1) : '0') + '%', color: 'text-amber-400'  },
           ].map(s => (
-            <BentoCard key={s.label} className="p-5" style={{ background: 'var(--card-bg)' }}>
-              <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">{s.label}</div>
-              <div className={`text-2xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
-          </BentoCard>
+            <BentoCard key={s.label} className="p-4" style={{ background: 'var(--card-bg)' }}>
+              <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{s.label}</div>
+              <div className={`text-xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
+            </BentoCard>
           ))}
         </div>
-      )}
-
-      {/* ── Global stat cards ────────────────────────────────────────────────── */}
-      {!selectedCompany && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[
-            {
-              label: 'Total Records',
-              value: totalBugs.toLocaleString(),
-              icon: <Database size={18} className="text-indigo-400" />,
-              valueColor: 'text-white',
-              nav: () => onNavigate('database'),
-            },
-            {
-              label: 'Critical Open',
-              value: totalCritical.toLocaleString(),
-              icon: <AlertTriangle size={18} className="text-red-400" />,
-              valueColor: 'text-red-400',
-              nav: () => onNavigate('database', '', null, { sev: 'S1' }),
-            },
-            {
-              label: 'Resolution Rate',
-              value: resolutionRate + '%',
-              icon: <TrendingUp size={18} className="text-[var(--accent)]" />,
-              valueColor: 'text-[var(--accent)]',
-              nav: null,
-            },
+            { label: 'Total Records',   value: totalBugs.toLocaleString(),     icon: <Database size={14} className="text-indigo-400" />,           color: 'text-white',           nav: () => onNavigate('database') },
+            { label: 'Critical Open',   value: totalCritical.toLocaleString(), icon: <AlertTriangle size={14} className="text-red-400" />,          color: 'text-red-400',         nav: () => onNavigate('database', '', null, { sev: 'S1' }) },
+            { label: 'Resolution Rate', value: resolutionRate + '%',           icon: <TrendingUp size={14} className="text-[var(--accent)]" />,     color: 'text-[var(--accent)]', nav: null },
+            { label: 'Resolved',        value: totalResolved.toLocaleString(), icon: <ShieldCheck size={14} className="text-[var(--accent)]" />,    color: 'text-[var(--accent)]', nav: () => onNavigate('database', '', null, { status: 'RESOLVED' }) },
+            { label: 'Active Users',    value: totalUsers,                     icon: <Users size={14} className="text-indigo-400" />,               color: 'text-white',           nav: () => onNavigate('superadmin') },
           ].map(s => (
-            <MotionBentoCard
+            <BentoCard
               key={s.label}
-              whileInView={{ opacity: 1, y: 0 }}
-              initial={{ opacity: 0, y: 20 }}
-              viewport={{ once: true }}
               onClick={s.nav || undefined}
-              className={`p-6 ${s.nav ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl' : ''}`}
+              className={`p-4 ${s.nav ? 'cursor-pointer hover:brightness-110' : ''}`}
               style={{ background: 'var(--card-bg)' }}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-white/10" style={{ background: 'var(--bg-elevated)' }}>
-                  {s.icon}
-                </div>
-                {s.nav && (
-                  <ExternalLink size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
-                )}
-              </div>
-              <div className={`text-3xl font-bold font-mono tracking-tight mb-1 ${s.valueColor}`}>{s.value}</div>
-              <div className="text-xs text-white/40 font-medium uppercase tracking-widest">{s.label}</div>
-            </MotionBentoCard>
-          ))}
-        </div>
-      )}
-
-      {/* ── Second row of global stats (when no company selected) ────────────── */}
-      {!selectedCompany && (
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-6 mb-8">
-          {[
-            {
-              label: 'Resolved',
-              value: totalResolved.toLocaleString(),
-              icon: <ShieldCheck size={18} className="text-[var(--accent)]" />,
-              valueColor: 'text-[var(--accent)]',
-              nav: () => onNavigate('database', '', null, { status: 'RESOLVED' }),
-            },
-            {
-              label: 'Active Users',
-              value: totalUsers,
-              icon: <Users size={18} className="text-indigo-400" />,
-              valueColor: 'text-white',
-              nav: () => onNavigate('superadmin'),
-            },
-          ].map(s => (
-            <MotionBentoCard
-              key={s.label}
-              whileInView={{ opacity: 1, y: 0 }}
-              initial={{ opacity: 0, y: 20 }}
-              viewport={{ once: true }}
-              onClick={s.nav || undefined}
-              className={`p-6 ${s.nav ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl' : ''}`}
-              style={{ background: 'var(--card-bg)' }}
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-white/10" style={{ background: 'var(--bg-elevated)' }}>
-                  {s.icon}
-                </div>
-                {s.nav && (
-                  <ExternalLink size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
-                )}
-              </div>
-              <div className={`text-3xl font-bold font-mono tracking-tight mb-1 ${s.valueColor}`}>{s.value}</div>
-              <div className="text-xs text-white/40 font-medium uppercase tracking-widest">{s.label}</div>
-            </MotionBentoCard>
+              <div className="flex items-center gap-1.5 mb-2">{s.icon}<span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span></div>
+              <div className={`text-xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
+            </BentoCard>
           ))}
         </div>
       )}
@@ -427,145 +492,6 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
         </MotionBentoCard>
       </div>
 
-      {/* ── Company breakdown table ──────────────────────────────────────────── */}
-      <MotionBentoCard
-        whileInView={{ opacity: 1, y: 0 }}
-        initial={{ opacity: 0, y: 20 }}
-        viewport={{ once: true }}
-        className="overflow-hidden"
-        style={{ background: 'var(--card-bg)' }}
-      >
-        <div className="p-5 border-b border-white/10 flex items-center gap-3" style={{ background: 'var(--bg-elevated)' }}>
-          <Globe size={15} className="text-indigo-400" />
-          <span className="text-xs font-bold text-white uppercase tracking-widest">Registered Organizations</span>
-          <span className="ml-auto text-[11px] font-bold text-white/40 uppercase tracking-widest px-2.5 py-1 border border-white/10 rounded-lg" style={{ background: 'var(--bg)' }}>
-            {companies.length} org{companies.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            <thead>
-              <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
-                {['Organisation', 'Total Bugs', 'Critical', 'Resolved', 'Users', 'Resolution Rate', '', ''].map((h, i) => (
-                  <th key={i} className="px-6 py-3 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {loadingCo ? (
-                <tr><td colSpan={8} className="py-16 text-center">
-                  <RefreshCw size={22} className="animate-spin text-white/30 mx-auto" />
-                </td></tr>
-              ) : companies.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-white/30 text-sm font-medium">No companies found.</td></tr>
-              ) : companies.map(co => {
-                const rate = co.total > 0 ? ((co.resolved / co.total) * 100).toFixed(1) : '0';
-                return (
-                  <tr key={co.id} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
-                          <Building2 size={14} className="text-white" />
-                        </div>
-                        <span className="font-bold text-sm text-white truncate max-w-[160px]">{co.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</td>
-                    <td className="px-6 py-4">
-                      <span className="text-[11px] font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded border border-red-500/20">
-                        {co.critical || 0}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-[var(--accent)] font-bold">{(co.resolved || 0).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm text-white/50">{co.users || 0}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: rate + '%' }} />
-                        </div>
-                        <span className="text-xs font-bold text-white/60 font-mono">{rate}%</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => onNavigate('database')}
-                        className="text-[11px] font-bold text-white/30 hover:text-white uppercase tracking-widest transition-colors flex items-center gap-1"
-                      >
-                        Explore <ArrowRight size={10} />
-                      </button>
-                    </td>
-                    <td className="px-4 py-4 text-right">
-                      <button
-                        onClick={() => onSelectCompany && onSelectCompany(selectedCompany?.id === co.id ? null : co)}
-                        className={`text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 px-2.5 py-1 rounded ${
-                          selectedCompany?.id === co.id
-                            ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
-                            : 'text-white/30 hover:text-amber-400 hover:bg-amber-500/10'
-                        }`}
-                      >
-                        {selectedCompany?.id === co.id ? 'Selected' : 'Select'} <Building2 size={10} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile card list */}
-        <div className="block md:hidden divide-y divide-white/5">
-          {loadingCo ? (
-            <div className="py-12 text-center">
-              <RefreshCw size={20} className="animate-spin text-white/30 mx-auto" />
-            </div>
-          ) : companies.length === 0 ? (
-            <div className="py-10 text-center text-white/30 text-sm font-medium">No companies found.</div>
-          ) : companies.map(co => {
-            const rate = co.total > 0 ? ((co.resolved / co.total) * 100).toFixed(1) : '0';
-            return (
-              <div key={co.id} className="p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
-                      <Building2 size={13} className="text-white" />
-                    </div>
-                    <span className="font-bold text-sm text-white truncate">{co.name}</span>
-                  </div>
-                  <button
-                    onClick={() => onSelectCompany && onSelectCompany(selectedCompany?.id === co.id ? null : co)}
-                    className={`text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 px-2.5 py-1 rounded flex-shrink-0 ${
-                      selectedCompany?.id === co.id
-                        ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
-                        : 'text-white/30 border border-white/10'
-                    }`}
-                  >
-                    {selectedCompany?.id === co.id ? 'Selected' : 'Select'}
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Total</div>
-                    <div className="text-sm font-bold text-white font-mono">{(co.total || 0).toLocaleString()}</div>
-                  </div>
-                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Critical</div>
-                    <div className="text-sm font-bold text-red-400 font-mono">{co.critical || 0}</div>
-                  </div>
-                  <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                    <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">Rate</div>
-                    <div className="text-sm font-bold font-mono" style={{ color: 'var(--accent)' }}>{rate}%</div>
-                  </div>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: rate + '%', background: 'var(--accent)' }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </MotionBentoCard>
     </motion.div>
   );
 }
