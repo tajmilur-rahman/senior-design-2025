@@ -560,7 +560,7 @@ export default function Landing({ onEnterWorkspace }) {
       <div className="relative z-10 flex flex-col w-full">
 
         {/* ── SECTION 1: HERO ──────────────────────────────────────── */}
-        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-32 lg:pt-40 relative">
+        <section id="hero" className="min-h-dvh w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-32 lg:pt-40 relative">
           <div
             className="absolute bottom-0 left-0 right-0 h-60 pointer-events-none"
             style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)' }}
@@ -580,7 +580,7 @@ export default function Landing({ onEnterWorkspace }) {
                 </motion.div>
 
                 {/* Hero headline */}
-              <h1 className="text-5xl sm:text-7xl lg:text-[8rem] font-extrabold tracking-tighter uppercase mb-6 leading-[1.1] pb-2 flex flex-wrap flex-shrink-0 items-baseline justify-center" style={{ textShadow: '0 0 40px rgba(250,103,255,0.15)' }}>
+              <h1 className="text-5xl sm:text-7xl lg:text-[8rem] font-extrabold tracking-tighter uppercase mb-6 leading-[1.1] pb-2 flex flex-wrap flex-shrink-0 items-baseline justify-center" style={{ textShadow: '0 0 40px rgba(250,103,255,0.15)', textRendering: 'optimizeLegibility' }}>
                   <div className="flex text-white">
                     {splitTitle('SPOTFIXES')}
                   </div>
@@ -645,7 +645,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* ── SECTION 2: PLATFORM ──────────────────────────────────── */}
-        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+        <section id="platform" className="min-h-dvh w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(142,59,255,0.04) 0%, transparent 70%)' }}
@@ -702,7 +702,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* ── SECTION 3: CAPABILITIES ──────────────────────────────── */}
-        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+        <section id="capabilities" className="min-h-dvh w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{ background: 'radial-gradient(ellipse 60% 70% at 50% 50%, rgba(250,103,255,0.04) 0%, transparent 70%)' }}
@@ -742,7 +742,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* ── SECTION 4: ARCHITECTURE ──────────────────────────────── */}
-        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+        <section id="architecture" className="min-h-dvh w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{ background: 'radial-gradient(ellipse 60% 70% at 50% 50%, rgba(85,247,255,0.03) 0%, transparent 70%)' }}
@@ -792,7 +792,7 @@ export default function Landing({ onEnterWorkspace }) {
         </section>
 
         {/* ── SECTION 5: DOCUMENTATION ─────────────────────────────── */}
-        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+        <section id="documentation" className="min-h-dvh w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
           <div className="max-w-5xl w-full relative z-10">
 
             <div className="text-center mb-14">
