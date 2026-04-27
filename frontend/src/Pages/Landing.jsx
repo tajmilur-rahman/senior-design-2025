@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { motion, AnimatePresence, useMotionValue, useSpring, useScroll, useTransform } from "framer-motion"
+import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion"
 import {
   ArrowRight, ShieldCheck, BrainCircuit, CheckCircle,
   Star, GitFork, ExternalLink, Database, Layers,
@@ -448,11 +448,6 @@ export default function Landing({ onEnterWorkspace }) {
   const [showArch, setShowArch] = useState(false)
   const totalSections = 5
 
-  const { scrollY } = useScroll()
-  const heroParallaxY = useTransform(scrollY, [0, 1000], [0, 150])
-  const feat1ParallaxY = useTransform(scrollY, [800, 3000], [50, -50])
-  const feat2ParallaxY = useTransform(scrollY, [800, 3000], [100, -100])
-
   // Scroll progress
   useEffect(() => {
     const onScroll = () => {
@@ -646,20 +641,6 @@ export default function Landing({ onEnterWorkspace }) {
                 </motion.div>
               </div>
 
-              {/* Hero image with Parallax */}
-              <motion.div
-                initial={{ opacity: 0, x: 40, scale: 0.97 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 0.7, delay: 0.3, ease: [0.16,1,0.3,1] }}
-                className="w-full mt-20 hidden md:block"
-                style={{ y: heroParallaxY }}
-              >
-                <ImageCard
-                  src="/images/Hero.webp"
-                  alt="A macro shot of a futuristic glass processor chip glowing with vivid cyan and magenta neon light against an absolute black background."
-                  className="aspect-[21/9] w-full"
-                />
-              </motion.div>
           </div>
         </section>
 
@@ -726,16 +707,14 @@ export default function Landing({ onEnterWorkspace }) {
             className="absolute inset-0 pointer-events-none"
             style={{ background: 'radial-gradient(ellipse 60% 70% at 50% 50%, rgba(250,103,255,0.04) 0%, transparent 70%)' }}
           />
-          <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-16 lg:gap-24 items-start relative z-10">
-
-            {/* Left */}
-            <div>
+          <div className="max-w-7xl w-full relative z-10">
+            <div className="max-w-3xl">
               <SectionLabel>Adaptive ML Engine</SectionLabel>
               <AnimatedScrollHeader
                 title="Accuracy that compounds<br/>with every review cycle."
                 subtitle="Human corrections feed directly into retraining. Your model gets smarter every sprint."
-              className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-8 leading-tight text-white"
-              subtitleClassName="text-xl text-white/80 leading-relaxed mb-12 font-normal"
+                className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-8 leading-tight text-white"
+                subtitleClassName="text-xl text-white/80 leading-relaxed mb-12 font-normal"
               />
 
               <ul className="space-y-5">
@@ -747,7 +726,7 @@ export default function Landing({ onEnterWorkspace }) {
                 ].map((item) => (
                   <li
                     key={item.text}
-                  className="flex items-center gap-4 text-base font-bold text-white/90 border border-white/8 bg-white/[0.03] px-6 py-5 transition-all hover:bg-white/[0.06]"
+                    className="flex items-center gap-4 text-base font-bold text-white/90 border border-white/8 bg-white/[0.03] px-6 py-5 transition-all hover:bg-white/[0.06]"
                     style={{ clipPath: DIAG_CUT }}
                   >
                     <div
@@ -758,29 +737,6 @@ export default function Landing({ onEnterWorkspace }) {
                   </li>
                 ))}
               </ul>
-            </div>
-
-            {/* Right: feature images */}
-            <div className="space-y-12 lg:space-y-16">
-              {/* Severity analysis */}
-              <motion.div style={{ y: feat1ParallaxY }}>
-                <ImageCard
-                  src="/images/Severity.webp"
-                  alt="Severity classification dashboard showing S1–S4 tiers with neon glow."
-                  accent="linear-gradient(90deg, #ff4200, #ff9e1b)"
-                  className="w-full aspect-video"
-                />
-              </motion.div>
-
-              {/* Duplicate detection */}
-              <motion.div style={{ y: feat2ParallaxY }}>
-                <ImageCard
-                  src="/images/Duplicate.webp"
-                  alt="Duplicate detection visualization showing two code structures matched by a neon beam."
-                  accent="linear-gradient(90deg, #8e3bff, #fa67ff)"
-                  className="w-full aspect-video"
-                />
-              </motion.div>
             </div>
           </div>
         </section>
