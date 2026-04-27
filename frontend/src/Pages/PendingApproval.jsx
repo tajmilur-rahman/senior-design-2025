@@ -2,6 +2,7 @@ import { Clock, LogOut, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { LiquidButton as Button } from '../liquid-glass-button';
 import { BentoCard } from '../bento-card';
+import { DottedSurface } from '../Components/ui/dotted-surface';
 
 export default function PendingApproval({ user, onLogout, status = 'pending' }) {
   const isInactive       = status === 'inactive';
@@ -17,11 +18,17 @@ export default function PendingApproval({ user, onLogout, status = 'pending' }) 
     : 'Your account is pending Super Admin approval. You\'ll receive access once your registration is reviewed.';
 
   return (
-    <div className="min-h-[100dvh] w-full flex items-center justify-center font-sans p-6 relative overflow-hidden" style={{ background: 'var(--bg)' }}>
-      {/* Ambient background glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900/10 via-black to-black pointer-events-none" />
+    <div className="min-h-[100dvh] w-full flex items-center justify-center font-sans p-6 relative overflow-hidden bg-black">
+      {/* Animated dotted surface background */}
+      <DottedSurface className="z-0" />
       
-      <BentoCard className="w-full max-w-md p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500 rounded-[2rem]">
+      {/* Deep vignette + color wash over dots */}
+      <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }} />
+      
+      {/* Subtle magenta-cyan gradient bloom at center */}
+      <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(142,59,255,0.12) 0%, transparent 70%)' }} />
+
+      <BentoCard className="w-full max-w-md p-8 lg:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500 rounded-[2rem] relative z-10">
         <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 ${isInactive ? 'bg-red-500/10 border border-red-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
           {isInactive ? <ShieldCheck size={28} className="text-red-500" /> : <Clock size={28} className="text-amber-500" />}
         </div>

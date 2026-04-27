@@ -640,7 +640,7 @@ export default function ResolutionSupport() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full bg-transparent h-14 pl-14 pr-4 text-white placeholder:text-white/30 focus:outline-none text-base"
+              className="w-full bg-transparent h-14 pl-14 pr-4 text-white placeholder:text-white/50 focus:outline-none text-base"
             />
           </div>
 
@@ -697,7 +697,7 @@ export default function ResolutionSupport() {
           <div className="mt-3 p-4 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-md animate-in fade-in duration-200">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1 min-w-[170px]">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Resolution type</label>
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Resolution type</label>
                 <CustomSelect
                   value={resolutionFilter}
                   onChange={setResolutionFilter}
@@ -714,18 +714,18 @@ export default function ResolutionSupport() {
               </div>
 
               <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Component</label>
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Component</label>
                 <input
                   type="text"
                   value={componentFilter}
                   onChange={(e) => setComponentFilter(e.target.value)}
                   placeholder="e.g. Networking"
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/50 focus:outline-none focus:border-blue-500/50"
                 />
               </div>
 
               <div className="flex flex-col gap-1 min-w-[130px]">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Severity</label>
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Severity</label>
                 <CustomSelect
                   value={severityFilter}
                   onChange={setSeverityFilter}
@@ -741,26 +741,26 @@ export default function ResolutionSupport() {
               </div>
 
               <div className="flex flex-col gap-1 w-28">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Min days</label>
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Min days</label>
                 <input
                   type="number"
                   value={minDays}
                   onChange={(e) => setMinDays(e.target.value)}
                   placeholder="0"
                   min="0"
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/50 focus:outline-none focus:border-blue-500/50"
                 />
               </div>
 
               <div className="flex flex-col gap-1 w-28">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Max days</label>
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest">Max days</label>
                 <input
                   type="number"
                   value={maxDays}
                   onChange={(e) => setMaxDays(e.target.value)}
                   placeholder="∞"
                   min="0"
-                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/50 focus:outline-none focus:border-blue-500/50"
                 />
               </div>
 
@@ -1097,7 +1097,7 @@ export default function ResolutionSupport() {
                 </div>
 
                 <div className={`bg-white/5 rounded-xl p-5 border-l-2 ${sc.border.replace("border-", "border-l-")}`}>
-                  <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">
+                  <div className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-3">
                     Resolution Details
                   </div>
 
@@ -1122,7 +1122,7 @@ export default function ResolutionSupport() {
                     <button
                       type="button"
                       onClick={() => setExpandedWhy((prev) => ({ ...prev, [idx]: !prev[idx] }))}
-                      className="flex items-center gap-2 text-[10px] font-bold text-white/40 hover:text-white/70 uppercase tracking-widest transition-colors w-full text-left"
+                      className="flex items-center gap-2 text-[11px] font-bold text-white/50 hover:text-white/70 uppercase tracking-widest transition-colors w-full text-left"
                     >
                       <Lightbulb size={11} className="text-blue-400 flex-shrink-0" />
                       Why this matched

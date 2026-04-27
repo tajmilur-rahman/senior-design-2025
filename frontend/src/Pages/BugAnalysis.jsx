@@ -294,7 +294,7 @@ export default function BugAnalysis({ user }) {
         {/* Model selector — hidden for super_admin */}
         {!isSuperAdmin && hasOwnModel && (
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Model</span>
+            <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Model</span>
             <div className="flex p-1 rounded-xl border border-white/10" style={{ background: 'var(--bg-elevated)' }}>
               <button
                 onClick={() => setModelSource('universal')}
@@ -342,7 +342,7 @@ export default function BugAnalysis({ user }) {
             className="rounded-xl p-4 flex flex-col"
             style={{ background: 'var(--bg-elevated)', minHeight: '11rem' }}
           >
-            <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3 select-none">
+            <label className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3 select-none">
               Bug Description
             </label>
             <div ref={searchWrapRef} className="flex-1 relative">
@@ -351,7 +351,7 @@ export default function BugAnalysis({ user }) {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && e.ctrlKey && handleAnalyze()}
-                className="w-full h-full bg-transparent resize-none text-white placeholder:text-white/30 focus:outline-none text-sm leading-relaxed"
+                className="w-full h-full bg-transparent resize-none text-white placeholder:text-white/50 focus:outline-none text-sm leading-relaxed"
                 style={{ minHeight: '7rem' }}
               />
               {showDbOverlay && (
@@ -405,7 +405,7 @@ export default function BugAnalysis({ user }) {
       {/* ── Sample bugs (empty state) ── */}
       {!prediction && !analyzing && (
         <div className="animate-in fade-in duration-500 mb-10 text-center">
-          <p className="text-[11px] font-bold text-white/40 mb-5 flex items-center justify-center gap-2 tracking-widest uppercase">
+          <p className="text-xs font-bold text-white/50 mb-5 flex items-center justify-center gap-2 tracking-widest uppercase">
             <Sparkles size={12} style={{ color: 'var(--accent)' }} /> Try an example
           </p>
           <motion.div
@@ -459,7 +459,7 @@ export default function BugAnalysis({ user }) {
             style={{ background: 'var(--card-bg)' }}
           >
             {/* Card heading */}
-            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
+            <div className="text-xs font-bold text-white/50 uppercase tracking-widest mb-6 flex items-center gap-2">
               <AlertTriangle size={13} className="text-white/30" /> Severity Prediction
             </div>
 
@@ -483,7 +483,7 @@ export default function BugAnalysis({ user }) {
             {/* Confidence bar */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Confidence</span>
+                <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Confidence</span>
                 <span className="text-sm font-bold text-white">{Math.round((prediction.confidence || 0) * 100)}%</span>
               </div>
               <div className="h-1.5 rounded-full overflow-hidden bg-white/10">
@@ -500,20 +500,20 @@ export default function BugAnalysis({ user }) {
               style={{ background: 'var(--bg-elevated)' }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Model</span>
+                <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Model</span>
                 <span className="text-xs font-semibold text-white">
                   {prediction.model_source === 'company' ? '🏢 Company' : '🌐 Universal'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Timestamp</span>
+                <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Timestamp</span>
                 <span className="text-xs font-mono text-white/70">
                   {new Date().toISOString().replace('T', ' ').slice(0, 19)} UTC
                 </span>
               </div>
               {sevDef?.action && (
                 <div className="pt-1.5 border-t border-white/10">
-                  <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest block mb-1">Recommended action</span>
+                  <span className="text-xs font-bold text-white/50 uppercase tracking-widest block mb-1">Recommended action</span>
                   <span className="text-xs font-semibold text-white">{sevDef.action}</span>
                 </div>
               )}
@@ -522,7 +522,7 @@ export default function BugAnalysis({ user }) {
             {/* Keywords */}
             {prediction.keywords?.length > 0 && (
               <div className="mb-6">
-                <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Key Features</div>
+                <div className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Key Features</div>
                 <div className="flex flex-wrap gap-1.5">
                   {prediction.keywords.map(k => (
                     <span key={k} className="text-[11px] font-bold px-2 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-widest">
@@ -539,7 +539,7 @@ export default function BugAnalysis({ user }) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-xs text-white/70 font-semibold">Is this accurate?</div>
-                    <div className="text-[11px] text-white/30 mt-0.5">Your response trains the model</div>
+                    <div className="text-xs text-white/50 mt-0.5">Your response trains the model</div>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -562,8 +562,8 @@ export default function BugAnalysis({ user }) {
               {showCorrection && !feedbackSent && (
                 <div className="animate-in fade-in space-y-3">
                   <div>
-                    <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-0.5">What should it be?</p>
-                    <p className="text-[11px] text-white/30">This correction retrains the model for future predictions.</p>
+                    <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-0.5">What should it be?</p>
+                    <p className="text-xs text-white/50">This correction retrains the model for future predictions.</p>
                   </div>
                   <CustomSelect
                     value={correctedSev}

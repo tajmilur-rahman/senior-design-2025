@@ -691,14 +691,14 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
               ].map(f => (
                 <div key={f.key} className="mb-5">
-                  <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
+                  <label className="sf-modal-label block text-xs font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
                   <input className="sf-modal-input w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-amber-500/50 focus:bg-white/10 outline-none transition-all text-sm"
                     type={f.type} required placeholder={f.placeholder}
                     value={systemInviteForm[f.key]} onChange={e => setSystemInviteForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
               <div className="mb-8">
-                <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">System Role</label>
+                <label className="sf-modal-label block text-xs font-bold text-white/60 uppercase tracking-widest mb-2">System Role</label>
                 <CustomSelect
                   value={systemInviteForm.role}
                   onChange={v => setSystemInviteForm(p => ({ ...p, role: v }))}
@@ -736,14 +736,14 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 { label: 'Display Name', key: 'username', type: 'text', placeholder: 'Jane Smith' },
               ].map(f => (
                 <div key={f.key} className="mb-5">
-                  <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
+                  <label className="sf-modal-label block text-xs font-bold text-white/60 uppercase tracking-widest mb-2">{f.label}</label>
                   <input className="sf-modal-input w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-indigo-500/50 focus:bg-white/10 outline-none transition-all text-sm"
                     type={f.type} required placeholder={f.placeholder}
                     value={createForm[f.key]} onChange={e => setCreateForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
               <div className="mb-5">
-                <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">Role</label>
+                <label className="sf-modal-label block text-xs font-bold text-white/60 uppercase tracking-widest mb-2">Role</label>
                 <CustomSelect
                   value={createForm.role}
                   onChange={v => setCreateForm(p => ({ ...p, role: v }))}
@@ -752,7 +752,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
                 />
               </div>
               <div className="mb-8">
-                <label className="sf-modal-label block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">Company</label>
+                <label className="sf-modal-label block text-xs font-bold text-white/60 uppercase tracking-widest mb-2">Company</label>
                 <CustomSelect
                   value={createForm.company_id}
                   onChange={v => setCreateForm(p => ({ ...p, company_id: v }))}

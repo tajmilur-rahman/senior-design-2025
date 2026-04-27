@@ -239,7 +239,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
             <thead>
               <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
                 {['Organisation', 'Total Bugs', 'Critical', 'Resolved', 'Users', 'Resolution Rate', '', ''].map((h, i) => (
-                  <th key={i} className="px-6 py-3 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  <th key={i} className="px-6 py-3 text-xs font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -373,7 +373,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
                 ? ((selectedCompany.resolved / selectedCompany.total) * 100).toFixed(1) : '0') + '%', color: 'text-amber-400'  },
           ].map(s => (
             <BentoCard key={s.label} className="p-4" style={{ background: 'var(--card-bg)' }}>
-              <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">{s.label}</div>
+              <div className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-2">{s.label}</div>
               <div className={`text-xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
             </BentoCard>
           ))}
@@ -393,7 +393,7 @@ function GlobalOverview({ user, onNavigate, data, error, lastUpdated, onRefresh,
               className={`p-4 ${s.nav ? 'cursor-pointer hover:brightness-110' : ''}`}
               style={{ background: 'var(--card-bg)' }}
             >
-              <div className="flex items-center gap-1.5 mb-2">{s.icon}<span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{s.label}</span></div>
+              <div className="flex items-center gap-1.5 mb-2">{s.icon}<span className="text-[11px] font-bold text-white/50 uppercase tracking-widest">{s.label}</span></div>
               <div className={`text-xl font-bold font-mono tracking-tight ${s.color}`}>{s.value}</div>
             </BentoCard>
           ))}

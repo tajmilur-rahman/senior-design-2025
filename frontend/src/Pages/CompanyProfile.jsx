@@ -397,7 +397,7 @@ export default function CompanyProfile({ user }) {
         {/* Configuration */}
         <BentoCard className="p-5">
           <div className="text-[11px] font-medium text-white/40 uppercase tracking-[0.06em] mb-4 flex items-center gap-2">
-            <Lock size={12} className="text-white/30" /> Workspace configuration
+            <Lock size={12} className="text-white/50" /> Workspace configuration
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3.5 rounded-xl bg-white/5 border border-white/5">
@@ -436,19 +436,19 @@ export default function CompanyProfile({ user }) {
         {/* Edit Profile */}
         <BentoCard className="p-5">
           <div className="text-[11px] font-medium text-white/40 uppercase tracking-[0.06em] mb-4 flex items-center gap-2">
-            <Save size={12} className="text-white/30" /> Edit profile
+            <Save size={12} className="text-white/50" /> Edit profile
           </div>
           <form onSubmit={handleSave} className="flex flex-col gap-3.5">
             <div>
               <label className="block text-[11px] text-white/30 uppercase tracking-[0.06em] mb-1.5">Website</label>
               <div className="relative">
-                <Globe size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                <input className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-white placeholder:text-white/20 focus:border-indigo-500/40 focus:bg-white/[0.06] outline-none transition-all text-sm" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yourcompany.com" type="url" />
+                <Globe size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" />
+                <input className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-white placeholder:text-white/40 focus:border-indigo-500/40 focus:bg-white/[0.06] outline-none transition-all text-sm" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yourcompany.com" type="url" />
               </div>
             </div>
             <div>
               <label className="block text-[11px] text-white/30 uppercase tracking-[0.06em] mb-1.5">Description</label>
-              <textarea className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white placeholder:text-white/20 focus:border-indigo-500/40 focus:bg-white/[0.06] outline-none transition-all text-sm resize-none" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="A brief description of your organisation…" maxLength={300} />
+              <textarea className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white placeholder:text-white/40 focus:border-indigo-500/40 focus:bg-white/[0.06] outline-none transition-all text-sm resize-none" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="A brief description of your organisation…" maxLength={300} />
               <div className="text-[11px] text-white/20 mt-0.5 text-right font-mono">{description.length}/300</div>
             </div>
             <div className="flex items-center justify-between gap-3 pt-0.5">

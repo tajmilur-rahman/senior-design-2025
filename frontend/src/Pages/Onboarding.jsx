@@ -6,6 +6,7 @@ import {
   Zap, Database, Brain, Download, CheckCircle, Loader, X
 } from "lucide-react";
 import { LiquidButton as Button } from "../liquid-glass-button";
+import { DottedSurface } from "../Components/ui/dotted-surface";
 // ArrowLeft and X are used in the seed error/retry UI
 
 // ── First-launch choice screen ────────────────────────────────────────────────
@@ -138,8 +139,16 @@ export default function Onboarding({ onComplete }) {
   // ── Populate / seed screen ────────────────────────────────────────────────
   if (choice === "populate") {
     return (
-      <div className="onboarding-backdrop" style={backdropStyle()}>
-        <div className="onboarding-card" style={{ maxWidth: "520px", display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem", gap: 24, textAlign: "center" }}>
+      <div className="onboarding-backdrop relative bg-black" style={{ ...backdropStyle(), backgroundImage: 'none' }}>
+        {/* Animated dotted surface background */}
+        <DottedSurface className="z-0" />
+        
+        {/* Deep vignette + color wash over dots */}
+        <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }} />
+        {/* Subtle magenta-cyan gradient bloom at center */}
+        <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(142,59,255,0.12) 0%, transparent 70%)' }} />
+
+        <div className="onboarding-card relative z-10" style={{ maxWidth: "520px", display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem", gap: 24, textAlign: "center" }}>
           {seeding ? (
             <>
               <div style={iconCircle("rgba(16,185,129,0.1)")} className="border border-emerald-500/20">
@@ -189,8 +198,16 @@ export default function Onboarding({ onComplete }) {
   // ── Choice screen ────────────────────────────────────────────────────────
   if (!choice) {
     return (
-      <div className="onboarding-backdrop" style={backdropStyle("flex-start")}>
-        <div className="onboarding-card" style={{ maxWidth: "900px", minHeight: "70vh", display: "flex", flexDirection: "column", padding: "3rem" }}>
+      <div className="onboarding-backdrop relative bg-black" style={{ ...backdropStyle("flex-start"), backgroundImage: 'none' }}>
+        {/* Animated dotted surface background */}
+        <DottedSurface className="z-0" />
+        
+        {/* Deep vignette + color wash over dots */}
+        <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }} />
+        {/* Subtle magenta-cyan gradient bloom at center */}
+        <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(142,59,255,0.12) 0%, transparent 70%)' }} />
+
+        <div className="onboarding-card relative z-10" style={{ maxWidth: "900px", minHeight: "70vh", display: "flex", flexDirection: "column", padding: "3rem" }}>
           <div className="onboarding-header">
             <div className="onboarding-icon"><Zap size={40} color="var(--accent)" /></div>
             <div className="onboarding-step-label">One-time setup</div>

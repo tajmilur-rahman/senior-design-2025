@@ -6,7 +6,7 @@ import {
   ArrowUp, Target, Copy, BarChart3, Box,
 } from "lucide-react"
 import TechStackCarousel from "../tech-stack-carousel"
-import { DottedSurface } from "../components/ui/dotted-surface"
+import { DottedSurface } from "../Components/ui/dotted-surface"
 
 const GITHUB_REPO = "https://github.com/tajmilur-rahman/senior-design-2025"
 

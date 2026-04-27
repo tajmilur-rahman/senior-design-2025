@@ -468,7 +468,7 @@ export default function UserManagement({ currentUser, initialQuery = '' }) {
               <tr className="border-b border-white/10" style={{ background: 'var(--bg-elevated)' }}>
                 {['User', 'Email', 'Role', isSuperAdmin ? 'Company' : null, 'Status', 'Actions']
                   .filter(Boolean).map(h => (
-                    <th key={h} className="px-6 py-4 text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-6 py-4 text-xs font-bold text-white/50 uppercase tracking-widest whitespace-nowrap">{h}</th>
                   ))}
               </tr>
             </thead>

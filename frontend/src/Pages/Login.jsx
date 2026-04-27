@@ -7,12 +7,8 @@ import { supabase } from '../supabaseClient';
 import axios from 'axios';
 import { LiquidButton as Button } from '../liquid-glass-button';
 import { motion, useAnimation, useInView, useMotionTemplate, useMotionValue } from 'framer-motion';
-import * as THREE from 'three';
-import TechStackCarousel from '../tech-stack-carousel';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { BentoCard } from '../bento-card';
+import { DottedSurface } from '../Components/ui/dotted-surface';
 
 // Lightweight utility to merge classes
 function cn(...inputs) {
@@ -183,163 +179,6 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
   const [reqCompanyId, setReqCompanyId]         = useState('');
   const [companies, setCompanies]               = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
-
-  // --- THREE.JS REFS ---
-  const canvasRef = useRef(null);
-  const threeRefs = useRef({
-    scene: null, camera: null, renderer: null, composer: null,
-    stars: [], nebula: null, mountains: [], animationId: null,
-    targetCameraX: 0, targetCameraY: 20, targetCameraZ: 300
-  });
-
-  // --- THREE.JS INITIALIZATION ---
-  useEffect(() => {
-    const initThree = () => {
-      const refs = threeRefs.current;
-      
-      refs.scene = new THREE.Scene();
-      refs.scene.fog = new THREE.FogExp2(0x000000, 0.00025);
-
-      refs.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
-      refs.camera.position.set(0, 20, 300);
-
-      refs.renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true, alpha: true });
-      refs.renderer.setSize(window.innerWidth, window.innerHeight);
-      refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      refs.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      refs.renderer.toneMappingExposure = 0.5;
-
-      refs.composer = new EffectComposer(refs.renderer);
-      refs.composer.addPass(new RenderPass(refs.scene, refs.camera));
-      refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.4, 0.85));
-
-      // Stars
-      const starCount = 4000;
-      for (let i = 0; i < 3; i++) {
-        const geo = new THREE.BufferGeometry();
-        const pos = new Float32Array(starCount * 3);
-        const colors = new Float32Array(starCount * 3);
-        const sizes = new Float32Array(starCount);
-        for (let j = 0; j < starCount; j++) {
-          const r = 200 + Math.random() * 1000;
-          const theta = Math.random() * Math.PI * 2;
-          const phi = Math.acos(Math.random() * 2 - 1);
-          pos[j*3] = r * Math.sin(phi) * Math.cos(theta);
-          pos[j*3+1] = r * Math.sin(phi) * Math.sin(theta);
-          pos[j*3+2] = r * Math.cos(phi);
-          
-          const c = new THREE.Color();
-          const choice = Math.random();
-          if (choice < 0.7) c.setHSL(0, 0, 0.8 + Math.random()*0.2);
-          else if (choice < 0.9) c.setHSL(0.6, 0.5, 0.8);
-          else c.setHSL(0.08, 0.5, 0.8);
-          
-          colors[j*3] = c.r; colors[j*3+1] = c.g; colors[j*3+2] = c.b;
-          sizes[j] = Math.random() * 2 + 0.5;
-        }
-        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-        
-        const mat = new THREE.ShaderMaterial({
-          uniforms: { time: { value: 0 }, depth: { value: i } },
-          vertexShader: `
-            attribute float size; attribute vec3 color; varying vec3 vColor;
-            uniform float time; uniform float depth;
-            void main() {
-              vColor = color; vec3 p = position;
-              float angle = time * 0.05 * (1.0 - depth * 0.3);
-              mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
-              p.xy = rot * p.xy;
-              vec4 mvP = modelViewMatrix * vec4(p, 1.0);
-              gl_PointSize = size * (300.0 / -mvP.z);
-              gl_Position = projectionMatrix * mvP;
-            }`,
-          fragmentShader: `
-            varying vec3 vColor;
-            void main() {
-              float d = length(gl_PointCoord - vec2(0.5));
-              if (d > 0.5) discard;
-              gl_FragColor = vec4(vColor, 1.0 - smoothstep(0.0, 0.5, d));
-            }`,
-          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
-        });
-        const stars = new THREE.Points(geo, mat);
-        refs.scene.add(stars);
-        refs.stars.push(stars);
-      }
-
-      // Mountains
-      const layers = [
-        { distance: 0, height: 60, color: 0x1a1a2e, opacity: 1 },
-        { distance: -400, height: 80, color: 0x16213e, opacity: 0.8 },
-        { distance: -800, height: 100, color: 0x0f3460, opacity: 0.6 },
-        { distance: -1200, height: 120, color: 0x0a4668, opacity: 0.4 },
-        { distance: -1600, height: 140, color: 0x072a44, opacity: 0.3 }
-      ];
-      layers.forEach((layer) => {
-        const pts = [];
-        for (let i = 0; i <= 50; i++) {
-          const x = (i / 50 - 0.5) * 4000;
-          const y = Math.sin(i * 0.1) * layer.height + Math.sin(i * 0.05) * layer.height * 0.5 + Math.random() * layer.height * 0.2 - 100;
-          pts.push(new THREE.Vector2(x, y));
-        }
-        pts.push(new THREE.Vector2(2000, -500), new THREE.Vector2(-2000, -500));
-        const mtn = new THREE.Mesh(
-          new THREE.ShapeGeometry(new THREE.Shape(pts)),
-          new THREE.MeshBasicMaterial({ color: layer.color, transparent: true, opacity: layer.opacity, side: THREE.DoubleSide })
-        );
-        mtn.position.z = layer.distance;
-        refs.scene.add(mtn);
-        refs.mountains.push(mtn);
-      });
-
-      const animate = () => {
-        refs.animationId = requestAnimationFrame(animate);
-        const t = Date.now() * 0.001;
-        refs.stars.forEach(s => { if (s.material.uniforms) s.material.uniforms.time.value = t; });
-        
-        if (refs.camera) {
-          // Smoothly orbit camera for login screen
-          refs.targetCameraX = Math.sin(t * 0.2) * 30;
-          refs.targetCameraY = 20 + Math.cos(t * 0.15) * 10;
-          refs.targetCameraZ = 200 + Math.sin(t * 0.05) * 40;
-
-          refs.camera.position.x += (refs.targetCameraX - refs.camera.position.x) * 0.05;
-          refs.camera.position.y += (refs.targetCameraY - refs.camera.position.y) * 0.05;
-          refs.camera.position.z += (refs.targetCameraZ - refs.camera.position.z) * 0.05;
-          refs.camera.lookAt(0, 10, -1000);
-        }
-        
-        refs.mountains.forEach((m, i) => {
-          m.position.x = Math.sin(t * 0.1) * 2 * (1 + i * 0.5);
-        });
-        if (refs.composer) refs.composer.render();
-      };
-      animate();
-    };
-
-    initThree();
-    const handleResize = () => {
-      const refs = threeRefs.current;
-      if (refs.camera && refs.renderer && refs.composer) {
-        refs.camera.aspect = window.innerWidth / window.innerHeight;
-        refs.camera.updateProjectionMatrix();
-        refs.renderer.setSize(window.innerWidth, window.innerHeight);
-        refs.composer.setSize(window.innerWidth, window.innerHeight);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      const refs = threeRefs.current;
-      if (refs.animationId) cancelAnimationFrame(refs.animationId);
-      window.removeEventListener('resize', handleResize);
-      refs.stars.forEach(s => { s.geometry.dispose(); s.material.dispose(); });
-      refs.mountains.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
-      if (refs.renderer) refs.renderer.dispose();
-    };
-  }, []);
 
   useEffect(() => {
     supabase.auth.onAuthStateChange(async (event, session) => {
@@ -565,22 +404,27 @@ export default function Login({ onLogin, forceResetRecovery = false, onResetDone
   );
 
   return (
-    <div className="relative min-h-[100dvh] w-full flex items-center justify-center font-sans overflow-y-auto overflow-x-hidden text-white custom-scrollbar" style={{ background: 'var(--bg)', color: 'var(--text-main)' }}>
+    <div className="relative min-h-[100dvh] w-full flex items-center justify-center font-sans overflow-y-auto overflow-x-hidden text-white custom-scrollbar bg-black">
       {onBack && (
         <button onClick={onBack} className="fixed top-6 left-6 z-[100] text-white/70 hover:text-white flex items-center gap-2 text-sm font-medium transition-colors bg-white/5 hover:bg-white/10 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
           ← Back to Home
         </button>
       )}
 
-      {/* 3D Background */}
-      <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-0 pointer-events-none" style={{ background: '#030712' }} />
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] sm:w-[800px] sm:h-[800px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none z-0" />
+      {/* Animated dotted surface background */}
+      <DottedSurface className="z-0" />
+
+      {/* Deep vignette + color wash over dots */}
+      <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }} />
+      
+      {/* Subtle magenta-cyan gradient bloom at center */}
+      <div className="fixed inset-0 z-[1] pointer-events-none" style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(142,59,255,0.12) 0%, transparent 70%)' }} />
 
       {/* Centered Auth Card */}
       <BentoCard className="w-full max-w-[480px] p-8 sm:p-12 mx-4 !bg-black/40 backdrop-blur-3xl shadow-[0_0_80px_rgba(79,70,229,0.15)] flex flex-col my-12 md:my-16 rounded-[2.5rem] border border-white/10 relative z-10">
         
         <div className="flex items-center justify-center mb-10 cursor-default select-none">
-          <span className="font-extrabold text-4xl sm:text-5xl tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]">Spot<span className="text-indigo-400">fixes</span></span>
+          <span className="font-extrabold text-4xl sm:text-5xl tracking-widest text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.15)] uppercase">SPOTFIXES</span>
         </div>
 
           {/* ── Invite set-password flow ── */}

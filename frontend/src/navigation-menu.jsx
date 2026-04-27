@@ -119,20 +119,20 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
         }}
         whileTap={!isExpanded ? { scale: 0.95 } : {}}
         className={cn(
-          "flex items-center rounded-full border shadow-lg backdrop-blur-xl h-12 relative transition-all"
+          "flex items-center rounded-full border shadow-lg backdrop-blur-xl h-16 relative transition-all"
         )}
         style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
       >
-        <motion.div variants={itemVariants} className="flex-shrink-0 flex items-center gap-2 font-semibold pl-3 pr-2" style={{ color: 'var(--text-main)' }}>
+        <motion.div variants={itemVariants} className="flex-shrink-0 flex items-center gap-3 font-semibold pl-4 pr-3" style={{ color: 'var(--text-main)' }}>
           <button
             onClick={(e) => { e.stopPropagation(); handleNavClick(onBack); }}
             disabled={!canGoBack}
-            className={cn("flex items-center justify-center w-7 h-7 rounded-full border transition-all", canGoBack ? "bg-white/5 border-white/10 hover:bg-white/15 cursor-pointer" : "bg-transparent border-transparent opacity-30 cursor-not-allowed")}
+            className={cn("flex items-center justify-center w-9 h-9 rounded-full border transition-all", canGoBack ? "bg-white/5 border-white/10 hover:bg-white/15 cursor-pointer" : "bg-transparent border-transparent opacity-30 cursor-not-allowed")}
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={18} />
           </button>
           <motion.div variants={labelVariants} className="overflow-hidden whitespace-nowrap flex items-center">
-            <span className="text-lg font-extrabold tracking-tight cursor-pointer transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" onClick={(e) => { e.stopPropagation(); handleNavClick(() => onNavigate('overview')); }}>Spot<span className="text-indigo-400">fixes</span></span>
+            <span className="text-xl font-extrabold tracking-widest uppercase cursor-pointer transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" onClick={(e) => { e.stopPropagation(); handleNavClick(() => onNavigate('overview')); }}>SPOTFIXES</span>
           </motion.div>
         </motion.div>
         
@@ -141,9 +141,9 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
             const Icon = item.icon;
             const isActive = currentTab === item.id;
             return (
-              <motion.button key={item.id} variants={itemVariants} onClick={(e) => { e.stopPropagation(); handleNavClick(() => onNavigate(item.id)); }} className={cn("relative group rounded-full px-3 py-1.5 text-sm font-medium flex items-center whitespace-nowrap transition-colors", isActive ? "" : "hover:bg-white/5 opacity-70 hover:opacity-100")} style={{ color: 'var(--text-main)' }}>
+              <motion.button key={item.id} variants={itemVariants} onClick={(e) => { e.stopPropagation(); handleNavClick(() => onNavigate(item.id)); }} className={cn("relative group rounded-full px-4 py-2.5 text-base font-semibold flex items-center whitespace-nowrap transition-colors", isActive ? "" : "hover:bg-white/5 opacity-70 hover:opacity-100")} style={{ color: 'var(--text-main)' }}>
                 {isActive && <motion.div layoutId="active-framer-nav-pill" className="absolute inset-0 rounded-full" style={{ background: 'var(--hover-bg)' }} transition={{ type: 'spring', stiffness: 380, damping: 35 }} />}
-                {Icon && <Icon size={14} className="relative z-10 flex-shrink-0" />}
+                {Icon && <Icon size={18} className="relative z-10 flex-shrink-0 transition-transform duration-200 group-hover:scale-110" />}
                 <motion.div variants={labelVariants} className="relative z-10 overflow-hidden flex items-center">
                   <span className="ml-1.5">{item.label}</span>
                 </motion.div>
@@ -153,8 +153,8 @@ export function AnimatedNavFramer({ navItems = [], currentTab, onNavigate, right
         </motion.div>
 
         {rightActions && (
-          <motion.div variants={itemVariants} className="flex items-center pl-1 pr-2">
-            <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
+          <motion.div variants={itemVariants} className="flex items-center pl-2 pr-3">
+            <div className="w-px h-7 mx-2" style={{ background: 'var(--border)' }} />
             {rightActions}
           </motion.div>
         )}

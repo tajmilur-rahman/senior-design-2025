@@ -184,8 +184,8 @@ export default function ProfileSettings({ user, onUpdate }) {
           <div className="text-xs font-bold text-white uppercase tracking-widest mb-6">Display Name</div>
           <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
             <div>
-              <label className="block text-[11px] font-bold text-white/60 uppercase tracking-widest mb-2">Name</label>
-              <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/50 focus:border-indigo-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} />
+              <label className="block text-xs font-bold text-white/70 uppercase tracking-widest mb-2">Name</label>
+              <input className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/60 focus:border-indigo-500/50 focus:bg-white/10 outline-none transition-all text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="Your display name" maxLength={60} />
             </div>
             <div>
               {profileMsg && (

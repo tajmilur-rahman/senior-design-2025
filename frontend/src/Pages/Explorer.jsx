@@ -312,7 +312,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                                 placeholder="Search summaries or #ID…"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="w-full h-12 border border-white/10 rounded-xl pl-11 pr-10 text-white placeholder:text-white/30 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all text-sm shadow-inner"
+                                className="w-full h-12 border border-white/10 rounded-xl pl-11 pr-10 text-white placeholder:text-white/50 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all text-sm shadow-inner"
                                 style={{ background: 'var(--bg)' }}
                             />
                             {search && (
@@ -371,7 +371,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                 {/* Row 3: Quick Filters & Clear */}
                 <div className="flex flex-col gap-4 pt-4 mt-2 border-t border-white/5">
                     <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest">Quick Filters</span>
+                        <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Quick Filters</span>
                         {hasFilters && (
                             <button
                                 onClick={clearFilters}
@@ -414,7 +414,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                                     <th
                                         key={col.key}
                                         onClick={() => requestSort(col.key)}
-                                        className="px-5 py-3 text-[11px] font-semibold text-white/40 uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-white"
+                                        className="px-5 py-3 text-xs font-bold text-white/50 uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-white"
                                         style={{ width: col.w || undefined }}
                                     >
                                         <span className="flex items-center gap-1.5">
@@ -607,27 +607,27 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
 
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                                         <div>
-                                            <span className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">Component</span>
+                                            <span className="block text-xs font-bold text-white/50 uppercase tracking-widest mb-1">Component</span>
                                             <span className="text-white font-medium bg-white/5 border border-white/10 px-2 py-1 rounded-lg text-xs inline-block">
                                                 {selectedBug.component || 'General'}
                                             </span>
                                         </div>
                                         <div>
-                                            <span className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">Status</span>
+                                            <span className="block text-xs font-bold text-white/50 uppercase tracking-widest mb-1">Status</span>
                                             <span className={`font-bold text-sm uppercase tracking-widest ${statusColor(selectedBug.status)}`}>
                                                 {selectedBug.status || 'NEW'}
                                             </span>
                                             {statusDef && <p className="text-xs text-white/40 mt-1 leading-relaxed">{statusDef.desc}</p>}
                                         </div>
                                         <div>
-                                            <span className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">Severity</span>
+                                            <span className="block text-xs font-bold text-white/50 uppercase tracking-widest mb-1">Severity</span>
                                             <div>
                                                 <SevBadge sev={selectedBug.severity} />
                                                 {sevDef && <p className="text-xs text-white/40 mt-2 leading-relaxed">{sevDef.desc}</p>}
                                             </div>
                                         </div>
                                         <div>
-                                            <span className="block text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">Reporter</span>
+                                            <span className="block text-xs font-bold text-white/50 uppercase tracking-widest mb-1">Reporter</span>
                                             <span className="text-white/70 text-xs">{selectedBug.reporter || '—'}</span>
                                         </div>
                                     </div>
