@@ -1,902 +1,969 @@
 import React, { useEffect, useRef, useState } from "react"
-import { motion, useInView, AnimatePresence } from "framer-motion"
-import { ArrowRight, ShieldCheck, Brain, BrainCircuit, CheckCircle, Star, GitFork, ExternalLink, Database, Layers, ArrowUp } from "lucide-react"
-import { LiquidButton as Button } from "../liquid-glass-button"
+import { motion, AnimatePresence, useMotionValue, useSpring, useScroll, useTransform } from "framer-motion"
+import {
+  ArrowRight, ShieldCheck, BrainCircuit, CheckCircle,
+  Star, GitFork, ExternalLink, Database, Layers,
+  ArrowUp, Target, Copy, BarChart3, Box,
+} from "lucide-react"
 import TechStackCarousel from "../tech-stack-carousel"
-import * as THREE from 'three'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { DottedSurface } from "../components/ui/dotted-surface"
 
 const GITHUB_REPO = "https://github.com/tajmilur-rahman/senior-design-2025"
 
+// ROG Astral signature gradient: magenta → white → cyan
+const ROG_GRADIENT = 'linear-gradient(90deg, #fa67ff, #ffffff, #7ef9ff)'
+const ROG_GRADIENT_45 = 'linear-gradient(45deg, #fa67ff, #ffffff, #7ef9ff)'
+// Diagonal bottom-right corner cut — ROG card motif
+const DIAG_CUT = 'polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)'
+const DIAG_CUT_LG = 'polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%)'
+
+// Gradient text utility (inline style helper)
+const gradientText = {
+  background: ROG_GRADIENT,
+  WebkitBackgroundClip: 'text',
+  WebkitTextFillColor: 'transparent',
+  backgroundClip: 'text',
+}
+
+// ROG Metallic text utility (silver/chrome look)
+const METALLIC_TEXT = {
+  background: 'linear-gradient(180deg, #ffffff 0%, #94a3b8 100%)',
+  WebkitBackgroundClip: 'text',
+  WebkitTextFillColor: 'transparent',
+  backgroundClip: 'text',
+}
+
 function GithubIcon({ size = 20, className = "" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23A11.52 11.52 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12z"/>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23A11.52 11.52 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12z" />
     </svg>
   )
 }
 
-// Lightweight utility to merge classes 
 export function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
+  return classes.filter(Boolean).join(" ")
 }
 
-// ============================================================================
-// SCROLL GLITCH ANIMATION (From Reference Code)
-// ============================================================================
+// ─── ROG-style Button ────────────────────────────────────────────────────────
+// Primary: gradient fill with black text (angled shape)
+// Outline: inset white border, transparent bg (angled shape)
+
+function ROGButton({ children, onClick, variant = 'primary', size = 'md', className = '', href, target }) {
+  const sizes = { sm: 'px-5 py-2.5 text-xs', md: 'px-7 py-3.5 text-sm', lg: 'px-9 py-4.5 text-base' }
+  const isPrimary = variant === 'primary'
+
+  const outerClass = cn(
+    'relative inline-flex group transition-all duration-300',
+    isPrimary ? 'hover:scale-[1.03]' : 'hover:scale-[1.03]',
+    className
+  )
+
+  const clipPoly = 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)'
+  const innerClipPoly = 'polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px)'
+
+  const outerStyle = {
+    clipPath: clipPoly,
+    background: isPrimary ? ROG_GRADIENT : 'rgba(255,255,255,0.3)',
+    padding: isPrimary ? '0' : '1px'
+  }
+
+  const innerStyle = {
+    clipPath: isPrimary ? 'none' : innerClipPoly,
+    background: isPrimary ? 'transparent' : '#050508',
+    color: isPrimary ? '#000' : '#fff',
+    width: '100%',
+    height: '100%',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 900,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase'
+  }
+
+  const Inner = () => (
+    <>
+      {isPrimary && (
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" style={{ background: ROG_GRADIENT }} />
+      )}
+      <div style={innerStyle} className={cn(sizes[size], isPrimary ? 'text-black relative z-10' : 'text-white relative z-10 hover:bg-[#15034a] transition-colors')}>
+        {children}
+      </div>
+    </>
+  )
+
+  if (href) return (
+    <a href={href} target={target} rel="noopener noreferrer" className={outerClass} style={outerStyle}>
+      <Inner />
+    </a>
+  )
+  return (
+    <button onClick={onClick} className={outerClass} style={outerStyle}>
+      <Inner />
+    </button>
+  )
+}
+
+// ─── Gradient-text section label ─────────────────────────────────────────────
+
+function SectionLabel({ children }) {
+  return (
+    <p className="text-xs font-bold uppercase tracking-[0.25em] mb-4 text-white">
+      {children}
+    </p>
+  )
+}
+
+// ─── Animated word-by-word heading ───────────────────────────────────────────
 
 function AnimatedScrollHeader({ title, subtitle, className, subtitleClassName }) {
-  const lines = title.split('<br/>');
-  let wordIndex = 0;
-
+  const lines = title.split('<br/>')
+  let wordIndex = 0
   return (
     <div>
       <h2 className={className}>
-        {lines.map((line, lineIndex) => (
-          <span key={lineIndex} className="block">
-            {line.split(' ').map((word, wIndex) => {
-              const currentIndex = wordIndex++;
+        {lines.map((line, li) => (
+          <span key={li} className="block">
+            {line.split(' ').map((word, wi) => {
+              const idx = wordIndex++
               return (
                 <motion.span
-                  key={wIndex}
-                  initial={{ opacity: 0, y: 15, filter: 'blur(4px)' }}
-                  whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                  viewport={{ once: true, margin: "0px 0px -15% 0px" }}
-                  transition={{ duration: 0.6, delay: currentIndex * 0.06 + (currentIndex % 3) * 0.02, ease: "easeOut" }}
-                  className="inline-block mr-[0.22em]"
+                  key={wi}
+                  initial={{ opacity: 0, y: 28 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+                  transition={{ duration: 0.6, delay: idx * 0.04, ease: [0.16, 1, 0.3, 1] }}
+                  className="inline-block mr-[0.2em] text-white"
                 >
                   {word}
                 </motion.span>
-              );
+              )
             })}
           </span>
         ))}
       </h2>
       {subtitle && (
         <motion.p
-          initial={{ opacity: 0, y: 15, filter: 'blur(4px)' }}
-          whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          viewport={{ once: true, margin: "0px 0px -15% 0px" }}
-          transition={{ duration: 0.8, delay: wordIndex * 0.06 + 0.1, ease: "easeOut" }}
+          initial={{ opacity: 0, y: 18 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: wordIndex * 0.04 + 0.1, ease: [0.16, 1, 0.3, 1] }}
           className={subtitleClassName}
         >
           {subtitle}
         </motion.p>
       )}
     </div>
-  );
+  )
 }
 
-// ============================================================================
-// BUTTON & UTILS (Hoisted to prevent TDZ React crashes)
-// ============================================================================
+// ─── ROG-style image frame / placeholder ─────────────────────────────────────
+// Uses diagonal bottom-right cut and gradient top border
 
-const SECTION_IDS = ['hero', 'platform', 'capabilities', 'architecture', 'documentation'];
+function ROGFrame({ src, alt, className = '', children }) {
+  return (
+    <div
+      className={cn('relative overflow-hidden flex items-center justify-center', className)}
+      style={{
+        maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+        WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)'
+      }}
+    >
+      {src ? (
+        <>
+          <img src={src} alt={alt} className="w-full h-full object-cover" />
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.1), transparent 30%, transparent 65%, rgba(0,0,0,0.4))' }}
+          />
+          {children}
+        </>
+      ) : (
+        <>
+          {/* subtle grid for placeholder */}
+          <div
+            className="absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)',
+              backgroundSize: '48px 48px',
+            }}
+          />
+          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(255,255,255,0.08), transparent 70%)' }} />
+          <div className="absolute inset-0 flex items-center justify-center p-8 z-10">
+            {children}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
-const scrollTo = (id) => {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
+// ─── Interactive image card — mouse tilt + scan-line ─────────────────────────
+function ImageCard({ src, alt, accent, className = '', children }) {
+  const ref = useRef(null)
+  const rotX = useMotionValue(0)
+  const rotY = useMotionValue(0)
+  const sc   = useMotionValue(1)
+  const springX = useSpring(rotX, { stiffness: 180, damping: 26 })
+  const springY = useSpring(rotY, { stiffness: 180, damping: 26 })
+  const springSc = useSpring(sc,   { stiffness: 180, damping: 26 })
+  const [over, setOver] = useState(false)
 
-// ============================================================================
-// ANIMATED LANDING NAVBAR (Framer Motion)
-// ============================================================================
+  const onMove = (e) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    rotX.set(((e.clientY - r.top)  / r.height - 0.5) * -9)
+    rotY.set(((e.clientX - r.left) / r.width  - 0.5) *  9)
+  }
+  const onEnter = () => { setOver(true);  sc.set(1.025) }
+  const onLeave = () => { setOver(false); rotX.set(0); rotY.set(0); sc.set(1) }
 
-const navContainerVariants = {
-  expanded: { y: 0, opacity: 1, width: "auto", transition: { y: { type: "spring", damping: 22, stiffness: 180 }, opacity: { duration: 0.4 }, type: "spring", damping: 26, stiffness: 200, staggerChildren: 0.06, delayChildren: 0.15 } },
-  collapsed: { y: 0, opacity: 1, width: "3.5rem", transition: { type: "spring", damping: 26, stiffness: 200, when: "afterChildren", staggerChildren: 0.04, staggerDirection: -1 } },
-};
-const navItemVariants = {
-  expanded: { opacity: 1, x: 0, scale: 1, transition: { type: "spring", damping: 15 } },
-  collapsed: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
-};
-const navLogoVariants = {
-  expanded: { opacity: 1, x: 0, rotate: 0, transition: { type: "spring", damping: 15 } },
-  collapsed: { opacity: 0, x: -25, rotate: -180, transition: { duration: 0.3 } },
-};
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      style={{ rotateX: springX, rotateY: springY, scale: springSc, perspective: '900px', transformStyle: 'preserve-3d' }}
+      className="cursor-default"
+    >
+      <ROGFrame src={src} alt={alt} accent={accent} className={className}>
+        {/* Scan-line sweep — lives inside ROGFrame so it's clipped by clipPath */}
+        <motion.div
+          className="absolute inset-0 pointer-events-none overflow-hidden z-30"
+          animate={{ opacity: over ? 1 : 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <motion.div
+            className="absolute left-0 right-0"
+            style={{ height: '45%', background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.07) 50%, transparent)' }}
+            animate={over ? { y: ['-100%', '260%'] } : { y: '-100%' }}
+            transition={over ? { duration: 2, ease: 'linear', repeat: Infinity, repeatDelay: 0.5 } : { duration: 0 }}
+          />
+        </motion.div>
+        {children}
+      </ROGFrame>
+    </motion.div>
+  )
+}
+
+// ─── Architecture Modal ───────────────────────────────────────────────────────
+
+const SECTION_IDS = ['hero', 'platform', 'capabilities', 'architecture', 'documentation']
+const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+function ArchitectureModal({ onClose }) {
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [onClose])
+
+  const pillars = [
+    { label: 'Intelligence', value: 'Random Forest',  sub: '222k+ training records',    icon: BrainCircuit },
+    { label: 'API Layer',    value: 'FastAPI + JWT',   sub: 'Role-based access control', icon: ShieldCheck  },
+    { label: 'Data Core',   value: 'Postgres + RLS',  sub: 'Per-tenant isolation',      icon: Database     },
+    { label: 'Frontend',    value: 'React + Vite',    sub: 'Real-time SPA',             icon: Layers       },
+  ]
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 24 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#06030f] border border-white/10"
+        style={{ clipPath: DIAG_CUT_LG, boxShadow: '0 0 80px rgba(142,59,255,0.15)' }}
+      >
+        <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: ROG_GRADIENT }} />
+
+        <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b border-white/8">
+          <div>
+            <SectionLabel>System Blueprint</SectionLabel>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">Spotfixes Architecture</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full border border-white/15 bg-white/5 hover:bg-white/12 flex items-center justify-center text-white/50 hover:text-white transition-all text-sm"
+          >✕</button>
+        </div>
+
+        <div className="px-8 py-8 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {pillars.map((p, i) => {
+              const Icon = p.icon
+              const accents = ['#fa67ff', '#7ef9ff', '#8e3bff', '#55f7ff']
+              const acc = accents[i]
+              return (
+                <div
+                  key={p.label}
+                  className="relative bg-white/[0.03] border border-white/8 p-6"
+                  style={{ clipPath: DIAG_CUT }}
+                >
+                  <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: acc }} />
+                  <div className="flex items-center gap-2 mb-4 text-xs font-bold uppercase tracking-widest" style={{ color: acc }}>
+                    <Icon size={13} />{p.label}
+                  </div>
+              <div className="text-xl font-extrabold text-white tracking-tight">{p.value}</div>
+              <div className="text-sm text-white/70 mt-1">{p.sub}</div>
+                </div>
+              )
+            })}
+          </div>
+          <div className="bg-white/[0.03] border border-white/8 p-6" style={{ clipPath: DIAG_CUT }}>
+            <p className="text-xs font-bold uppercase tracking-widest mb-3 text-white">Multi-Tenant by Default</p>
+            <p className="text-sm text-white/70 leading-relaxed">
+              Every company runs on its own isolated Postgres table with Row-Level Security. The universal model trains on aggregate data; per-company models fine-tune on proprietary bugs.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Animated Nav ─────────────────────────────────────────────────────────────
 
 function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
-  const [isExpanded, setExpanded] = useState(true);
-  const lastScrollY = useRef(0);
-  const mouseLeaveTimeout = useRef(null);
-  const clickStabilizeTimeout = useRef(null);
-  const justClicked = useRef(false);
+  const [isExpanded, setExpanded] = useState(true)
+  const lastScrollY = useRef(0)
+  const mouseLeaveTimeout = useRef(null)
+  const clickStabilizeTimeout = useRef(null)
+  const justClicked = useRef(false)
 
   const handleSectionClick = (id) => {
-    justClicked.current = true;
-    if (clickStabilizeTimeout.current) clearTimeout(clickStabilizeTimeout.current);
-    clickStabilizeTimeout.current = setTimeout(() => { justClicked.current = false; }, 1200);
-    scrollTo(id);
-  };
+    justClicked.current = true
+    clearTimeout(clickStabilizeTimeout.current)
+    clickStabilizeTimeout.current = setTimeout(() => { justClicked.current = false }, 1200)
+    scrollTo(id)
+  }
 
   useEffect(() => {
-    const handleScroll = () => {
-      const latest = window.scrollY;
-      const previous = lastScrollY.current;
-      if (isExpanded && latest > previous && latest > 150 && !justClicked.current) setExpanded(false);
-      else if (!isExpanded && latest < previous) setExpanded(true);
-      lastScrollY.current = latest;
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (clickStabilizeTimeout.current) clearTimeout(clickStabilizeTimeout.current);
-    };
-  }, [isExpanded]);
+    const onScroll = () => {
+      const latest = window.scrollY
+      if (isExpanded && latest > lastScrollY.current && latest > 150 && !justClicked.current) setExpanded(false)
+      else if (!isExpanded && latest < lastScrollY.current) setExpanded(true)
+      lastScrollY.current = latest
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(clickStabilizeTimeout.current) }
+  }, [isExpanded])
 
   const sections = [
     { label: 'Platform',      id: 'platform',      section: 2 },
-    { label: 'Capabilities',  id: 'capabilities',  section: 3 },
+    { label: 'Engine',        id: 'capabilities',  section: 3 },
     { label: 'Architecture',  id: 'architecture',  section: 4 },
-    { label: 'Documentation', id: 'documentation', section: 5 },
-  ];
+    { label: 'Source',        id: 'documentation', section: 5 },
+  ]
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] hidden md:block">
       <motion.nav
         initial={{ y: -80, opacity: 0 }}
-        animate={isExpanded ? "expanded" : "collapsed"}
-        variants={navContainerVariants}
-        onMouseEnter={() => {
-          if (mouseLeaveTimeout.current) clearTimeout(mouseLeaveTimeout.current);
-          setExpanded(true);
-        }}
-        onMouseLeave={() => {
-          mouseLeaveTimeout.current = setTimeout(() => {
-            if (lastScrollY.current > 150) setExpanded(false);
-          }, 700);
-        }}
-        whileTap={!isExpanded ? { scale: 0.95 } : {}}
-        onClick={(e) => { if (!isExpanded) { e.preventDefault(); setExpanded(true); } }}
+        animate={{ y: 0, opacity: 1, width: isExpanded ? 'auto' : '3.5rem' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        onMouseEnter={() => { clearTimeout(mouseLeaveTimeout.current); setExpanded(true) }}
+        onMouseLeave={() => { mouseLeaveTimeout.current = setTimeout(() => { if (lastScrollY.current > 150) setExpanded(false) }, 700) }}
+        onClick={(e) => { if (!isExpanded) { e.preventDefault(); setExpanded(true) } }}
         className={cn(
-          "flex items-center overflow-hidden rounded-full border shadow-lg backdrop-blur-xl h-14",
-          !isExpanded && "cursor-pointer justify-center"
+          'flex items-center overflow-hidden h-12 bg-black/80 backdrop-blur-2xl border border-white/10',
+          !isExpanded && 'cursor-pointer justify-center'
         )}
-        style={{ background: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+        style={{ clipPath: 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)' }}
       >
+        {/* Logo */}
         <motion.div
-          variants={navLogoVariants}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex-shrink-0 flex items-center text-xl font-extrabold tracking-tight pl-5 pr-4 text-white cursor-pointer transition-all hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]"
-          onClick={(e) => { e.stopPropagation(); scrollTo('hero'); }}
+          animate={{ opacity: isExpanded ? 1 : 0, x: isExpanded ? 0 : -20 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="flex-shrink-0 pl-5 pr-4 cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); scrollTo('hero') }}
         >
-          Spot<span className="text-indigo-400">fixes</span>
+          <span className="text-sm font-extrabold tracking-wider text-white uppercase">
+            SPOTFIXES
+          </span>
         </motion.div>
-        
-        <motion.div className={cn("flex items-center gap-1 sm:gap-2 pr-4", !isExpanded && "pointer-events-none")}>
+
+        {/* Nav links */}
+        <motion.div
+          animate={{ opacity: isExpanded ? 1 : 0 }}
+          transition={{ duration: 0.15 }}
+          className={cn('flex items-center gap-1 pr-4', !isExpanded && 'pointer-events-none')}
+        >
           {sections.map(({ label, id, section }) => {
-            const isActive = currentSection === section;
+            const active = currentSection === section
             return (
-              <motion.button key={id} variants={navItemVariants} onClick={(e) => { e.stopPropagation(); handleSectionClick(id); }} className={cn("relative group rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors", isActive ? "text-white" : "text-white/60 hover:text-white hover:bg-white/5")}>
-                {isActive && <motion.div layoutId="active-landing-nav-pill" className="absolute inset-0 rounded-full bg-white/15" transition={{ type: 'spring', stiffness: 380, damping: 35 }} />}
+              <button
+                key={id}
+                onClick={(e) => { e.stopPropagation(); handleSectionClick(id) }}
+                className="relative px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 rounded-full"
+              style={{ color: active ? '#ffffff' : 'rgba(255,255,255,0.6)' }}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="nav-pill"
+                    className="absolute inset-0 rounded-full"
+                    style={{ background: 'rgba(142,59,255,0.2)' }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 35 }}
+                  />
+                )}
                 <span className="relative z-10">{label}</span>
-              </motion.button>
-            );
+              </button>
+            )
           })}
         </motion.div>
 
-        <motion.div variants={navItemVariants} className={cn("flex items-center pl-1 pr-2", !isExpanded && "pointer-events-none hidden")}>
-          <div className="w-px h-6 mx-2 bg-white/10" />
-          <Button size="sm" onClick={(e) => { e.stopPropagation(); onEnterWorkspace(); }}>
-            Workspace <ArrowRight className="ml-1 h-3 w-3" />
-          </Button>
+        {/* CTA */}
+        <motion.div
+          animate={{ opacity: isExpanded ? 1 : 0 }}
+          transition={{ duration: 0.15 }}
+          className={cn('flex items-center pl-1 pr-2', !isExpanded && 'pointer-events-none hidden')}
+        >
+          <div className="w-px h-5 mx-2 bg-white/10" />
+          <ROGButton size="sm" onClick={(e) => { e.stopPropagation(); onEnterWorkspace() }}>
+            Access <ArrowRight className="ml-1 h-3 w-3" />
+          </ROGButton>
         </motion.div>
 
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-white">
-          <motion.div variants={{ expanded: { opacity: 0 }, collapsed: { opacity: 1 } }} animate={isExpanded ? "expanded" : "collapsed"}>
-            <BrainCircuit className="h-5 w-5" />
+        {/* Collapsed icon */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <motion.div animate={{ opacity: isExpanded ? 0 : 1 }} transition={{ duration: 0.15 }}>
+            <BrainCircuit className="h-5 w-5" style={{ color: '#fa67ff' }} />
           </motion.div>
         </div>
       </motion.nav>
     </div>
-  );
+  )
 }
 
-// ============================================================================
-// ARCHITECTURE MODAL
-// ============================================================================
+// ─── Main Landing ─────────────────────────────────────────────────────────────
 
-function ArchitectureModal({ onClose }) {
+export default function Landing({ onEnterWorkspace }) {
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [currentSection, setCurrentSection] = useState(1)
+  const [showArch, setShowArch] = useState(false)
+  const totalSections = 5
+
+  const { scrollY } = useScroll()
+  const heroParallaxY = useTransform(scrollY, [0, 1000], [0, 150])
+  const feat1ParallaxY = useTransform(scrollY, [800, 3000], [50, -50])
+  const feat2ParallaxY = useTransform(scrollY, [800, 3000], [100, -100])
+
+  // Scroll progress
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+    const onScroll = () => {
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight
+      const progress  = maxScroll > 0 ? Math.min(Math.max(window.scrollY / maxScroll, 0), 1) : 0
+      setScrollProgress(progress)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
-  const pillars = [
-    {
-      label: 'Intelligence',
-      value: 'Random Forest',
-      sub: '222k+ training records',
-      icon: BrainCircuit,
-      cls: 'border-emerald-500/30 from-emerald-500/20 to-emerald-500/5',
-      accent: 'text-emerald-400',
-    },
-    {
-      label: 'API',
-      value: 'FastAPI + JWT',
-      sub: 'Role-based access control',
-      icon: ShieldCheck,
-      cls: 'border-violet-500/30 from-violet-500/20 to-violet-500/5',
-      accent: 'text-violet-400',
-    },
-    {
-      label: 'Data',
-      value: 'Postgres + RLS',
-      sub: 'Per-tenant isolation',
-      icon: Database,
-      cls: 'border-blue-500/30 from-blue-500/20 to-blue-500/5',
-      accent: 'text-blue-400',
-    },
-    {
-      label: 'Client',
-      value: 'React + Vite',
-      sub: 'Real-time SPA',
-      icon: Layers,
-      cls: 'border-amber-500/30 from-amber-500/20 to-amber-500/5',
-      accent: 'text-amber-400',
-    },
-  ];
+  // Section detection
+  useEffect(() => {
+    const obs = SECTION_IDS.map((id, i) => {
+      const el = document.getElementById(id)
+      if (!el) return null
+      const o = new IntersectionObserver(
+        ([e]) => { if (e.isIntersecting) setCurrentSection(i + 1) },
+        { threshold: 0.4 }
+      )
+      o.observe(el)
+      return o
+    })
+    return () => obs.forEach(o => o?.disconnect())
+  }, [])
+
+  // Per-character animated hero title
+  const splitTitle = (text, customStyle = {}) =>
+    text.split('').map((char, i) => (
+      <motion.span
+        key={i}
+        initial={{ y: 24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.7, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
+        className="inline-block whitespace-pre"
+        style={customStyle}
+      >
+        {char}
+      </motion.span>
+    ))
+
+  const features = [
+    { badge: 'Severity Analysis',   title: 'ML Classification',     desc: 'S1–S4 predictions in under a second. Trained on 222k+ real Firefox reports.',   icon: BarChart3,   accent: '#fa67ff' },
+    { badge: 'Duplicate Detection', title: 'Semantic Search',        desc: 'Vector embeddings check every new report against your full bug history.',         icon: Copy,        accent: '#7ef9ff' },
+    { badge: 'Multi-Tenancy',       title: 'Tenant Isolation',       desc: 'Each company runs on its own Postgres table with Row-Level Security.',             icon: ShieldCheck, accent: '#8e3bff' },
+    { badge: 'Access Control',      title: 'Role-Based Permissions', desc: 'User, Admin, and Super Admin tiers with invite flows and approval queues.',        icon: Target,      accent: '#55f7ff' },
+    { badge: 'Bulk Ingestion',      title: 'CSV & JSON Import',      desc: 'Upload thousands of records at once. Each entry classified on arrival.',           icon: Box,         accent: '#a383ff' },
+    { badge: 'Resolution Surfacing', title: 'Fix Surfacing',         desc: 'Retrieve resolved duplicates and the fixes that shipped with them.',               icon: CheckCircle, accent: '#fc00ff' },
+  ]
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="relative w-full bg-black text-white font-sans"
+      style={{ '--selection-bg': '#030000', '--selection-color': '#a9bcdf' }}
     >
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#080808] border border-white/10 rounded-[2rem] shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-8 pt-8 pb-6 bg-[#080808] border-b border-white/5">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
-              <span className="text-[11px] font-medium tracking-[0.06em] uppercase text-emerald-400">System Blueprint</span>
-            </div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">Spotfixes Architecture</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"
-          >
-            ✕
-          </button>
-        </div>
+      <style>{`::selection { background: #030000; color: #a9bcdf; }`}</style>
 
-        <div className="px-8 py-8 space-y-6">
-          {/* Four pillars — confident, high-scannability */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {pillars.map((p) => {
-              const Icon = p.icon;
-              return (
-                <div key={p.label} className={`relative rounded-2xl border bg-gradient-to-br ${p.cls} p-6 overflow-hidden`}>
-                  <div className={`flex items-center gap-2 mb-5 ${p.accent}`}>
-                    <Icon size={16} />
-                    <span className="text-[11px] font-bold uppercase tracking-widest">{p.label}</span>
-                  </div>
-                  <div className="text-2xl font-bold text-white tracking-tight">{p.value}</div>
-                  <div className="text-sm text-white/55 mt-1">{p.sub}</div>
-                </div>
-              );
-            })}
-          </div>
+      <AnimatePresence>
+        {showArch && <ArchitectureModal onClose={() => setShowArch(false)} />}
+      </AnimatePresence>
 
-          {/* Multi-tenancy — one tight callout */}
-          <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-6">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-white/30 mb-3">Multi-Tenant by Default</p>
-            <p className="text-sm text-white/75 leading-relaxed">
-              Every company runs on its own isolated Postgres table with Row-Level Security. The universal model trains on aggregate data; per-company models fine-tune on proprietary bugs.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+      {/* Animated dotted surface background */}
+      <DottedSurface className="z-0" />
 
-export default function Landing({ onEnterWorkspace }) {
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [currentSection, setCurrentSection] = useState(1);
-  const [showArch, setShowArch] = useState(false);
-  const totalSections = 5;
-
-  // --- THREE.JS & GSAP REFS ---
-  const canvasRef = useRef(null);
-  const titleRef = useRef(null);
-  const subtitleRef = useRef(null);
-  const threeRefs = useRef({
-    scene: null, camera: null, renderer: null, composer: null,
-    stars: [], nebula: null, mountains: [], aurora: null, animationId: null,
-    targetCameraX: 0, targetCameraY: 20, targetCameraZ: 300
-  });
-
-  // --- THREE.JS INITIALIZATION ---
-  useEffect(() => {
-    const initThree = () => {
-      const refs = threeRefs.current;
-      
-      refs.scene = new THREE.Scene();
-      refs.scene.fog = new THREE.FogExp2(0x03040f, 0.00022);
-
-      refs.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
-      refs.camera.position.set(0, 20, 300);
-
-      refs.renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true, alpha: true });
-      refs.renderer.setSize(window.innerWidth, window.innerHeight);
-      refs.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      refs.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      refs.renderer.toneMappingExposure = 0.7;
-
-      try {
-        refs.composer = new EffectComposer(refs.renderer);
-        refs.composer.addPass(new RenderPass(refs.scene, refs.camera));
-        refs.composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.4, 0.5, 0.55));
-      } catch {
-        refs.composer = null;
-      }
-
-      // Stars — halve particle count on mobile for performance
-      const starCount = window.innerWidth < 768 ? 2000 : 4000;
-      for (let i = 0; i < 3; i++) {
-        const geo = new THREE.BufferGeometry();
-        const pos = new Float32Array(starCount * 3);
-        const colors = new Float32Array(starCount * 3);
-        const sizes = new Float32Array(starCount);
-        for (let j = 0; j < starCount; j++) {
-          const r = 200 + Math.random() * 1000;
-          const theta = Math.random() * Math.PI * 2;
-          const phi = Math.acos(Math.random() * 2 - 1);
-          pos[j*3] = r * Math.sin(phi) * Math.cos(theta);
-          pos[j*3+1] = r * Math.sin(phi) * Math.sin(theta);
-          pos[j*3+2] = r * Math.cos(phi);
-          
-          const c = new THREE.Color();
-          const choice = Math.random();
-          if (choice < 0.7) c.setHSL(0, 0, 0.8 + Math.random()*0.2);
-          else if (choice < 0.9) c.setHSL(0.6, 0.5, 0.8);
-          else c.setHSL(0.08, 0.5, 0.8);
-          
-          colors[j*3] = c.r; colors[j*3+1] = c.g; colors[j*3+2] = c.b;
-          sizes[j] = Math.random() * 2 + 0.5;
-        }
-        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-        
-        const mat = new THREE.ShaderMaterial({
-          uniforms: { time: { value: 0 }, depth: { value: i } },
-          vertexShader: `
-            attribute float size; attribute vec3 color; varying vec3 vColor;
-            uniform float time; uniform float depth;
-            void main() {
-              vColor = color; vec3 p = position;
-              float angle = time * 0.05 * (1.0 - depth * 0.3);
-              mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
-              p.xy = rot * p.xy;
-              vec4 mvP = modelViewMatrix * vec4(p, 1.0);
-              gl_PointSize = size * (300.0 / -mvP.z);
-              gl_Position = projectionMatrix * mvP;
-            }`,
-          fragmentShader: `
-            varying vec3 vColor;
-            void main() {
-              float d = length(gl_PointCoord - vec2(0.5));
-              if (d > 0.5) discard;
-              gl_FragColor = vec4(vColor, 1.0 - smoothstep(0.0, 0.5, d));
-            }`,
-          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
-        });
-        const stars = new THREE.Points(geo, mat);
-        refs.scene.add(stars);
-        refs.stars.push(stars);
-      }
-
-      // Mountains — distinct silhouette layers from near-black to deep indigo-blue
-      const layers = [
-        { distance: 0,     height: 60,  color: 0x05050d, opacity: 1.0  },
-        { distance: -400,  height: 80,  color: 0x0b0e22, opacity: 0.95 },
-        { distance: -800,  height: 100, color: 0x0e1840, opacity: 0.85 },
-        { distance: -1200, height: 120, color: 0x112054, opacity: 0.65 },
-        { distance: -1600, height: 140, color: 0x0d1a42, opacity: 0.45 },
-      ];
-      layers.forEach((layer) => {
-        const pts = [];
-        for (let i = 0; i <= 50; i++) {
-          const x = (i / 50 - 0.5) * 4000;
-          const y = Math.sin(i * 0.1) * layer.height + Math.sin(i * 0.05) * layer.height * 0.5 + Math.random() * layer.height * 0.2 - 100;
-          pts.push(new THREE.Vector2(x, y));
-        }
-        pts.push(new THREE.Vector2(2000, -500), new THREE.Vector2(-2000, -500));
-        const mtn = new THREE.Mesh(
-          new THREE.ShapeGeometry(new THREE.Shape(pts)),
-          new THREE.MeshBasicMaterial({ color: layer.color, transparent: true, opacity: layer.opacity, side: THREE.DoubleSide })
-        );
-        mtn.position.z = layer.distance;
-        refs.scene.add(mtn);
-        refs.mountains.push(mtn);
-      });
-
-      // Aurora — horizon glow sitting just above the mountain ridges
-      const auroraGeo = new THREE.PlaneGeometry(4000, 200, 1, 1);
-      const auroraMat = new THREE.ShaderMaterial({
-        uniforms: {
-          time: { value: 0 },
-          color1: { value: new THREE.Color(0x2255ff) },
-          color2: { value: new THREE.Color(0x7722ff) },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-        `,
-        fragmentShader: `
-          varying vec2 vUv; uniform float time; uniform vec3 color1; uniform vec3 color2;
-          void main() {
-            float alpha = sin(vUv.y * 3.14159) * 0.45;
-            float hFade = smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x);
-            alpha *= hFade;
-            float w1 = sin(vUv.x * 5.0 + time * 0.35) * 0.07;
-            float w2 = sin(vUv.x * 11.0 - time * 0.25) * 0.04;
-            alpha = max(0.0, alpha * (1.0 + w1 + w2));
-            float colorShift = sin(time * 0.18) * 0.3;
-            vec3 color = mix(color1, color2, clamp(vUv.x + colorShift, 0.0, 1.0));
-            gl_FragColor = vec4(color, alpha);
-          }
-        `,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      const auroraPlane = new THREE.Mesh(auroraGeo, auroraMat);
-      auroraPlane.position.set(0, 5, -850);
-      refs.scene.add(auroraPlane);
-      refs.aurora = auroraPlane;
-
-      const animate = () => {
-        refs.animationId = requestAnimationFrame(animate);
-        const t = Date.now() * 0.001;
-        refs.stars.forEach(s => { if (s.material.uniforms) s.material.uniforms.time.value = t; });
-        if (refs.aurora) refs.aurora.material.uniforms.time.value = t;
-        
-        if (refs.camera) {
-          refs.camera.position.x += (refs.targetCameraX - refs.camera.position.x) * 0.05 + Math.sin(t * 0.1) * 0.1;
-          refs.camera.position.y += (refs.targetCameraY - refs.camera.position.y) * 0.05 + Math.cos(t * 0.15) * 0.05;
-          refs.camera.position.z += (refs.targetCameraZ - refs.camera.position.z) * 0.05;
-          refs.camera.lookAt(0, 10, -1000);
-        }
-        
-        refs.mountains.forEach((m, i) => {
-          m.position.x = Math.sin(t * 0.1) * 2 * (1 + i * 0.5);
-        });
-        if (refs.composer) refs.composer.render();
-        else if (refs.renderer) refs.renderer.render(refs.scene, refs.camera);
-      };
-      animate();
-    };
-
-    initThree();
-
-    const handleResize = () => {
-      const refs = threeRefs.current;
-      if (refs.camera && refs.renderer) {
-        refs.camera.aspect = window.innerWidth / window.innerHeight;
-        refs.camera.updateProjectionMatrix();
-        refs.renderer.setSize(window.innerWidth, window.innerHeight);
-        if (refs.composer) refs.composer.setSize(window.innerWidth, window.innerHeight);
-      }
-    };
-
-    const handleMouseMove = (e) => {
-      const refs = threeRefs.current;
-      refs.targetCameraX = ((e.clientX / window.innerWidth) - 0.5) * 45;
-    };
-
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-
-    return () => {
-      const refs = threeRefs.current;
-      if (refs.animationId) cancelAnimationFrame(refs.animationId);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('mousemove', handleMouseMove);
-      refs.stars.forEach(s => { s.geometry.dispose(); s.material.dispose(); });
-      refs.mountains.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
-      if (refs.aurora) { refs.aurora.geometry.dispose(); refs.aurora.material.dispose(); }
-      if (refs.renderer) refs.renderer.dispose();
-    };
-  }, []);
-
-  const splitTitle = (text) => text.split('').map((char, i) => (
-    <motion.span
-      key={i}
-      initial={{ y: 100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      whileHover={{ scale: 1.15, color: '#818cf8', textShadow: '0 0 25px rgba(129,140,248,0.6)' }}
-      transition={{ duration: 0.8, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
-      className="inline-block title-char whitespace-pre cursor-pointer"
-    >
-      {char}
-    </motion.span>
-  ));
-
-  // Scroll progress bar
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
-      const documentHeight = document.documentElement.scrollHeight;
-      const windowHeight = window.innerHeight;
-      const maxScroll = documentHeight - windowHeight;
-      const progress = maxScroll > 0 ? Math.min(Math.max(scrollY / maxScroll, 0), 1) : 0;
-      setScrollProgress(progress);
-      // Move camera deep into mountains based on scroll
-      if (threeRefs.current.camera) {
-        threeRefs.current.targetCameraZ = 300 - (progress * 1100);
-        threeRefs.current.targetCameraY = 20 + (progress * 40);
-      }
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Section detection via IntersectionObserver — no boundary flicker
-  useEffect(() => {
-    const observers = SECTION_IDS.map((id, idx) => {
-      const el = document.getElementById(id);
-      if (!el) return null;
-      const obs = new IntersectionObserver(
-        ([entry]) => { if (entry.isIntersecting) setCurrentSection(idx + 1); },
-        { threshold: 0.4 }
-      );
-      obs.observe(el);
-      return obs;
-    });
-    return () => observers.forEach(o => o?.disconnect());
-  }, []);
-
-  return (
-    <div className="relative w-full bg-black text-white selection:bg-white/20 font-sans">
-      {showArch && <ArchitectureModal onClose={() => setShowArch(false)} />}
-
-      <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-0 pointer-events-none" style={{ background: '#03040f' }} />
+      {/* Deep vignette + color wash over dots */}
+      <div
+        className="fixed inset-0 z-[1] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 35%, rgba(0,0,0,0.65) 100%)' }}
+      />
+      {/* Subtle magenta-cyan gradient bloom at center */}
+      <div
+        className="fixed inset-0 z-[1] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(142,59,255,0.12) 0%, transparent 70%)' }}
+      />
 
       <AnimatedLandingNav currentSection={currentSection} onEnterWorkspace={onEnterWorkspace} />
 
-      {/* Mobile Navbar Fallback */}
-      <nav className="fixed top-0 left-0 right-0 z-50 w-full bg-black/10 backdrop-blur-xl border-b border-white/10 transition-all">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 md:hidden">
-          <div className="relative flex h-16 items-center justify-between">
-            <div className="flex items-center cursor-pointer flex-shrink-0 transition-transform hover:scale-105 active:scale-95" onClick={() => scrollTo('hero')}>
-              <span className="text-2xl font-extrabold tracking-tight text-white hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-all">
-                Spot<span className="text-indigo-400">fixes</span>
-              </span>
-            </div>
-            <div className="flex-shrink-0">
-              <Button size="sm" onClick={onEnterWorkspace}>
-                Enter Workspace
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-
+      {/* Mobile nav */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-black/85 backdrop-blur-2xl border-b border-white/8 md:hidden">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="flex h-16 items-center justify-between">
+            <span className="text-base font-extrabold tracking-wide uppercase cursor-pointer text-white" onClick={() => scrollTo('hero')}>
+              SPOTFIXES
+            </span>
+            <ROGButton size="sm" onClick={onEnterWorkspace}>
+              Access <ArrowRight className="ml-1 h-3 w-3" />
+            </ROGButton>
           </div>
         </div>
       </nav>
 
-      {/* Scroll Progress Indicator */}
-      <div className="fixed right-6 lg:right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-6 z-50 hidden md:flex pointer-events-none">
-        <div className="text-[11px] font-bold tracking-[0.2em] text-white/40 uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Scroll</div>
-        <div className="w-[2px] h-32 bg-white/10 relative rounded-full overflow-hidden">
-          <div className="absolute top-0 left-0 w-full bg-white transition-all duration-150 ease-out" style={{ height: `${scrollProgress * 100}%` }} />
+      {/* Scroll progress indicator */}
+      <div className="fixed right-6 lg:right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-50 hidden md:flex pointer-events-none">
+        <div className="text-[10px] font-extrabold tracking-[0.3em] text-white/50 uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+          System State
         </div>
-        <div className="text-[11px] font-bold font-mono text-white/40">
-          {String(currentSection).padStart(2, '0')} / {String(totalSections).padStart(2, '0')}
+        <div className="w-px h-32 bg-white/10 relative overflow-visible">
+          <div
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[3px] transition-all duration-100 ease-out"
+            style={{ height: `${Math.max(scrollProgress * 100, 5)}%`, background: ROG_GRADIENT, boxShadow: '0 0 10px #fa67ff, 0 0 20px #7ef9ff' }}
+          />
+        </div>
+        <div className="text-[11px] font-extrabold text-white/80 font-mono">
+          {String(currentSection).padStart(2,'0')} <span className="text-white/40">/ {String(totalSections).padStart(2,'0')}</span>
         </div>
       </div>
 
-      {/* Main Content Sections */}
+      {/* ═══════════════════════════════════════════════════════════ */}
       <div className="relative z-10 flex flex-col w-full">
-        
-        {/* SECTION 1: HERO */}
-        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-20 relative">
-          {/* Radial vignette so hero text reads cleanly over the 3D scene */}
-          <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 90% 70% at 50% 50%, transparent 35%, rgba(0,0,0,0.6) 100%)' }} />
-          {/* Bottom fade into next section */}
-          <div className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none bg-gradient-to-t from-black/60 to-transparent" />
-          <div className="max-w-4xl text-center w-full relative z-10">
-            {/* Badge */}
-            <div className="mb-8 inline-flex items-center rounded-full bg-white/[0.10] backdrop-blur-xl border border-white/20 px-5 py-2.5 text-sm font-semibold text-white/95">
-              <ShieldCheck className="mr-2 h-4 w-4 text-indigo-300" />
-              Enterprise Bug Triage Engine
-            </div>
 
-            {/* Main Heading (Animated by Framer Motion) */}
-            <h1 className="mb-6 text-4xl font-bold tracking-tighter text-white sm:text-7xl lg:text-8xl flex flex-wrap justify-center overflow-hidden">
-              {splitTitle("SPOTFIXES")}
-            </h1>
+        {/* ── SECTION 1: HERO ──────────────────────────────────────── */}
+        <section id="hero" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-32 lg:pt-40 relative">
+          <div
+            className="absolute bottom-0 left-0 right-0 h-60 pointer-events-none"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)' }}
+          />
 
-            {/* Subtitle */}
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-              className="mb-10 text-center"
-            >
-              <p className="subtitle-line text-xl leading-relaxed text-white/85 sm:text-2xl max-w-2xl mx-auto font-medium">
-                Predict. Classify. Resolve.
-              </p>
-              <p className="subtitle-line text-lg leading-relaxed text-white/60 max-w-2xl mx-auto mt-3">
-                Automated severity classification & duplicate detection.
-              </p>
-            </motion.div>
+          <div className="max-w-6xl w-full mx-auto relative z-10 flex flex-col items-center text-center">
 
-            {/* CTA Buttons */}
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.9, type: "spring", stiffness: 200, damping: 15 }}
-              className="hero-btn flex flex-col sm:flex-row items-center justify-center gap-4 mb-12"
-            >
-              <Button size="lg" className="shadow-2xl shadow-white/25 font-semibold" onClick={onEnterWorkspace}>
-                Enter Workspace
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button variant="outline" size="lg" className="font-semibold bg-transparent" onClick={() => setShowArch(true)}>
-                View Architecture
-              </Button>
-            </motion.div>
+              {/* Left: text */}
+            <div className="w-full flex flex-col items-center">
+                {/* Eyebrow label */}
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: [0.16,1,0.3,1] }}
+                >
+                  <SectionLabel>ML-Powered Bug Intelligence</SectionLabel>
+                </motion.div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 max-w-2xl mx-auto rounded-2xl overflow-hidden border border-white/10 bg-white/[0.04] backdrop-blur-sm divide-x divide-white/10">
-              {[
-                { value: '222k+', label: 'Training Records' },
-                { value: '< 1s',  label: 'Prediction Latency' },
-                { value: 'S1–S4', label: 'Auto-Classification' },
-              ].map((s) => (
-                <div key={s.label} className="text-center px-4 py-6 sm:px-8 sm:py-7">
-                  <div className="text-3xl sm:text-4xl font-bold text-white mb-1.5">{s.value}</div>
-                  <div className="text-white/55 text-xs sm:text-sm font-medium">{s.label}</div>
-                </div>
-              ))}
-            </div>
+                {/* Hero headline */}
+              <h1 className="text-5xl sm:text-7xl lg:text-[8rem] font-extrabold tracking-tighter uppercase mb-6 leading-[1.1] pb-2 flex flex-wrap flex-shrink-0 items-baseline justify-center" style={{ textShadow: '0 0 40px rgba(250,103,255,0.15)' }}>
+                  <div className="flex text-white">
+                    {splitTitle('SPOTFIXES')}
+                  </div>
+                </h1>
+
+                {/* Tagline */}
+                <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.6, ease: [0.16,1,0.3,1] }}
+                className="mb-10 flex flex-col items-center"
+                >
+                <p className="text-2xl sm:text-3xl font-medium text-white mb-4 tracking-tight leading-snug">
+                    From report to resolution —{' '}
+                    <span className="text-white">in under a second.</span>
+                  </p>
+                <p className="text-lg sm:text-xl text-white/80 leading-relaxed max-w-2xl font-medium" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.8)' }}>
+                    Severity classification and duplicate detection, powered by a
+                    Random Forest model trained on 222k+ real Mozilla Firefox reports.
+                    Built for engineering teams that ship fast.
+                  </p>
+                </motion.div>
+
+                {/* CTAs */}
+                <motion.div
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.75, ease: [0.16,1,0.3,1] }}
+                className="flex flex-wrap justify-center gap-5 mb-16"
+                >
+                  <ROGButton size="lg" onClick={onEnterWorkspace}>
+                    Start Triaging <ArrowRight className="ml-2 h-4 w-4" />
+                  </ROGButton>
+                  <ROGButton variant="outline" size="lg" onClick={() => setShowArch(true)}>
+                    View Architecture
+                  </ROGButton>
+                </motion.div>
+
+                {/* Spec metrics */}
+                <motion.div
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.9, ease: [0.16,1,0.3,1] }}
+                className="grid grid-cols-3 gap-px bg-white/8 border border-white/8 overflow-hidden w-full max-w-4xl mx-auto"
+                  style={{ clipPath: DIAG_CUT }}
+                >
+                  {[
+                    { value: '222K+', label: 'Training Records' },
+                    { value: '< 1s',  label: 'Inference Time'   },
+                    { value: 'S1–S4', label: 'Severity Classes' },
+                  ].map((s) => (
+                    <div key={s.label} className="relative text-center px-4 py-6 bg-black">
+                      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: '#ffffff', opacity: 0.2 }} />
+                      <div className="text-2xl sm:text-4xl font-extrabold tracking-tighter mb-1 font-mono text-white">{s.value}</div>
+                      <div className="text-xs font-bold text-white/60 uppercase tracking-widest">{s.label}</div>
+                    </div>
+                  ))}
+                </motion.div>
+              </div>
+
+              {/* Hero image with Parallax */}
+              <motion.div
+                initial={{ opacity: 0, x: 40, scale: 0.97 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ duration: 0.7, delay: 0.3, ease: [0.16,1,0.3,1] }}
+                className="w-full mt-20 hidden md:block"
+                style={{ y: heroParallaxY }}
+              >
+                <ImageCard
+                  src="/images/Hero.webp"
+                  alt="A macro shot of a futuristic glass processor chip glowing with vivid cyan and magenta neon light against an absolute black background."
+                  className="aspect-[21/9] w-full"
+                />
+              </motion.div>
           </div>
         </section>
 
-        {/* SECTION 2: PLATFORM */}
-        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative py-24">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent pointer-events-none" />
-          <div className="max-w-5xl w-full relative z-10">
+        {/* ── SECTION 2: PLATFORM ──────────────────────────────────── */}
+        <section id="platform" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(142,59,255,0.04) 0%, transparent 70%)' }}
+          />
+          <div className="max-w-7xl w-full relative z-10">
+
+            {/* Tech background lines */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/5 pointer-events-none hidden lg:block" />
+            <div className="absolute top-1/2 left-0 right-0 h-px bg-white/5 pointer-events-none hidden lg:block" />
+
             <div className="text-center mb-16">
-              <div className="mb-5 inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/25 px-4 py-1.5 text-xs text-blue-300 font-bold uppercase tracking-widest">
-                Platform
-              </div>
+              <SectionLabel>Core Platform</SectionLabel>
               <AnimatedScrollHeader
-                title="The bug triage workspace<br/>for product teams."
-                subtitle="Submit, classify, and resolve — in one place."
-                className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
-                subtitleClassName="text-xl md:text-2xl text-white/70 leading-relaxed max-w-2xl mx-auto"
+                title="Every capability your team<br/>needs to ship confidently."
+            subtitle="Classify, deduplicate, and route bugs — automatically, on every submission. Complete visibility and control."
+            className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight text-white"
+            subtitleClassName="text-xl text-white/80 leading-relaxed max-w-3xl mx-auto font-normal"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[
-                { badge: 'Severity Analysis',   title: 'ML Classification',      desc: 'S1–S4 predictions in under a second. Trained on 222k+ real Firefox reports.',  color: 'text-blue-300',   hoverBorder: 'hover:border-blue-400/40',   glow: 'group-hover:from-blue-500/8'   },
-                { badge: 'Duplicate Detection', title: 'Semantic Search',         desc: 'Vector embeddings check every new report against your full bug history.',       color: 'text-purple-300', hoverBorder: 'hover:border-purple-400/40', glow: 'group-hover:from-purple-500/8' },
-                { badge: 'Multi-Tenancy',       title: 'Tenant Isolation',        desc: 'Each company runs on its own Postgres table with Row-Level Security.',          color: 'text-emerald-300',hoverBorder: 'hover:border-emerald-400/40',glow: 'group-hover:from-emerald-500/8'},
-                { badge: 'Access Control',      title: 'Role-Based Permissions',  desc: 'User, Admin, and Super Admin tiers with invite flows and approval queues.',     color: 'text-amber-300',  hoverBorder: 'hover:border-amber-400/40',  glow: 'group-hover:from-amber-500/8'  },
-                { badge: 'Bulk Ingestion',      title: 'CSV & JSON Import',       desc: 'Upload thousands of records at once. Each entry classified on arrival.',        color: 'text-pink-300',   hoverBorder: 'hover:border-pink-400/40',   glow: 'group-hover:from-pink-500/8'   },
-                { badge: 'Resolution',          title: 'Fix Surfacing',           desc: 'Retrieve resolved duplicates and the fixes that shipped with them.',            color: 'text-cyan-300',   hoverBorder: 'hover:border-cyan-400/40',   glow: 'group-hover:from-cyan-500/8'   },
-              ].map((f, i) => (
-                <div key={i} className={`group relative bg-white/[0.06] backdrop-blur-sm border border-white/[0.12] rounded-2xl p-7 transition-all duration-300 hover:bg-white/[0.10] hover:-translate-y-0.5 hover:shadow-xl ${f.hoverBorder}`}>
-                  <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br from-transparent to-transparent ${f.glow} transition-all duration-300 pointer-events-none`} />
-                  <div className={`text-xs font-bold uppercase tracking-widest mb-4 ${f.color}`}>{f.badge}</div>
-                  <h3 className="text-white font-bold text-xl mb-3 tracking-tight leading-snug">{f.title}</h3>
-                  <p className="text-white/65 text-sm leading-relaxed">{f.desc}</p>
-                </div>
-              ))}
+
+            {/* Feature grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+              {features.map((f, i) => {
+                const Icon = f.icon
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 28 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: i * 0.05, ease: [0.16,1,0.3,1] }}
+                    className="relative bg-white/[0.04] border border-white/8 p-8 group cursor-default transition-all duration-300 hover:bg-white/[0.07] hover:-translate-y-1 hover:border-white/14 shadow-sm hover:shadow-xl"
+                    style={{ clipPath: DIAG_CUT }}
+                  >
+                    {/* gradient top border */}
+                    <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, ${f.accent}, transparent)` }} />
+
+                    <div
+                      className="w-11 h-11 rounded-full flex items-center justify-center mb-5"
+                      style={{ background: f.accent + '18' }}
+                    >
+                      <Icon size={20} style={{ color: f.accent }} />
+                    </div>
+
+                    <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: f.accent }}>{f.badge}</p>
+                    <h3 className="text-white font-bold text-xl mb-2 tracking-tight">{f.title}</h3>
+                    <p className="text-white/70 text-base leading-relaxed">{f.desc}</p>
+                  </motion.div>
+                )
+              })}
+            </div>
+
+          </div>
+        </section>
+
+        {/* ── SECTION 3: CAPABILITIES ──────────────────────────────── */}
+        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse 60% 70% at 50% 50%, rgba(250,103,255,0.04) 0%, transparent 70%)' }}
+          />
+          <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-16 lg:gap-24 items-start relative z-10">
+
+            {/* Left */}
+            <div>
+              <SectionLabel>Adaptive ML Engine</SectionLabel>
+              <AnimatedScrollHeader
+                title="Accuracy that compounds<br/>with every review cycle."
+                subtitle="Human corrections feed directly into retraining. Your model gets smarter every sprint."
+              className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-8 leading-tight text-white"
+              subtitleClassName="text-xl text-white/80 leading-relaxed mb-12 font-normal"
+              />
+
+              <ul className="space-y-5">
+                {[
+                  { text: 'TF-IDF n-gram feature extraction',      accent: '#fa67ff' },
+                  { text: 'Vector RAG duplicate detection',         accent: '#7ef9ff' },
+                  { text: 'Feedback-driven model retraining',       accent: '#8e3bff' },
+                  { text: '222k+ Mozilla Firefox training records', accent: '#55f7ff' },
+                ].map((item) => (
+                  <li
+                    key={item.text}
+                  className="flex items-center gap-4 text-base font-bold text-white/90 border border-white/8 bg-white/[0.03] px-6 py-5 transition-all hover:bg-white/[0.06]"
+                    style={{ clipPath: DIAG_CUT }}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: item.accent, boxShadow: `0 0 8px ${item.accent}` }}
+                    />
+                    {item.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Right: feature images */}
+            <div className="space-y-12 lg:space-y-16">
+              {/* Severity analysis */}
+              <motion.div style={{ y: feat1ParallaxY }}>
+                <ImageCard
+                  src="/images/Severity.webp"
+                  alt="Severity classification dashboard showing S1–S4 tiers with neon glow."
+                  accent="linear-gradient(90deg, #ff4200, #ff9e1b)"
+                  className="w-full aspect-video"
+                />
+              </motion.div>
+
+              {/* Duplicate detection */}
+              <motion.div style={{ y: feat2ParallaxY }}>
+                <ImageCard
+                  src="/images/Duplicate.webp"
+                  alt="Duplicate detection visualization showing two code structures matched by a neon beam."
+                  accent="linear-gradient(90deg, #8e3bff, #fa67ff)"
+                  className="w-full aspect-video"
+                />
+              </motion.div>
             </div>
           </div>
         </section>
 
-        {/* SECTION 3: CAPABILITIES */}
-        <section id="capabilities" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative py-24">
-           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/10 to-transparent pointer-events-none" />
-           <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-16 items-center relative z-10">
-              <div className="text-left">
-                 <div className="mb-5 inline-flex items-center rounded-full bg-purple-500/10 border border-purple-500/25 px-4 py-1.5 text-xs text-purple-300 font-bold uppercase tracking-widest">
-                   Capabilities
-                 </div>
-                 <AnimatedScrollHeader
-                   title="A model that learns from your team."
-                   subtitle="Corrections feed back into training. Accuracy improves every review cycle."
-                   className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
-                   subtitleClassName="text-xl text-white/70 leading-relaxed mb-10"
-                 />
-                 <ul className="space-y-5">
-                   {[
-                     'TF-IDF n-gram feature extraction',
-                     'Vector RAG duplicate detection',
-                     'Feedback-driven model retraining',
-                   ].map((item) => (
-                     <li key={item} className="flex items-center gap-4 text-lg text-white/85 bg-white/[0.04] border border-white/[0.10] rounded-xl px-5 py-4 backdrop-blur-sm">
-                       <CheckCircle size={20} className="text-purple-400 flex-shrink-0" />
-                       {item}
-                     </li>
-                   ))}
-                 </ul>
-              </div>
-              <div className="bg-white/[0.06] border border-white/[0.15] rounded-3xl aspect-square flex items-center justify-center relative overflow-hidden backdrop-blur-md shadow-2xl p-10">
-                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-500/20 via-purple-900/5 to-transparent pointer-events-none" />
-                 {/* Decorative rings */}
-                 <div className="absolute w-48 h-48 rounded-full border border-purple-500/15 pointer-events-none" />
-                 <div className="absolute w-64 h-64 rounded-full border border-purple-500/10 pointer-events-none" />
-                 <div className="absolute w-80 h-80 rounded-full border border-purple-500/5 pointer-events-none" />
-                 <Brain size={120} className="text-purple-400/60 relative z-10" />
-              </div>
-           </div>
-        </section>
+        {/* ── SECTION 4: ARCHITECTURE ──────────────────────────────── */}
+        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse 60% 70% at 50% 50%, rgba(85,247,255,0.03) 0%, transparent 70%)' }}
+          />
+          <div className="max-w-7xl w-full relative z-10">
 
-        {/* SECTION 4: ARCHITECTURE */}
-        <section id="architecture" className="min-h-screen w-full flex flex-col items-center justify-center px-0 border-t border-white/[0.08] relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/10 to-transparent pointer-events-none" />
-          <div className="w-full text-center relative z-10 py-24">
-             <div className="mb-5 inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/25 px-4 py-1.5 text-xs text-emerald-300 font-bold uppercase tracking-widest">
-               Architecture & Stack
-             </div>
-             <AnimatedScrollHeader
-               title="Built with enterprise tools."
-               subtitle="FastAPI and Supabase Postgres. Row-Level Security enforced per tenant."
-               className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 px-6"
-               subtitleClassName="text-xl text-white/70 leading-relaxed max-w-2xl mx-auto mb-16 px-6"
-             />
-             
-             <TechStackCarousel />
+            <div className="mb-24">
+              <div className="text-center mb-12">
+                <SectionLabel>Infrastructure</SectionLabel>
+                <AnimatedScrollHeader
+                  title="Enterprise-grade stack,<br/>zero ops overhead."
+                  subtitle="FastAPI on the edge. Supabase Postgres with Row-Level Security enforced per tenant by default. Maximum scalability."
+                  className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight text-white"
+                  subtitleClassName="text-xl text-white/80 leading-relaxed max-w-3xl mx-auto font-normal"
+                />
+              </div>
 
-             <div className="mt-16 px-6">
-                 <Button size="lg" className="shadow-2xl shadow-white/10 font-semibold" onClick={() => scrollTo('documentation')}>
-                   View Documentation <ArrowRight className="ml-2 h-5 w-5" />
-                 </Button>
-             </div>
+              {/* Tenant isolation status */}
+              <div className="max-w-sm mx-auto">
+                <ImageCard
+                  src={null}
+                  alt="Tenant isolation status"
+                  accent="linear-gradient(90deg, #00CB07, #7ef9ff)"
+                  className="h-44"
+                >
+                  <div className="text-center">
+                    <CheckCircle size={34} className="mx-auto mb-2" style={{ color: '#42ca42', filter: 'drop-shadow(0 0 12px #00CB07)' }} />
+                    <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: '#42ca42' }}>Secure Isolation</p>
+                    <p className="text-[12px] font-medium text-white/70">Row-Level Security · Active</p>
+                  </div>
+                </ImageCard>
+              </div>
+            </div>
+
+            {/* Tech stack */}
+            <div className="text-center mb-10">
+              <SectionLabel>Technology Matrix</SectionLabel>
+            </div>
+            <TechStackCarousel />
+
+            <div className="mt-16 text-center">
+              <ROGButton size="lg" onClick={() => scrollTo('documentation')}>
+                View Documentation <ArrowRight className="ml-2 h-4 w-4" />
+              </ROGButton>
+            </div>
           </div>
         </section>
 
-        {/* SECTION 5: DOCUMENTATION */}
-        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative pb-24 pt-24">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent pointer-events-none" />
-          <div className="max-w-4xl w-full relative z-10">
-             <div className="text-center mb-14">
-               <div className="mb-5 inline-flex items-center rounded-full bg-white/[0.08] border border-white/15 px-4 py-1.5 text-xs text-white/70 font-bold uppercase tracking-widest">
-                 Open Source
-               </div>
-               <AnimatedScrollHeader
-                 title="Read the source."
-                 subtitle="ML pipeline, backend, and frontend — all in one repository."
-                 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
-                 subtitleClassName="text-xl text-white/70 leading-relaxed max-w-xl mx-auto"
-               />
-             </div>
+        {/* ── SECTION 5: DOCUMENTATION ─────────────────────────────── */}
+        <section id="documentation" className="min-h-screen w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+          <div className="max-w-5xl w-full relative z-10">
 
-             {/* GitHub Open Source Banner */}
-             <div className="mt-16 relative group">
-               <div className="absolute -inset-px rounded-[2rem] bg-gradient-to-r from-white/15 via-white/8 to-white/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-               <div className="relative bg-white/[0.07] border border-white/[0.15] rounded-[2rem] p-8 lg:p-12 overflow-hidden backdrop-blur-sm">
+            <div className="text-center mb-14">
+              <SectionLabel>Open Source</SectionLabel>
+              <AnimatedScrollHeader
+                title="Built in the open."
+              subtitle="ML pipeline, REST API, and React frontend — everything in one public repository for complete transparency."
+              className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight text-white"
+              subtitleClassName="text-xl text-white/80 leading-relaxed max-w-2xl mx-auto font-normal"
+              />
+            </div>
 
-                 {/* Background glow */}
-                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-white/8 via-transparent to-transparent pointer-events-none" />
-                 <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+            {/* GitHub banner */}
+            <div
+              className="relative border border-white/10 bg-white/[0.03] p-8 lg:p-12 overflow-hidden group hover:bg-white/[0.05] transition-all duration-300"
+              style={{ clipPath: DIAG_CUT_LG }}
+            >
+              <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: ROG_GRADIENT }} />
+              <div
+                className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(142,59,255,0.06), transparent 60%)' }}
+              />
 
-                 <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+              <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+                <div className="flex items-start gap-5 flex-1">
+                  <div className="w-14 h-14 rounded-2xl bg-white/8 border border-white/12 flex items-center justify-center flex-shrink-0">
+                    <GithubIcon size={22} className="text-white" />
+                  </div>
+                  <div>
+                    <div className="mb-3">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 border border-white/12 bg-white/5 px-3 py-1 rounded-full">
+                        Open Source
+                      </span>
+                    </div>
+                <h3 className="text-2xl font-extrabold text-white tracking-tight mb-3">Built in the Open.</h3>
+                <p className="text-base text-white/80 leading-relaxed max-w-lg">
+                      Full source — ML pipeline, backend, frontend. Fork and contribute.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4 mt-5">
+                  <div className="flex items-center gap-2 text-white/70 text-sm font-bold">
+                        <Star size={12} style={{ color: '#ff9e1b' }} /> Open Source
+                      </div>
+                      <div className="w-px h-3 bg-white/15" />
+                  <div className="flex items-center gap-2 text-white/70 text-sm font-bold">
+                        <GitFork size={12} style={{ color: '#55f7ff' }} /> Fork & Contribute
+                      </div>
+                      <div className="w-px h-3 bg-white/15" />
+                  <span className="text-white/50 text-sm font-bold">tajmilur-rahman / senior-design-2025</span>
+                    </div>
+                  </div>
+                </div>
 
-                   {/* Left — text */}
-                   <div className="flex items-start gap-5 flex-1">
-                     <div className="w-14 h-14 rounded-2xl bg-white/[0.10] border border-white/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                       <GithubIcon size={24} className="text-white" />
-                     </div>
-                     <div>
-                       <div className="flex items-center gap-3 mb-3">
-                         <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 border border-white/15 bg-white/[0.06] px-3 py-1 rounded-full">Open Source</span>
-                       </div>
-                       <h3 className="text-2xl font-bold text-white tracking-tight mb-2">Built in the open.</h3>
-                       <p className="text-base text-white/65 leading-relaxed max-w-lg">
-                         Full source — ML pipeline, backend, frontend. Fork and contribute.
-                       </p>
-                       <div className="flex flex-wrap items-center gap-4 mt-5">
-                         <div className="flex items-center gap-1.5 text-white/55 text-xs font-medium">
-                           <Star size={13} className="text-amber-400" />
-                           <span className="font-mono">Open Source</span>
-                         </div>
-                         <div className="w-px h-3 bg-white/15" />
-                         <div className="flex items-center gap-1.5 text-white/55 text-xs font-medium">
-                           <GitFork size={13} className="text-blue-400" />
-                           <span className="font-mono">Fork &amp; Contribute</span>
-                         </div>
-                         <div className="w-px h-3 bg-white/15" />
-                         <div className="flex items-center gap-1.5 text-white/55 text-xs font-mono">
-                           tajmilur-rahman / senior-design-2025
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-
-                   {/* Right — CTA buttons */}
-                   <div className="flex flex-col sm:flex-row lg:flex-col gap-3 flex-shrink-0">
-                     <a
-                       href={GITHUB_REPO}
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       className="flex items-center justify-center gap-2.5 bg-white text-black hover:bg-zinc-100 font-bold text-sm px-7 py-3.5 rounded-2xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:shadow-[0_0_35px_rgba(255,255,255,0.25)] hover:-translate-y-0.5"
-                     >
-                       <GithubIcon size={16} />
-                       View on GitHub
-                     </a>
-                     <a
-                       href={`${GITHUB_REPO}/archive/refs/heads/main.zip`}
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       className="flex items-center justify-center gap-2 bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 hover:border-white/25 text-white/75 hover:text-white font-semibold text-sm px-7 py-3.5 rounded-2xl transition-all hover:-translate-y-0.5"
-                     >
-                       <ExternalLink size={14} />
-                       Download ZIP
-                     </a>
-                   </div>
-
-                 </div>
-               </div>
-             </div>
-
+                <div className="flex flex-col sm:flex-row lg:flex-col gap-4 flex-shrink-0">
+                  <ROGButton href={GITHUB_REPO} target="_blank" size="md">
+                    <GithubIcon size={14} className="mr-2" /> View on GitHub
+                  </ROGButton>
+                  <ROGButton href={`${GITHUB_REPO}/archive/refs/heads/main.zip`} target="_blank" variant="outline" size="md">
+                    <ExternalLink size={13} className="mr-2" /> Download ZIP
+                  </ROGButton>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* SECTION 6: TEAM CREDITS */}
-        <section className="w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.08] relative py-24">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-900/10 to-transparent pointer-events-none" />
-          <div className="max-w-4xl w-full relative z-10">
+        {/* ── SECTION 6: TEAM CREDITS ──────────────────────────────── */}
+        <section className="w-full flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 border-t border-white/[0.06] relative py-32 lg:py-40">
+          <div className="max-w-6xl w-full relative z-10">
 
-            {/* Header */}
             <div className="text-center mb-16">
-              <div className="mb-5 inline-flex items-center rounded-full bg-indigo-500/10 border border-indigo-500/25 px-4 py-1.5 text-xs text-indigo-300 font-bold uppercase tracking-widest">
-                Senior Design Project · 2025-26
-              </div>
+              <SectionLabel>Senior Design Project · 2025-26</SectionLabel>
               <AnimatedScrollHeader
                 title="Gannon University"
-                subtitle="Erie, Pennsylvania"
-                className="text-4xl md:text-5xl font-bold tracking-tight mb-3"
-                subtitleClassName="text-white/55 text-lg"
+              subtitle="Erie, Pennsylvania — Senior Design 2025"
+              className="text-5xl md:text-7xl font-extrabold tracking-tight mb-4 leading-tight text-white"
+              subtitleClassName="text-white/70 text-lg font-medium"
               />
             </div>
 
-            {/* Team Members */}
+            {/* Team */}
             <div className="mb-10">
-              <p className="text-xs font-bold uppercase tracking-widest text-white/40 text-center mb-7">Built and developed by</p>
-              <div className="flex flex-wrap justify-center gap-4">
-                {['Amartuvshin Ganzorig', 'Anunjin Batdelger', 'Koshi Yuasa'].map((name) => (
-                  <div key={name} className="bg-white/[0.08] border border-white/[0.15] rounded-2xl px-8 py-5 text-center backdrop-blur-sm hover:bg-white/[0.12] hover:-translate-y-0.5 transition-all duration-200">
-                    <div className="text-white font-bold text-xl tracking-tight">{name}</div>
-                  </div>
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/50 text-center mb-8">
+                Built and developed by
+              </p>
+              <div className="flex flex-wrap justify-center gap-6">
+                {['Amartuvshin Ganzorig', 'Anunjin Batdelger', 'Koshi Yuasa'].map((name, i) => (
+                  <motion.div
+                    key={name}
+                    initial={{ opacity: 0, y: 14 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.45, delay: i * 0.08, ease: [0.16,1,0.3,1] }}
+                    className="relative border border-white/10 bg-white/[0.04] px-8 py-5 text-center transition-all duration-300 hover:bg-white/[0.08] hover:-translate-y-1 group cursor-default"
+                    style={{ clipPath: DIAG_CUT }}
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-[2px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: ROG_GRADIENT }} />
+                  <div className="text-white font-bold text-lg tracking-wide">{name}</div>
+                  </motion.div>
                 ))}
               </div>
             </div>
 
-            {/* Faculty + Advisors — 3-column grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-7 hover:bg-white/[0.09] transition-all duration-200">
-                <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-5">Faculty Mentor</p>
-                <div className="text-white font-bold text-xl">Dr. Tajmilur Rahman</div>
-              </div>
-
-              <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-7 hover:bg-white/[0.09] transition-all duration-200">
-                <p className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-5">Senior Design Professors</p>
-                <div className="space-y-3">
-                  <div className="text-white font-bold text-xl">Dr. Mei-Huei Tang</div>
-                  <div className="text-white font-bold text-xl">Dr. Richard Matovu</div>
-                </div>
-              </div>
-
-              <div className="bg-white/[0.06] border border-white/[0.12] rounded-2xl p-7 hover:bg-white/[0.09] transition-all duration-200">
-                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-5">Mozilla Firefox · Guidance</p>
-                <div className="space-y-3">
-                  <div className="text-white font-bold text-xl">Marco Castelluccio</div>
-                  <div className="text-white font-bold text-xl">Suhaib Mujahid</div>
-                </div>
-              </div>
+            {/* Faculty / advisors */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+              {[
+                { label: 'Faculty Mentor',         accent: '#ff9e1b', names: ['Dr. Tajmilur Rahman'] },
+                { label: 'Design Professors',      accent: '#8e3bff', names: ['Dr. Mei-Huei Tang', 'Dr. Richard Matovu'] },
+                { label: 'Mozilla · Guidance',     accent: '#fa67ff', names: ['Marco Castelluccio', 'Suhaib Mujahid'] },
+              ].map((col, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.45, delay: i * 0.08, ease: [0.16,1,0.3,1] }}
+                  className="relative border border-white/8 bg-white/[0.03] p-7 transition-all hover:bg-white/[0.06]"
+                  style={{ clipPath: DIAG_CUT }}
+                >
+                  <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: col.accent }} />
+                  <p className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: col.accent }}>{col.label}</p>
+                  <div className="space-y-3">
+                    {col.names.map((n) => (
+                    <div key={n} className="text-white font-bold text-lg">{n}</div>
+                    ))}
+                  </div>
+                </motion.div>
+              ))}
             </div>
 
           </div>
@@ -904,18 +971,26 @@ export default function Landing({ onEnterWorkspace }) {
 
       </div>
 
-      {/* Back to Top Button */}
+      {/* Back to top */}
       <AnimatePresence>
-        {scrollProgress > 0.15 && (
+        {scrollProgress > 0.12 && (
           <motion.button
             initial={{ opacity: 0, scale: 0.8, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ duration: 0.25, ease: [0.16,1,0.3,1] }}
             onClick={() => scrollTo('hero')}
-            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white backdrop-blur-xl shadow-2xl transition-all hover:-translate-y-1"
+            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 bg-white/8 border border-white/12 text-white hover:bg-white/14 transition-all duration-200 hover:-translate-y-1"
+            style={{
+              borderRadius: '50%',
+              boxShadow: '0 0 0 0px rgba(250,103,255,0)',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 20px rgba(250,103,255,0.3)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 0 0px rgba(250,103,255,0)' }}
             title="Back to top"
           >
-            <ArrowUp size={20} />
+            <ArrowUp size={18} />
           </motion.button>
         )}
       </AnimatePresence>
