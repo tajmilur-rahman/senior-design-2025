@@ -40,8 +40,8 @@ const NAV_TABS = [
 ];
 
 const sidebarVariants = {
-  expanded: { width: "14rem", transition: { type: "spring", damping: 20, stiffness: 250, staggerChildren: 0.05 } },
-  collapsed: { width: "4rem", transition: { type: "spring", damping: 20, stiffness: 250, staggerChildren: 0.05, staggerDirection: -1, when: "afterChildren" } }
+  expanded: { width: "16rem", transition: { type: "spring", damping: 20, stiffness: 250, staggerChildren: 0.05 } },
+  collapsed: { width: "5rem", transition: { type: "spring", damping: 20, stiffness: 250, staggerChildren: 0.05, staggerDirection: -1, when: "afterChildren" } }
 };
 
 const sidebarTextVariants = {
@@ -210,7 +210,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const navigate = (targetTab, query = '', prefill = null, filters = null) => {
     setTab(prev => { setPreviousTab(prev); return targetTab; });
     setExtQ(query);
-    if (prefill) setPrefill(prefill);
+    setPrefill(prefill || null);
     setExtFilters(filters || null);
     setMobileNavOpen(false);
     setAvatarMenuOpen(false);
@@ -313,18 +313,18 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     };
 
     const adminItems = [
-      { label: 'Admin Panel', icon: <Users size={18} />, onClick: () => { closeMenu(); navigate('users'); }, show: isAdmin && !isSuperAdmin },
-      { label: 'Super Admin Panel', icon: <Crown size={18} />, onClick: () => { closeMenu(); navigate('superadmin'); }, show: isSuperAdmin, color: 'text-amber-400' },
-      { label: 'System Panel', icon: <Crown size={18} />, onClick: () => { closeMenu(); navigate('superadmin'); }, show: isDeveloper, color: 'text-sky-500' },
+      { label: 'Admin Panel', icon: <Users size={20} />, onClick: () => { closeMenu(); navigate('users'); }, show: isAdmin && !isSuperAdmin },
+      { label: 'Super Admin Panel', icon: <Crown size={20} />, onClick: () => { closeMenu(); navigate('superadmin'); }, show: isSuperAdmin, color: 'text-amber-400' },
+      { label: 'System Panel', icon: <Crown size={20} />, onClick: () => { closeMenu(); navigate('superadmin'); }, show: isDeveloper, color: 'text-sky-500' },
     ].filter(i => i.show);
 
     const prefItems = [
-      { label: 'Your Profile', icon: <UserCog size={18} />, onClick: () => { closeMenu(); navigate('profile'); }, show: true },
+      { label: 'Your Profile', icon: <UserCog size={20} />, onClick: () => { closeMenu(); navigate('profile'); }, show: true },
       { 
         label: 'Appearance', 
         rightLabel: theme === 'dark' ? 'Dark' : 'Light', 
         icon: (
-          <div className="relative w-[18px] h-[18px] flex items-center justify-center">
+          <div className="relative w-[20px] h-[20px] flex items-center justify-center">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.div
                 key={theme}
@@ -334,7 +334,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                 transition={{ duration: 0.2 }}
                 className="absolute flex"
               >
-                {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+                {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -345,7 +345,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         label: 'Navigation', 
         rightLabel: navOrientation === 'horizontal' ? 'Left' : 'Top', 
         icon: (
-          <div className="relative w-[18px] h-[18px] flex items-center justify-center">
+          <div className="relative w-[20px] h-[20px] flex items-center justify-center">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.div
                 key={navOrientation}
@@ -355,7 +355,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                 transition={{ duration: 0.2 }}
                 className="absolute flex"
               >
-                {navOrientation === 'horizontal' ? <PanelLeft size={18} /> : <PanelTop size={18} />}
+                {navOrientation === 'horizontal' ? <PanelLeft size={20} /> : <PanelTop size={20} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -365,7 +365,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     ].filter(i => i.show);
 
     const accountItems = [
-      { label: 'Log out', icon: <LogOut size={18} />, onClick: () => { closeMenu(); onLogout(); }, show: true, color: 'text-red-500', hoverBg: 'hover:bg-red-500/10 hover:text-red-600' }
+      { label: 'Log out', icon: <LogOut size={20} />, onClick: () => { closeMenu(); onLogout(); }, show: true, color: 'text-red-500', hoverBg: 'hover:bg-red-500/10 hover:text-red-600' }
     ].filter(i => i.show);
 
     const renderMenuItem = (item, index) => (
@@ -376,14 +376,14 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         transition={{ duration: 0.2, delay: index * 0.03 }}
         role="menuitem"
         onClick={(e) => { e.stopPropagation(); item.onClick(); }}
-        className={`w-full flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-[13px] font-semibold transition-colors ${item.hoverBg || 'hover:bg-[var(--hover-bg)] hover:text-[var(--text-main)]'} ${item.color || 'text-[var(--text-sec)]'}`}
+        className={`w-full flex items-center justify-between p-3 rounded-xl cursor-pointer text-sm font-semibold transition-colors ${item.hoverBg || 'hover:bg-[var(--hover-bg)] hover:text-[var(--text-main)]'} ${item.color || 'text-[var(--text-sec)]'}`}
       >
         <span className="flex items-center gap-3">
           <span className="opacity-70">{item.icon}</span>
           {item.label}
         </span>
         {item.rightLabel && (
-          <span className="text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded border" style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-dim)' }}>
+          <span className="text-[11px] uppercase tracking-widest font-bold px-2.5 py-0.5 rounded border" style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-dim)' }}>
             {item.rightLabel}
           </span>
         )}
@@ -402,18 +402,18 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         className={`absolute ${positionClass} z-[100]`}
         role="menu"
       >
-        <div className="w-[310px] rounded-2xl shadow-2xl p-0" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-          <section className="rounded-2xl p-1.5 shadow-inner border m-1" style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}>
+        <div className="w-[340px] rounded-2xl shadow-2xl p-0" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+          <section className="rounded-2xl p-2 shadow-inner border m-1" style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}>
             {/* Profile Header */}
-            <div className="flex items-center p-2.5 gap-3 mb-1">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md flex-shrink-0" style={{ background: 'var(--accent)' }}>
+            <div className="flex items-center p-3 gap-3.5 mb-1">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0" style={{ background: 'var(--accent)' }}>
                 {initials}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm truncate leading-tight" style={{ color: 'var(--text-main)' }}>{user?.username || 'User'}</h3>
-                <p className="text-xs truncate leading-tight mt-0.5" style={{ color: 'var(--text-sec)' }}>{user?.email || 'email@example.com'}</p>
+                <h3 className="font-semibold text-base truncate leading-tight" style={{ color: 'var(--text-main)' }}>{user?.username || 'User'}</h3>
+                <p className="text-sm truncate leading-tight mt-0.5" style={{ color: 'var(--text-sec)' }}>{user?.email || 'email@example.com'}</p>
               </div>
-              <div className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-md border ${getStatusColor(user?.status)}`}>
+              <div className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest rounded-md border ${getStatusColor(user?.status)}`}>
                 {user?.status || 'Active'}
               </div>
             </div>
@@ -421,7 +421,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
             {adminItems.length > 0 && (
               <>
                 <div className="h-px my-1.5 mx-2" style={{ background: 'var(--border)' }} />
-                <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>Administration</div>
+                <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>Administration</div>
                 <div className="flex flex-col gap-0.5">
                   {adminItems.map(item => renderMenuItem(item, animIndex++))}
                 </div>
@@ -429,7 +429,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
             )}
 
             <div className="h-px my-1.5 mx-2" style={{ background: 'var(--border)' }} />
-            <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>Preferences</div>
+            <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>Preferences</div>
             <div className="flex flex-col gap-0.5">
               {prefItems.map(item => renderMenuItem(item, animIndex++))}
             </div>
@@ -446,19 +446,19 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   };
 
   const desktopRightActions = (
-    <div className="flex items-center gap-1.5 sm:gap-2">
+    <div className="flex items-center gap-2 sm:gap-3">
       {isAdmin && (
-        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-8 h-8 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white" title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}>
-          <Bell size={14} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
-          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
+        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white" title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}>
+          <Bell size={18} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
+          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[10px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
         </button>
       )}
       <div ref={avatarMenuRef} className="relative">
-        <button onClick={(e) => { e.stopPropagation(); setAvatarMenuOpen(o => !o); }} className="flex items-center gap-1.5 px-1 pr-2 py-1 rounded-full transition-all border" style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
-          <div className="w-6 h-6 text-xs font-bold flex items-center justify-center rounded-full" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
+        <button onClick={(e) => { e.stopPropagation(); setAvatarMenuOpen(o => !o); }} className="flex items-center gap-2 px-1.5 pr-3 py-1.5 rounded-full transition-all border" style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
+          <div className="w-8 h-8 text-sm font-bold flex items-center justify-center rounded-full" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
             {(user?.username || 'U')[0].toUpperCase()}
           </div>
-          <ChevronDown size={14} className={`transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-main)' }} />
+          <ChevronDown size={16} className={`transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-main)' }} />
         </button>
         <AnimatePresence>
           {avatarMenuOpen && renderAnimatedAvatarMenu(() => setAvatarMenuOpen(false))}
@@ -471,16 +471,16 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
     <div className="flex-shrink-0 flex items-center gap-2">
       {isAdmin && (
         <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 active:bg-white/15 transition-all text-white/70 hover:text-white">
-          <Bell size={15} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
-          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
+          <Bell size={18} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
+          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[10px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
         </button>
       )}
       <div ref={mobileAvatarMenuRef} className="relative">
-        <button onClick={(e) => { e.stopPropagation(); setAvatarMenuOpen(o => !o); }} className="flex items-center gap-2 px-1 pr-3 py-1 rounded-full transition-all border" style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
-          <div className="w-7 h-7 text-xs font-bold flex items-center justify-center rounded-full" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
+        <button onClick={(e) => { e.stopPropagation(); setAvatarMenuOpen(o => !o); }} className="flex items-center gap-2 px-1.5 pr-3 py-1.5 rounded-full transition-all border" style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
+          <div className="w-8 h-8 text-sm font-bold flex items-center justify-center rounded-full" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
             {(user?.username || 'U')[0].toUpperCase()}
           </div>
-          <ChevronDown size={14} className={`transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-main)' }} />
+          <ChevronDown size={16} className={`transition-transform ${avatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-main)' }} />
         </button>
         <AnimatePresence>
           {avatarMenuOpen && renderAnimatedAvatarMenu(() => setAvatarMenuOpen(false))}
@@ -502,15 +502,15 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
           aria-label="Primary navigation"
         >
-          <div className="px-4 h-16 flex items-center border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-            <button onClick={() => setSidebarExpanded(!isSidebarExpanded)} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 text-white/70">
-              <Menu size={18} />
+        <div className="px-5 h-[72px] flex items-center border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+          <button onClick={() => setSidebarExpanded(!isSidebarExpanded)} className="flex items-center justify-center w-11 h-11 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 text-white/70">
+            <Menu size={24} />
             </button>
-            <motion.button variants={sidebarTextVariants} onClick={() => navigate('overview')} className="ml-3 text-xl font-extrabold tracking-tight text-white whitespace-nowrap overflow-hidden transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
-              Spot<span className="text-indigo-400">fixes</span>
+          <motion.button variants={sidebarTextVariants} onClick={() => navigate('overview')} className="ml-3.5 text-xl font-extrabold tracking-widest uppercase text-white whitespace-nowrap overflow-hidden transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
+              SPOTFIXES
             </motion.button>
           </div>
-          <nav className="flex-1 py-4 px-2 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar" aria-label="Sections">
+        <nav className="flex-1 py-5 px-3 space-y-2 overflow-y-auto overflow-x-hidden custom-scrollbar" aria-label="Sections">
             {NAV_TABS.map(t => {
               if (t.superAdminOnly && !isSuperAdmin)  return null;
               if (t.adminOnly      && !isAdmin)       return null;
@@ -523,7 +523,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                   onClick={() => navigate(t.id)}
                   aria-current={isActive ? 'page' : undefined}
                   title={!isSidebarExpanded ? t.label : undefined}
-                  className={`relative group w-full flex items-center px-2 py-2.5 rounded-lg text-sm font-semibold text-left ${
+              className={`relative group w-full flex items-center px-3 py-3.5 rounded-xl text-base font-semibold text-left ${
                     !isActive && 'hover:bg-white/5'
                   } ${isSidebarExpanded ? 'justify-start' : 'justify-center'}`}
                 >
@@ -539,7 +539,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                     <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full" style={{ background: 'var(--accent)' }} />
                   )}
                   
-                  {Icon && <Icon size={18} className={`relative z-10 flex-shrink-0 transition-colors duration-200 ${isActive ? 'text-white' : 'opacity-50 group-hover:opacity-100'}`} style={isActive ? { color: 'var(--text-main)' } : {}} />}
+                  {Icon && <Icon size={18} className={`relative z-10 flex-shrink-0 transition-all duration-200 group-hover:scale-110 ${isActive ? 'text-white' : 'opacity-50 group-hover:opacity-100'}`} style={isActive ? { color: 'var(--text-main)' } : {}} />}
                   <motion.span variants={sidebarTextVariants} className={`relative z-10 ml-3 truncate transition-colors duration-200 ${isActive ? 'font-semibold' : 'opacity-60 group-hover:opacity-100'}`} style={{ color: 'var(--text-main)' }}>{t.label}</motion.span>
                 </button>
               );
@@ -547,19 +547,19 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           </nav>
           
           {/* Vertical Sidebar Bottom Actions (User, Theme, Notifications) */}
-          <div className="p-3 border-t flex-shrink-0 flex flex-col gap-2" style={{ borderColor: 'var(--border)' }}>
+        <div className="p-4 border-t flex-shrink-0 flex flex-col gap-3" style={{ borderColor: 'var(--border)' }}>
             <div className={`flex ${isSidebarExpanded ? 'items-center justify-between px-2' : 'flex-col items-center gap-3 pt-2'}`}>
-              <motion.span variants={sidebarTextVariants} className="text-[10px] font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">System</motion.span>
-              <div className={`flex ${isSidebarExpanded ? 'items-center gap-1' : 'flex-col items-center gap-2'}`}>
+            <motion.span variants={sidebarTextVariants} className="text-[11px] font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">System</motion.span>
+            <div className={`flex ${isSidebarExpanded ? 'items-center gap-2' : 'flex-col items-center gap-2'}`}>
                 {isAdmin && (
                   <button
                     onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')}
-                    className="relative flex items-center justify-center w-7 h-7 rounded-full bg-transparent hover:bg-white/10 text-white/50 hover:text-white transition-all"
+                  className="relative flex items-center justify-center w-10 h-10 rounded-full bg-transparent hover:bg-white/10 text-white/50 hover:text-white transition-all"
                     title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}
                   >
-                    <Bell size={13} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
+                  <Bell size={20} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
                     {pendingCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[11px] font-bold text-black flex items-center justify-center">
                         {pendingCount > 9 ? '9+' : pendingCount}
                       </span>
                     )}
@@ -572,22 +572,22 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
               <button
                 type="button"
                 onClick={() => setSidebarAvatarMenuOpen(o => !o)}
-                className={`w-full flex items-center ${isSidebarExpanded ? 'gap-2.5 px-2 py-1.5' : 'justify-center py-2'} rounded-xl transition-all border`}
+              className={`w-full flex items-center ${isSidebarExpanded ? 'gap-3 px-3 py-2.5' : 'justify-center py-2.5'} rounded-xl transition-all border`}
                 style={{ background: 'var(--hover-bg)', borderColor: 'var(--border)' }}
               >
-                <div className="w-8 h-8 text-xs font-bold flex items-center justify-center rounded-full flex-shrink-0" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
+              <div className="w-10 h-10 text-base font-bold flex items-center justify-center rounded-full flex-shrink-0" style={{ background: 'var(--text-main)', color: 'var(--bg)' }}>
                   {(user?.username || 'U')[0].toUpperCase()}
                 </div>
                 <motion.div variants={sidebarTextVariants} className="flex-1 min-w-0 text-left">
-                  <div className="text-sm font-bold truncate leading-tight" style={{ color: 'var(--text-main)' }}>
+                <div className="text-base font-bold truncate leading-tight" style={{ color: 'var(--text-main)' }}>
                     {user?.username || 'User'}
                   </div>
-                  <div className="text-[10px] truncate leading-tight capitalize" style={{ color: 'var(--text-sec)' }}>
+                <div className="text-xs truncate leading-tight capitalize mt-0.5" style={{ color: 'var(--text-sec)' }}>
                     {user?.role?.replace('_', ' ') || 'User'}
                   </div>
                 </motion.div>
                 <motion.div variants={sidebarTextVariants}>
-                  <ChevronUp size={14} className={`transition-transform flex-shrink-0 ${sidebarAvatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-sec)' }} />
+                <ChevronUp size={20} className={`transition-transform flex-shrink-0 ${sidebarAvatarMenuOpen ? 'rotate-180' : ''}`} style={{ color: 'var(--text-sec)' }} />
                 </motion.div>
               </button>
 
@@ -606,13 +606,13 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         style={{ background: 'var(--nav-bg)', borderColor: 'var(--border)' }}
         aria-label="Mobile Top bar"
       >
-        <div className="px-4 h-16 flex items-center justify-between">
+        <div className="px-4 h-[72px] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 active:bg-white/15 transition-all">
-              <Menu size={18} className="text-white/70" />
+              <Menu size={20} className="text-white/70" />
             </button>
             <div className="flex items-center cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => navigate('overview')}>
-              <span className="text-2xl font-extrabold tracking-tight text-white hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">Spot<span className="text-indigo-400">fixes</span></span>
+              <span className="text-xl font-extrabold tracking-widest uppercase text-white hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all">SPOTFIXES</span>
             </div>
           </div>
           {mobileRightActions}
@@ -627,21 +627,21 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
             onClick={() => setMobileNavOpen(false)}
             aria-hidden="true"
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 max-w-[80%] border-r flex flex-col" style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}>
-            <div className="h-16 px-5 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-              <span className="text-xl font-extrabold tracking-tight" style={{ color: 'var(--text-main)' }}>
-                Spot<span className="text-indigo-400">fixes</span>
+        <aside className="absolute left-0 top-0 bottom-0 w-72 max-w-[85%] border-r flex flex-col" style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}>
+          <div className="h-[72px] px-5 flex items-center justify-between border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+            <span className="text-xl font-extrabold tracking-widest uppercase" style={{ color: 'var(--text-main)' }}>
+                SPOTFIXES
               </span>
               <button
                 onClick={() => setMobileNavOpen(false)}
                 aria-label="Close navigation menu"
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
                 style={{ color: 'var(--text-sec)' }}
               >
-                <X size={16} />
+              <X size={20} />
               </button>
             </div>
-            <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+          <nav className="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
               {NAV_TABS.map(t => {
                 if (t.superAdminOnly && !isSuperAdmin)  return null;
                 if (t.adminOnly      && !isAdmin)       return null;
@@ -651,13 +651,13 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
                     key={t.id}
                     onClick={() => navigate(t.id)}
                     aria-current={tab === t.id ? 'page' : undefined}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
+                  className={`group w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-base font-semibold transition-all text-left ${
                       tab === t.id
                         ? 'bg-white/15 text-white'
                         : 'text-white/70 hover:bg-white/10 hover:text-white'
                     }`}
                   >
-                    {t.superAdminOnly && <Crown size={11} className="opacity-80" />}
+                  {t.superAdminOnly && <Crown size={14} className="opacity-80 transition-transform duration-200 group-hover:scale-110" />}
                     <span className="truncate">{t.label}</span>
                   </button>
                 );
@@ -669,7 +669,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
 
       {navOrientation === 'horizontal' && <AnimatedNavFramer navItems={visibleTabs} currentTab={tab} onNavigate={navigate} rightActions={desktopRightActions} onBack={goBack} canGoBack={!!previousTab} />}
 
-      <main className={`main-scroll relative z-10 transition-all duration-300 ${navOrientation === 'vertical' ? (isSidebarExpanded ? 'pt-16 md:pt-8 md:pl-56' : 'pt-16 md:pt-8 md:pl-16') : 'pt-16 md:pt-24'}`}>
+      <main className={`main-scroll relative z-10 transition-all duration-300 ${navOrientation === 'vertical' ? (isSidebarExpanded ? 'pt-[72px] md:pt-8 md:pl-64' : 'pt-[72px] md:pt-8 md:pl-20') : 'pt-[72px] md:pt-[104px]'}`}>
         {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
         {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} onNavigate={navigate} />}
         {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}

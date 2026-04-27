@@ -4,8 +4,8 @@ import { mozillaTaxonomy } from '../javascript/taxonomy';
 import {
   UploadCloud, AlertCircle, FileText, PenTool,
   Cpu, CheckCircle, Send, Trash2, X,
-  FolderTree, Database, RefreshCw, ArrowRight, Info,
-  Globe, Building2, Zap, Lock, ChevronDown,
+  Database, RefreshCw, ArrowRight, Info,
+  Building2, Zap, Lock, ChevronDown,
   BrainCircuit, ClipboardCheck, Archive,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -369,24 +369,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
     }
   };
 
-  const [resetting, setResetting]           = useState(false);
-  const [confirmingReset, setConfirmingReset] = useState(false);
-
-  const handleResetTable = async () => {
-    setConfirmingReset(false);
-    setResetting(true);
-    try {
-      const res = await axios.post('/api/admin/table/reset');
-      setBatches([]);
-      showMsg(res.data.message || 'Database reset complete.');
-      fetchBugs();
-    } catch (e) {
-      showMsg(e.response?.data?.detail || 'Reset failed.', 'error');
-    } finally {
-      setResetting(false);
-    }
-  };
-
   const handleBulkUpload = async () => {
     if (!file) return; setLoading(true); showMsg('Uploading…');
     const fd = new FormData(); fd.append('file', file); fd.append('batch_name', file.name);
@@ -533,9 +515,9 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                   {/* Description textarea */}
                   <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3">
-                      <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Describe the Issue</label>
+                      <label className="text-xs font-bold text-white/50 uppercase tracking-widest">Describe the Issue</label>
                       <span className="text-[11px] text-red-400 font-bold border border-red-500/20 bg-red-500/10 px-2 py-0.5 rounded tracking-widest uppercase">required</span>
-                      <span className="ml-auto text-[11px] font-bold text-white/30 uppercase tracking-widest">Demo samples →</span>
+                      <span className="ml-auto text-xs font-bold text-white/50 uppercase tracking-widest">Demo samples →</span>
                     </div>
                     {/* Quick sample chips */}
                     <div className="flex flex-wrap gap-2 mb-3">
@@ -556,7 +538,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                       ))}
                     </div>
                     <textarea
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none transition-all text-sm min-h-[120px] resize-y font-mono"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/50 focus:outline-none transition-all text-sm min-h-[120px] resize-y font-mono"
                       style={{ '--tw-ring-color': 'var(--accent)' }}
                       placeholder="Expected behavior vs actual behavior… Stack traces…"
                       value={summary}
@@ -568,7 +550,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
 
                   {/* Severity selection */}
                   <div className="mb-6">
-                    <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-4">Severity Selection</div>
+                    <div className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">Severity Selection</div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {SEVERITY_DEFS.map(def => {
                         const isSelected = severity === def.code;
@@ -768,46 +750,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                     </div>
                   )}
 
-                  {/* Danger zone */}
-                  <div className="mt-6 pt-6 border-t border-white/5">
-                    <div className="text-xs font-bold text-white/30 uppercase tracking-widest mb-3">Danger zone</div>
-                    {confirmingReset ? (
-                      <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
-                        <p className="text-xs text-white/70 mb-4 leading-relaxed">
-                          This will permanently delete all bulk-imported bugs for your company. The Firefox baseline dataset will not be affected.
-                        </p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleResetTable}
-                            disabled={resetting}
-                            className="flex-1 py-2 bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs rounded-xl hover:bg-red-500/30 transition-all disabled:opacity-50"
-                          >
-                            {resetting ? 'Resetting…' : 'Yes, delete imported bugs'}
-                          </button>
-                          <button
-                            onClick={() => setConfirmingReset(false)}
-                            className="flex-1 py-2 bg-white/5 border border-white/10 text-white/50 font-bold text-xs rounded-xl hover:bg-white/10 transition-all"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmingReset(true)}
-                        disabled={resetting}
-                        className="w-full flex items-center gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl hover:bg-red-500/10 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/20 transition-colors">
-                          {resetting ? <RefreshCw size={15} className="text-red-400 animate-spin" /> : <Trash2 size={15} className="text-red-400" />}
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-bold text-red-400">{resetting ? 'Resetting…' : 'Reset to Original Database'}</div>
-                          <div className="text-xs text-white/40 mt-0.5">Removes all bulk-imported bugs — Firefox baseline data stays intact</div>
-                        </div>
-                      </button>
-                    )}
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -905,11 +847,11 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 z-10" style={{ background: 'var(--card-bg)' }}>
                 <tr className="border-b border-white/5">
-                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium pl-6">Severity</th>
-                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium">Summary</th>
-                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium hidden sm:table-cell">Component</th>
-                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium hidden md:table-cell">Product</th>
-                  <th className="pb-3 pt-4 text-[11px] text-white/40 uppercase tracking-widest font-medium text-right pr-6 hidden lg:table-cell">Status</th>
+                  <th className="pb-3 pt-4 text-xs text-white/50 uppercase tracking-widest font-medium pl-6">Severity</th>
+                  <th className="pb-3 pt-4 text-xs text-white/50 uppercase tracking-widest font-medium">Summary</th>
+                  <th className="pb-3 pt-4 text-xs text-white/50 uppercase tracking-widest font-medium hidden sm:table-cell">Component</th>
+                  <th className="pb-3 pt-4 text-xs text-white/50 uppercase tracking-widest font-medium hidden md:table-cell">Product</th>
+                  <th className="pb-3 pt-4 text-xs text-white/50 uppercase tracking-widest font-medium text-right pr-6 hidden lg:table-cell">Status</th>
                   <th className="pb-3 pt-4 pr-4"></th>
                 </tr>
               </thead>

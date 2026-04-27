@@ -273,7 +273,7 @@ export default function Directory({ onNavigate, user }) {
             <BentoCard
               key={item.name}
               className="p-6 lg:p-8 cursor-pointer hover:!border-indigo-500/40 hover:!bg-white/[0.04]"
-              onClick={() => onNavigate('submit', '', { component: item.name })}
+              onClick={() => onNavigate('database', '', null, { comp: item.name })}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0" />
 
@@ -287,7 +287,7 @@ export default function Directory({ onNavigate, user }) {
               </div>
 
               <div className="text-indigo-400 group-hover:text-indigo-300 font-bold text-xs uppercase tracking-widest flex items-center gap-2 relative z-10 transition-colors">
-                Pre-fill &amp; Submit <ArrowRight size={12} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                View bugs <ArrowRight size={12} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </div>
             </BentoCard>
           ))
