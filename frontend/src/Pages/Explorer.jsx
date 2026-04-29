@@ -626,10 +626,6 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                                                 {sevDef && <p className="text-xs text-white/40 mt-2 leading-relaxed">{sevDef.desc}</p>}
                                             </div>
                                         </div>
-                                        <div>
-                                            <span className="block text-xs font-bold text-white/50 uppercase tracking-widest mb-1">Reporter</span>
-                                            <span className="text-white/70 text-xs">{selectedBug.reporter || '—'}</span>
-                                        </div>
                                     </div>
                                 </div>
 
