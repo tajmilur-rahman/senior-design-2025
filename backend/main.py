@@ -878,12 +878,14 @@ async def create_bug(request: BugPayload, current_user: dict = Depends(auth.requ
 
     table = get_company_table(cid)
     payload = {
-        "summary":              request.summary,
-        "component":            component_value,
-        "severity":             request.severity,
-        "status":               "NEW",
-        "consent_global_model": request.consent_global_model,
+        "summary":   request.summary,
+        "component": component_value,
+        "severity":  request.severity,
+        "status":    "NEW",
     }
+    # consent_global_model only exists on the shared bugs table
+    if table == "bugs":
+        payload["consent_global_model"] = request.consent_global_model
     if not is_shared_table(table):
         payload["company_id"] = cid
 
