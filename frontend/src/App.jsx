@@ -1,26 +1,33 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { supabase } from './supabaseClient';
 import axios from 'axios';
-import BugAnalysis     from './Pages/BugAnalysis';
-import Overview        from './Pages/Overview';
-import Explorer        from './Pages/Explorer';
-import SubmitTab from './Pages/Submit';
 import Login           from './Pages/Login';
-import Directory       from './Pages/Directory';
 import Landing         from './Pages/Landing';
-import Onboarding      from './Pages/Onboarding';
-import Performance     from './Pages/Performance';
-import SuperAdmin        from './Pages/SuperAdmin';
-import UserManagement    from './Pages/UserManagement';
-import ResolutionSupport from './Pages/ResolutionSupport';
 import PendingApproval   from './Pages/PendingApproval';
 import CodeWall          from './Pages/CodeWall';
-import ProfileSettings   from './Pages/ProfileSettings';
-import CompanyProfile    from './Pages/CompanyProfile';
-import { LogOut, Crown, Users, ChevronDown, ChevronLeft, ChevronUp, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon, Menu, PanelLeft, PanelTop, LayoutDashboard, FlaskConical, Gauge, BarChart3, BookUser, Database, ShieldCheck, Building2 } from 'lucide-react';
+const BugAnalysis     = lazy(() => import('./Pages/BugAnalysis'));
+const Overview        = lazy(() => import('./Pages/Overview'));
+const Explorer        = lazy(() => import('./Pages/Explorer'));
+const SubmitTab       = lazy(() => import('./Pages/Submit'));
+const Directory       = lazy(() => import('./Pages/Directory'));
+const Onboarding      = lazy(() => import('./Pages/Onboarding'));
+const Performance     = lazy(() => import('./Pages/Performance'));
+const SuperAdmin      = lazy(() => import('./Pages/SuperAdmin'));
+const UserManagement  = lazy(() => import('./Pages/UserManagement'));
+const ResolutionSupport = lazy(() => import('./Pages/ResolutionSupport'));
+const ProfileSettings = lazy(() => import('./Pages/ProfileSettings'));
+const CompanyProfile  = lazy(() => import('./Pages/CompanyProfile'));
+import { LogOut, Crown, Users, ChevronDown, ChevronUp, UserCog, BrainCircuit, CheckCircle, X, AlertTriangle, Bell, Sun, Moon, Menu, PanelLeft, PanelTop, LayoutDashboard, FlaskConical, Gauge, BarChart3, BookUser, Database, ShieldCheck, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import { AnimatedNavFramer } from './navigation-menu';
+import ErrorBoundary from './Components/ErrorBoundary';
+
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--border-strong)', borderTopColor: 'var(--accent)' }} />
+  </div>
+);
 
 axios.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
@@ -30,12 +37,12 @@ axios.interceptors.request.use(async (config) => {
 
 const NAV_TABS = [
   { id: 'overview',    label: 'Overview',          icon: LayoutDashboard },
-  { id: 'submit',      label: 'Bug Ingestion', icon: FlaskConical },
+  { id: 'submit',      label: 'Bug Ingestion',     icon: FlaskConical },
   { id: 'performance', label: 'Performance',       icon: Gauge,          adminOnly: true },
-  { id: 'analysis',    label: 'Analytics',         icon: BarChart3 },
+  { id: 'analysis',    label: 'Severity Analysis', icon: BarChart3 },
+  { id: 'resolution',  label: 'Analytics',         icon: ShieldCheck },
   { id: 'directory',   label: 'Directory',         icon: BookUser },
   { id: 'database',    label: 'Database',          icon: Database },
-  { id: 'resolution',  label: 'Resolution',        icon: ShieldCheck },
   { id: 'company',     label: 'Company',           icon: Building2,      adminOnly: true, hideForSystemLevel: true },
 ];
 
@@ -234,10 +241,13 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   useEffect(() => {
     if (!trainingJob.key || trainingJob.done) return;
     let elapsed = 0;
-    pollRef.current = setInterval(async () => {
-      elapsed += 1;
-      if (elapsed > 600) {
-        clearInterval(pollRef.current);
+    let interval = 1000;
+    const MAX_INTERVAL = 5000;
+    const MAX_ELAPSED_MS = 600000; // 10 minutes
+
+    const poll = async () => {
+      elapsed += interval;
+      if (elapsed > MAX_ELAPSED_MS) {
         setTrainingJob(j => ({ ...j, done: true, error: 'Timed out after 10 minutes.' }));
         return;
       }
@@ -245,14 +255,20 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
         const s = await axios.get(`/api/admin/model/train/status?stream_key=${trainingJob.key}`);
         const d = s.data;
         if (d.done) {
-          clearInterval(pollRef.current);
           if (!d.error) setPerfRefreshKey(k => k + 1);
+          setTrainingJob(j => ({ ...j, step: d.step || j.step, pct: d.pct || j.pct, done: true, error: d.error || null }));
+          return;
         }
-        setTrainingJob(j => ({ ...j, step: d.step || j.step, pct: d.pct || j.pct,
-          done: d.done, error: d.done && d.error ? d.error : null }));
-      } catch { /* transient — keep polling */ }
-    }, 1000);
-    return () => clearInterval(pollRef.current);
+        setTrainingJob(j => ({ ...j, step: d.step || j.step, pct: d.pct || j.pct }));
+        interval = Math.min(interval * 1.5, MAX_INTERVAL);
+      } catch {
+        interval = Math.min(interval * 2, MAX_INTERVAL);
+      }
+      pollRef.current = setTimeout(poll, interval);
+    };
+
+    pollRef.current = setTimeout(poll, interval);
+    return () => clearTimeout(pollRef.current);
   }, [trainingJob.key, trainingJob.done]);
 
   const isSuperAdmin  = user?.role === 'super_admin';
@@ -448,9 +464,9 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const desktopRightActions = (
     <div className="flex items-center gap-2 sm:gap-3">
       {isAdmin && (
-        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white" title={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'}>
+        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} aria-label={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'} className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white/70 hover:text-white">
           <Bell size={18} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
-          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[10px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
+          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[10px] font-bold text-black flex items-center justify-center" aria-hidden="true">{pendingCount > 9 ? '9+' : pendingCount}</span>}
         </button>
       )}
       <div ref={avatarMenuRef} className="relative">
@@ -470,9 +486,9 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
   const mobileRightActions = (
     <div className="flex-shrink-0 flex items-center gap-2">
       {isAdmin && (
-        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} className="relative flex items-center justify-center w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 active:bg-white/15 transition-all text-white/70 hover:text-white">
+        <button onClick={() => navigate(isSuperAdmin || isDeveloper ? 'superadmin' : 'users')} aria-label={pendingCount > 0 ? `${pendingCount} pending approval${pendingCount > 1 ? 's' : ''}` : 'Notifications'} className="relative flex items-center justify-center w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 active:bg-white/15 transition-all text-white/70 hover:text-white">
           <Bell size={18} className={pendingCount > 0 ? 'text-amber-400 subtle-bounce' : ''} />
-          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[10px] font-bold text-black flex items-center justify-center">{pendingCount > 9 ? '9+' : pendingCount}</span>}
+          {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[10px] font-bold text-black flex items-center justify-center" aria-hidden="true">{pendingCount > 9 ? '9+' : pendingCount}</span>}
         </button>
       )}
       <div ref={mobileAvatarMenuRef} className="relative">
@@ -503,7 +519,7 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
           aria-label="Primary navigation"
         >
         <div className="px-5 h-[72px] flex items-center border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-          <button onClick={() => setSidebarExpanded(!isSidebarExpanded)} className="flex items-center justify-center w-11 h-11 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 text-white/70">
+          <button onClick={() => setSidebarExpanded(!isSidebarExpanded)} aria-label={isSidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'} className="flex items-center justify-center w-11 h-11 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0 text-white/70">
             <Menu size={24} />
             </button>
           <motion.button variants={sidebarTextVariants} onClick={() => navigate('overview')} className="ml-3.5 text-xl font-extrabold tracking-widest uppercase text-white whitespace-nowrap overflow-hidden transition-all hover:scale-105 hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
@@ -670,18 +686,22 @@ function Dashboard({ user, onLogout, initialTab, onUpdateUser }) {
       {navOrientation === 'horizontal' && <AnimatedNavFramer navItems={visibleTabs} currentTab={tab} onNavigate={navigate} rightActions={desktopRightActions} onBack={goBack} canGoBack={!!previousTab} />}
 
       <main className={`main-scroll relative z-10 transition-all duration-300 ${navOrientation === 'vertical' ? (isSidebarExpanded ? 'pt-[72px] md:pt-8 md:pl-64' : 'pt-[72px] md:pt-8 md:pl-20') : 'pt-[72px] md:pt-[104px]'}`}>
-        {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
-        {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} onNavigate={navigate} />}
-        {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
-        {tab === 'analysis'    && <BugAnalysis  user={user} />}
-        {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
-        {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
-        {tab === 'resolution'  && <ResolutionSupport />}
-        {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} initialQuery={externalQuery} />}
-        {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin user={user} canManage={true} canApprove={true} canDelete={true} />}
-        {tab === 'superadmin'  && isDeveloper   && <SuperAdmin user={user} canManage={false} canApprove={true} canDelete={false} />}
-        {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
-        {tab === 'company'     && !isDeveloper  && isAdmin && <CompanyProfile  user={user} />}
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoader />}>
+            {tab === 'overview'    && <Overview     user={user} onNavigate={navigate} selectedCompany={selectedCompany} onSelectCompany={setSelectedCompany} />}
+            {tab === 'submit'      && <SubmitTab    user={user} prefill={submitPrefill} onClearPrefill={() => setPrefill(null)} onNavigate={navigate} />}
+            {tab === 'performance' && isAdmin       && <Performance key={`perf-${perfRefreshKey}`} user={user} onTrainStart={handleTrainStart} />}
+            {tab === 'analysis'    && <BugAnalysis  user={user} />}
+            {tab === 'directory'   && <Directory    onNavigate={navigate} user={user} />}
+            {tab === 'database'    && <Explorer     user={user} initialQuery={externalQuery} initialFilters={extFilters} onNavigate={navigate} />}
+            {tab === 'resolution'  && <ResolutionSupport />}
+            {tab === 'users'       && isAdmin       && <UserManagement currentUser={user} initialQuery={externalQuery} />}
+            {tab === 'superadmin'  && isSuperAdmin  && <SuperAdmin user={user} canManage={true} canApprove={true} canDelete={true} />}
+            {tab === 'superadmin'  && isDeveloper   && <SuperAdmin user={user} canManage={false} canApprove={true} canDelete={false} />}
+            {tab === 'profile'                      && <ProfileSettings user={user} onUpdate={onUpdateUser} />}
+            {tab === 'company'     && !isDeveloper  && isAdmin && <CompanyProfile  user={user} />}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       <TrainingBanner
@@ -779,7 +799,7 @@ export default function App() {
           });
         }
       } catch (err) {
-        console.error('[App] initAuth:', err);
+        if (import.meta.env.DEV) console.error('[App] initAuth:', err);
         setUser(null);
       } finally {
         setLoading(false);
@@ -872,7 +892,7 @@ export default function App() {
       // Increased retry delay to gracefully handle the DB role assignment lag during first-time registration
       db = await fetchUserRowWithRetry(loginUser.id, 6, 500);
     } catch (err) {
-      console.error('[App] handleLogin DB fetch:', err);
+      if (import.meta.env.DEV) console.error('[App] handleLogin DB fetch:', err);
     }
 
     let companyName = db?._apiProfile?.company_name || null;
@@ -971,14 +991,20 @@ export default function App() {
   const _onboardingDone  = user.onboarding_completed
     || !!localStorage.getItem(_onboardLocalKey);
   if (user && user.role === 'admin' && !_onboardingDone) return (
-    <Onboarding onComplete={handleOnboardingComplete} user={user} />
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Onboarding onComplete={handleOnboardingComplete} user={user} />
+      </Suspense>
+    </ErrorBoundary>
   );
   return (
-    <Dashboard
-      user={user}
-      onLogout={handleLogout}
-      initialTab={initialTab}
-      onUpdateUser={u => setUser(prev => ({ ...prev, ...u }))}
-    />
+    <ErrorBoundary>
+      <Dashboard
+        user={user}
+        onLogout={handleLogout}
+        initialTab={initialTab}
+        onUpdateUser={u => setUser(prev => ({ ...prev, ...u }))}
+      />
+    </ErrorBoundary>
   );
 }

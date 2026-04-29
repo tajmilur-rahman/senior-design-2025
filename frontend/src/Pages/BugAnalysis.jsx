@@ -127,7 +127,7 @@ function DbSearchOverlay({ onSelect, onClose }) {
             <div className="py-8 text-center text-white/30 text-sm">No bugs found</div>
           ) : bugs.map((bug, i) => (
             <button
-              key={i}
+              key={bug.id ?? bug.bug_id ?? i}
               onClick={() => { onSelect(bug.summary || ''); onClose(); }}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/[0.04] last:border-0 group"
             >
@@ -639,7 +639,7 @@ export default function BugAnalysis({ user }) {
               <div className="flex flex-col gap-3">
                 {duplicates.slice(0, 6).map((dup, i) => (
                   <div
-                    key={i}
+                    key={dup.id ?? dup.bug_id ?? i}
                     className="p-4 border border-white/5 hover:border-white/15 rounded-2xl flex items-start gap-3 transition-all duration-200 group cursor-default"
                     style={{ background: 'var(--bg-elevated)' }}
                   >

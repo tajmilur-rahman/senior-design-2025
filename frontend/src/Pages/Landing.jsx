@@ -12,26 +12,9 @@ const GITHUB_REPO = "https://github.com/tajmilur-rahman/senior-design-2025"
 
 // ROG Astral signature gradient: magenta → white → cyan
 const ROG_GRADIENT = 'linear-gradient(90deg, #fa67ff, #ffffff, #7ef9ff)'
-const ROG_GRADIENT_45 = 'linear-gradient(45deg, #fa67ff, #ffffff, #7ef9ff)'
 // Diagonal bottom-right corner cut — ROG card motif
 const DIAG_CUT = 'polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)'
 const DIAG_CUT_LG = 'polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%)'
-
-// Gradient text utility (inline style helper)
-const gradientText = {
-  background: ROG_GRADIENT,
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-  backgroundClip: 'text',
-}
-
-// ROG Metallic text utility (silver/chrome look)
-const METALLIC_TEXT = {
-  background: 'linear-gradient(180deg, #ffffff 0%, #94a3b8 100%)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-  backgroundClip: 'text',
-}
 
 function GithubIcon({ size = 20, className = "" }) {
   return (
@@ -45,64 +28,28 @@ export function cn(...classes) {
   return classes.filter(Boolean).join(" ")
 }
 
-// ─── ROG-style Button ────────────────────────────────────────────────────────
-// Primary: gradient fill with black text (angled shape)
-// Outline: inset white border, transparent bg (angled shape)
+// ─── SaaS-style Button ───────────────────────────────────────────────────────
+// Primary: white fill, dark text — clean contrast on dark bg
+// Outline: white border, white text, transparent bg
 
 function ROGButton({ children, onClick, variant = 'primary', size = 'md', className = '', href, target }) {
-  const sizes = { sm: 'px-5 py-2.5 text-xs', md: 'px-7 py-3.5 text-sm', lg: 'px-9 py-4.5 text-base' }
-  const isPrimary = variant === 'primary'
-
-  const outerClass = cn(
-    'relative inline-flex group transition-all duration-300',
-    isPrimary ? 'hover:scale-[1.03]' : 'hover:scale-[1.03]',
+  const sizes = {
+    sm: 'px-4 py-2 text-xs',
+    md: 'px-5 py-2.5 text-sm',
+    lg: 'px-6 py-3 text-sm',
+  }
+  const base = cn(
+    'inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 select-none',
+    sizes[size],
+    variant === 'primary'
+      ? 'bg-white text-black hover:bg-white/90 shadow-sm hover:shadow-md'
+      : 'bg-transparent text-white border border-white/25 hover:bg-white/[0.08] hover:border-white/40',
     className
   )
-
-  const clipPoly = 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)'
-  const innerClipPoly = 'polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px)'
-
-  const outerStyle = {
-    clipPath: clipPoly,
-    background: isPrimary ? ROG_GRADIENT : 'rgba(255,255,255,0.3)',
-    padding: isPrimary ? '0' : '1px'
-  }
-
-  const innerStyle = {
-    clipPath: isPrimary ? 'none' : innerClipPoly,
-    background: isPrimary ? 'transparent' : '#050508',
-    color: isPrimary ? '#000' : '#fff',
-    width: '100%',
-    height: '100%',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 900,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase'
-  }
-
-  const Inner = () => (
-    <>
-      {isPrimary && (
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" style={{ background: ROG_GRADIENT }} />
-      )}
-      <div style={innerStyle} className={cn(sizes[size], isPrimary ? 'text-black relative z-10' : 'text-white relative z-10 hover:bg-[#15034a] transition-colors')}>
-        {children}
-      </div>
-    </>
-  )
-
   if (href) return (
-    <a href={href} target={target} rel="noopener noreferrer" className={outerClass} style={outerStyle}>
-      <Inner />
-    </a>
+    <a href={href} target={target} rel="noopener noreferrer" className={base}>{children}</a>
   )
-  return (
-    <button onClick={onClick} className={outerClass} style={outerStyle}>
-      <Inner />
-    </button>
-  )
+  return <button onClick={onClick} className={base}>{children}</button>
 }
 
 // ─── Gradient-text section label ─────────────────────────────────────────────
@@ -327,87 +274,52 @@ function ArchitectureModal({ onClose }) {
   )
 }
 
-// ─── Animated Nav ─────────────────────────────────────────────────────────────
+// ─── Landing Nav ──────────────────────────────────────────────────────────────
+// Always-visible centered pill — no retract on scroll
 
 function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
-  const [isExpanded, setExpanded] = useState(true)
-  const lastScrollY = useRef(0)
-  const mouseLeaveTimeout = useRef(null)
-  const clickStabilizeTimeout = useRef(null)
-  const justClicked = useRef(false)
-
-  const handleSectionClick = (id) => {
-    justClicked.current = true
-    clearTimeout(clickStabilizeTimeout.current)
-    clickStabilizeTimeout.current = setTimeout(() => { justClicked.current = false }, 1200)
-    scrollTo(id)
-  }
-
-  useEffect(() => {
-    const onScroll = () => {
-      const latest = window.scrollY
-      if (isExpanded && latest > lastScrollY.current && latest > 150 && !justClicked.current) setExpanded(false)
-      else if (!isExpanded && latest < lastScrollY.current) setExpanded(true)
-      lastScrollY.current = latest
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(clickStabilizeTimeout.current) }
-  }, [isExpanded])
-
   const sections = [
-    { label: 'Platform',      id: 'platform',      section: 2 },
-    { label: 'Engine',        id: 'capabilities',  section: 3 },
-    { label: 'Architecture',  id: 'architecture',  section: 4 },
-    { label: 'Source',        id: 'documentation', section: 5 },
+    { label: 'Platform',     id: 'platform',      section: 2 },
+    { label: 'Engine',       id: 'capabilities',  section: 3 },
+    { label: 'Architecture', id: 'architecture',  section: 4 },
+    { label: 'Source',       id: 'documentation', section: 5 },
   ]
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] hidden md:block">
       <motion.nav
         initial={{ y: -80, opacity: 0 }}
-        animate={{ y: 0, opacity: 1, width: isExpanded ? 'auto' : '3.5rem' }}
+        animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-        onMouseEnter={() => { clearTimeout(mouseLeaveTimeout.current); setExpanded(true) }}
-        onMouseLeave={() => { mouseLeaveTimeout.current = setTimeout(() => { if (lastScrollY.current > 150) setExpanded(false) }, 700) }}
-        onClick={(e) => { if (!isExpanded) { e.preventDefault(); setExpanded(true) } }}
-        className={cn(
-          'flex items-center overflow-hidden h-12 bg-black/80 backdrop-blur-2xl border border-white/10',
-          !isExpanded && 'cursor-pointer justify-center'
-        )}
-        style={{ clipPath: 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)' }}
+        className="flex items-center h-12 px-2 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-xl gap-1"
       >
         {/* Logo */}
-        <motion.div
-          animate={{ opacity: isExpanded ? 1 : 0, x: isExpanded ? 0 : -20 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="flex-shrink-0 pl-5 pr-4 cursor-pointer"
-          onClick={(e) => { e.stopPropagation(); scrollTo('hero') }}
+        <div
+          className="flex-shrink-0 pl-3 pr-3 cursor-pointer"
+          onClick={() => scrollTo('hero')}
         >
-          <span className="text-sm font-extrabold tracking-wider text-white uppercase">
-            SPOTFIXES
+          <span className="text-sm font-bold tracking-wide text-white">
+            Spotfixes
           </span>
-        </motion.div>
+        </div>
+
+        <div className="w-px h-5 bg-white/10 mx-1" />
 
         {/* Nav links */}
-        <motion.div
-          animate={{ opacity: isExpanded ? 1 : 0 }}
-          transition={{ duration: 0.15 }}
-          className={cn('flex items-center gap-1 pr-4', !isExpanded && 'pointer-events-none')}
-        >
+        <div className="flex items-center gap-1">
           {sections.map(({ label, id, section }) => {
             const active = currentSection === section
             return (
               <button
                 key={id}
-                onClick={(e) => { e.stopPropagation(); handleSectionClick(id) }}
-                className="relative px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 rounded-full"
-              style={{ color: active ? '#ffffff' : 'rgba(255,255,255,0.6)' }}
+                onClick={() => scrollTo(id)}
+                className="relative px-3 py-1.5 text-xs font-medium transition-colors duration-150 rounded-lg"
+                style={{ color: active ? '#ffffff' : 'rgba(255,255,255,0.5)' }}
               >
                 {active && (
                   <motion.div
                     layoutId="nav-pill"
-                    className="absolute inset-0 rounded-full"
-                    style={{ background: 'rgba(142,59,255,0.2)' }}
+                    className="absolute inset-0 rounded-lg bg-white/10"
                     transition={{ type: 'spring', stiffness: 380, damping: 35 }}
                   />
                 )}
@@ -415,25 +327,15 @@ function AnimatedLandingNav({ currentSection, onEnterWorkspace }) {
               </button>
             )
           })}
-        </motion.div>
+        </div>
+
+        <div className="w-px h-5 bg-white/10 mx-1" />
 
         {/* CTA */}
-        <motion.div
-          animate={{ opacity: isExpanded ? 1 : 0 }}
-          transition={{ duration: 0.15 }}
-          className={cn('flex items-center pl-1 pr-2', !isExpanded && 'pointer-events-none hidden')}
-        >
-          <div className="w-px h-5 mx-2 bg-white/10" />
-          <ROGButton size="sm" onClick={(e) => { e.stopPropagation(); onEnterWorkspace() }}>
-            Access <ArrowRight className="ml-1 h-3 w-3" />
+        <div className="pr-1">
+          <ROGButton size="sm" onClick={onEnterWorkspace}>
+            Sign in <ArrowRight className="ml-1.5 h-3 w-3" />
           </ROGButton>
-        </motion.div>
-
-        {/* Collapsed icon */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <motion.div animate={{ opacity: isExpanded ? 0 : 1 }} transition={{ duration: 0.15 }}>
-            <BrainCircuit className="h-5 w-5" style={{ color: '#fa67ff' }} />
-          </motion.div>
         </div>
       </motion.nav>
     </div>
@@ -501,8 +403,8 @@ export default function Landing({ onEnterWorkspace }) {
 
   return (
     <div
-      className="relative w-full bg-black text-white font-sans"
-      style={{ '--selection-bg': '#030000', '--selection-color': '#a9bcdf' }}
+      className="relative w-full bg-black text-white"
+      style={{ '--selection-bg': '#030000', '--selection-color': '#a9bcdf', fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       <style>{`::selection { background: #030000; color: #a9bcdf; }`}</style>
 
@@ -936,7 +838,7 @@ export default function Landing({ onEnterWorkspace }) {
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.25, ease: [0.16,1,0.3,1] }}
             onClick={() => scrollTo('hero')}
-            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 bg-white/8 border border-white/12 text-white hover:bg-white/14 transition-all duration-200 hover:-translate-y-1"
+            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 bg-white/[0.08] border border-white/[0.12] text-white hover:bg-white/[0.14] transition-all duration-200 hover:-translate-y-1"
             style={{
               borderRadius: '50%',
               boxShadow: '0 0 0 0px rgba(250,103,255,0)',

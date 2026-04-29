@@ -1,3 +1,4 @@
+requests==2.32.3
 fastapi==0.135.1
 uvicorn==0.42.0
 python-dotenv==1.2.2
@@ -16,3 +17,5 @@ psycopg2-binary==2.9.11
 gunicorn==25.1.0
 joblib==1.5.3
 sqlalchemy>=2.0.0
+slowapi==0.1.9
+cryptography==44.0.3

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useEscapeKey } from '../Components/Modal';
+import ConfirmDialog from '../Components/ConfirmDialog';
 import {
   Users, Trash2, RefreshCw, UserX, Building2,
   AlertTriangle, CheckCircle, X, Crown, Globe,
@@ -148,8 +149,9 @@ function InviteCodePanel() {
 
   useEffect(() => { fetchCode(); }, [fetchCode]);
 
-  const handleRegenerate = async () => {
-    if (!window.confirm('Regenerate invite code? The current code will stop working immediately.')) return;
+  const [regenConfirm, setRegenConfirm] = useState(false);
+  const handleRegenerate = () => setRegenConfirm(true);
+  const doRegenerate = async () => {
     setRegenerating(true);
     try {
       const res = await axios.post('/api/admin/invite_code/regenerate');
@@ -170,6 +172,16 @@ function InviteCodePanel() {
   if (loading || !inviteData) return null;
 
   return (
+    <>
+    <ConfirmDialog
+      open={regenConfirm}
+      title="Regenerate invite code"
+      message="The current code will stop working immediately. Continue?"
+      confirmLabel="Regenerate"
+      danger={true}
+      onConfirm={doRegenerate}
+      onClose={() => setRegenConfirm(false)}
+    />
     <BentoCard className="bg-blue-500/[0.03] border-indigo-500/20 p-6 lg:p-8 shadow-2xl mb-6 hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
       <div className="flex items-center gap-2 mb-4 relative z-10">
@@ -197,6 +209,7 @@ function InviteCodePanel() {
         </div>
       </div>
     </BentoCard>
+    </>
   );
 }
 
@@ -228,8 +241,9 @@ function AccessRequestsPanel({ showToast }) {
     } finally { setActioning(null); }
   };
 
-  const handleReject = async (req) => {
-    if (!window.confirm(`Reject access request from ${req.username} (${req.email})?`)) return;
+  const [rejectConfirm, setRejectConfirm] = useState(null);
+  const handleReject = (req) => setRejectConfirm(req);
+  const doReject = async (req) => {
     setActioning(req.id);
     try {
       await axios.delete(`/api/admin/invite_requests/${req.id}`);
@@ -243,6 +257,16 @@ function AccessRequestsPanel({ showToast }) {
   if (loading) return null;
 
   return (
+    <>
+    <ConfirmDialog
+      open={!!rejectConfirm}
+      title="Reject access request"
+      message={rejectConfirm ? `Reject access request from ${rejectConfirm.username} (${rejectConfirm.email})?` : ''}
+      confirmLabel="Reject"
+      danger={true}
+      onConfirm={() => doReject(rejectConfirm)}
+      onClose={() => setRejectConfirm(null)}
+    />
     <BentoCard className="p-6 lg:p-8 shadow-2xl mb-6 hover:-translate-y-1 hover:shadow-xl">
       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent opacity-50" />
       <div className="flex items-center gap-2 mb-6 relative z-10">
@@ -285,6 +309,7 @@ function AccessRequestsPanel({ showToast }) {
         </div>
       )}
     </BentoCard>
+    </>
   );
 }
 
@@ -297,6 +322,7 @@ export default function UserManagement({ currentUser, initialQuery = '' }) {
   const [toast,     setToast]     = useState({ text: '', type: '' });
   const [search,    setSearch]    = useState(initialQuery);
   const [actioning, setActioning] = useState(null);
+  const [confirm,   setConfirm]   = useState({ open: false, title: '', message: '', onConfirm: null, danger: false });
 
   useEffect(() => {
     setSearch(initialQuery);
@@ -340,32 +366,43 @@ export default function UserManagement({ currentUser, initialQuery = '' }) {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  const handlePromote = async (u) => {
+  const handlePromote = (u) => {
     const newRole = u.role === 'admin' ? 'user' : 'admin';
-    const label   = newRole === 'admin' ? 'promote to Admin' : 'demote to User';
-    if (!window.confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${u.username}?`)) return;
-    setActioning(u.uuid);
-    try {
-      await axios.patch(`/api/admin/users/${u.uuid}`, { role: newRole });
-      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, role: newRole, is_admin: newRole === 'admin' } : x));
-      showToast(`${u.username} is now ${newRole === 'admin' ? 'an Admin' : 'a User'}.`);
-    } catch (err) {
-      showToast(err.response?.data?.detail || 'Role update failed.', 'error');
-    } finally { setActioning(null); }
+    const label   = newRole === 'admin' ? 'Promote to Admin' : 'Demote to User';
+    setConfirm({
+      open: true, danger: false,
+      title: label, message: `${label} ${u.username}?`, confirmLabel: label,
+      onConfirm: async () => {
+        setActioning(u.uuid);
+        try {
+          await axios.patch(`/api/admin/users/${u.uuid}`, { role: newRole });
+          setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, role: newRole, is_admin: newRole === 'admin' } : x));
+          showToast(`${u.username} is now ${newRole === 'admin' ? 'an Admin' : 'a User'}.`);
+        } catch (err) {
+          showToast(err.response?.data?.detail || 'Role update failed.', 'error');
+        } finally { setActioning(null); }
+      },
+    });
   };
 
-  const handleToggleStatus = async (u) => {
+  const handleToggleStatus = (u) => {
     const isActive = (u.status || 'active') === 'active';
     const action   = isActive ? 'deactivate' : 'reactivate';
-    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${u.username}?`)) return;
-    setActioning(u.uuid);
-    try {
-      await axios.patch(`/api/admin/users/${u.uuid}/${action}`);
-      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: isActive ? 'inactive' : 'active' } : x));
-      showToast(`${u.username} ${isActive ? 'deactivated' : 'reactivated'}.`);
-    } catch (err) {
-      showToast(err.response?.data?.detail || 'Status update failed.', 'error');
-    } finally { setActioning(null); }
+    const label    = action.charAt(0).toUpperCase() + action.slice(1);
+    setConfirm({
+      open: true, danger: isActive,
+      title: `${label} user`, message: `${label} ${u.username}?`, confirmLabel: label,
+      onConfirm: async () => {
+        setActioning(u.uuid);
+        try {
+          await axios.patch(`/api/admin/users/${u.uuid}/${action}`);
+          setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: isActive ? 'inactive' : 'active' } : x));
+          showToast(`${u.username} ${isActive ? 'deactivated' : 'reactivated'}.`);
+        } catch (err) {
+          showToast(err.response?.data?.detail || 'Status update failed.', 'error');
+        } finally { setActioning(null); }
+      },
+    });
   };
 
   const handleDeleteConfirm = async (deleteCompany) => {
@@ -408,6 +445,15 @@ export default function UserManagement({ currentUser, initialQuery = '' }) {
       className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 font-sans relative z-10"
     >
       <Toast msg={toast} onClose={() => setToast({ text: '', type: '' })} />
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        message={confirm.message}
+        confirmLabel={confirm.confirmLabel}
+        danger={confirm.danger}
+        onConfirm={confirm.onConfirm || (() => {})}
+        onClose={() => setConfirm(c => ({ ...c, open: false }))}
+      />
       {toDelete && (
         <DeleteConfirmModal
           user={toDelete} isSuperAdmin={isSuperAdmin}

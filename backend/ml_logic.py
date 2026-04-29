@@ -376,6 +376,7 @@ def find_similar_bugs(query_text: str, company_id=None, top_k: int = 5) -> list:
                 res = _db.table("feedback") \
                     .select("id, summary, actual_severity, predicted_severity") \
                     .not_.is_("summary", "null") \
+                    .eq("consent_global_model", True) \
                     .limit(400) \
                     .execute()
                 db_rows = res.data or []

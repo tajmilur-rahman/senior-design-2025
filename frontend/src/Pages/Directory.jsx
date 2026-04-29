@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
 import { FolderTree, ExternalLink, ArrowRight, Layers, Building2, Users, Bug, BrainCircuit, CheckCircle, XCircle, Trash2, RefreshCw, Search, Globe, Activity } from 'lucide-react';
-import { mozillaTaxonomy, teamDescriptions } from '../javascript/taxonomy';
+import { mozillaTaxonomy, teamDescriptions, teamComponentCounts } from '../javascript/taxonomy';
 import { LiquidButton as Button } from '../liquid-glass-button';
 import { BentoCard } from '../bento-card';
 
@@ -25,7 +25,7 @@ export default function Directory({ onNavigate, user }) {
       });
       setCompanies(prev => prev.map(c => c.id === coId ? { ...c, has_own_model: false } : c));
     } catch (e) {
-      console.error('Reset failed:', e.response?.data || e.message);
+      if (import.meta.env.DEV) console.error('Reset failed:', e.response?.data || e.message);
     } finally {
       setResettingId(null);
     }
@@ -39,7 +39,7 @@ export default function Directory({ onNavigate, user }) {
       const token = localStorage.getItem('token');
       axios.get('/api/superadmin/companies', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setCompanies(res.data || []))
-        .catch(e => console.error('Could not load companies', e))
+        .catch(e => { if (import.meta.env.DEV) console.error('Could not load companies', e); })
         .finally(() => setLoadingCompanies(false));
     } else {
       const fetchCounts = async () => {
@@ -48,7 +48,7 @@ export default function Directory({ onNavigate, user }) {
           const normalised = {};
           Object.keys(res.data).forEach(k => { normalised[k.toLowerCase()] = res.data[k]; });
           setCounts(normalised);
-        } catch (e) { console.error('Could not load counts', e); }
+        } catch (e) { if (import.meta.env.DEV) console.error('Could not load counts', e); }
       };
       fetchCounts();
     }
@@ -327,11 +327,11 @@ export default function Directory({ onNavigate, user }) {
                 <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                   <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{team}</div>
                   <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">
-                    {tCount > 0 ? `${tCount.toLocaleString()} records` : `${Object.keys(mozillaTaxonomy[team]).length} categories`}
+                    {tCount > 0 ? `${tCount.toLocaleString()} records` : `${(teamComponentCounts?.[team] ?? 0)} components`}
                   </div>
                 </div>
 
-                <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10">
+                <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10 line-clamp-3">
                   {teamDescriptions[team] || 'Core subsystem architecture and logic.'}
                 </div>
 
