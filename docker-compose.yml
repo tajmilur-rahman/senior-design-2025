@@ -28,7 +28,7 @@ services:
         python ml_training/Train_Universal.py --fast;
       fi &&
       echo 'Starting Gunicorn...' &&
-      gunicorn -k uvicorn.workers.UvicornWorker -t 30 -w 4 -b 0.0.0.0:8000 backend.main:app
+      gunicorn -k uvicorn.workers.UvicornWorker -t 30 -w 2 -b 0.0.0.0:8000 backend.main:app
       "
 
   frontend:

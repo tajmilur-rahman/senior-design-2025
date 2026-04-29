@@ -12,26 +12,9 @@ const GITHUB_REPO = "https://github.com/tajmilur-rahman/senior-design-2025"
 
 // ROG Astral signature gradient: magenta → white → cyan
 const ROG_GRADIENT = 'linear-gradient(90deg, #fa67ff, #ffffff, #7ef9ff)'
-const ROG_GRADIENT_45 = 'linear-gradient(45deg, #fa67ff, #ffffff, #7ef9ff)'
 // Diagonal bottom-right corner cut — ROG card motif
 const DIAG_CUT = 'polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)'
 const DIAG_CUT_LG = 'polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%)'
-
-// Gradient text utility (inline style helper)
-const gradientText = {
-  background: ROG_GRADIENT,
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-  backgroundClip: 'text',
-}
-
-// ROG Metallic text utility (silver/chrome look)
-const METALLIC_TEXT = {
-  background: 'linear-gradient(180deg, #ffffff 0%, #94a3b8 100%)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-  backgroundClip: 'text',
-}
 
 function GithubIcon({ size = 20, className = "" }) {
   return (
@@ -60,7 +43,7 @@ function ROGButton({ children, onClick, variant = 'primary', size = 'md', classN
     sizes[size],
     variant === 'primary'
       ? 'bg-white text-black hover:bg-white/90 shadow-sm hover:shadow-md'
-      : 'bg-transparent text-white border border-white/25 hover:bg-white/8 hover:border-white/40',
+      : 'bg-transparent text-white border border-white/25 hover:bg-white/[0.08] hover:border-white/40',
     className
   )
   if (href) return (
@@ -423,10 +406,7 @@ export default function Landing({ onEnterWorkspace }) {
       className="relative w-full bg-black text-white"
       style={{ '--selection-bg': '#030000', '--selection-color': '#a9bcdf', fontFamily: "'Inter', system-ui, sans-serif" }}
     >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        ::selection { background: #030000; color: #a9bcdf; }
-      `}</style>
+      <style>{`::selection { background: #030000; color: #a9bcdf; }`}</style>
 
       <AnimatePresence>
         {showArch && <ArchitectureModal onClose={() => setShowArch(false)} />}
@@ -858,7 +838,7 @@ export default function Landing({ onEnterWorkspace }) {
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.25, ease: [0.16,1,0.3,1] }}
             onClick={() => scrollTo('hero')}
-            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 bg-white/8 border border-white/12 text-white hover:bg-white/14 transition-all duration-200 hover:-translate-y-1"
+            className="fixed bottom-8 right-6 lg:right-10 z-[100] p-3.5 bg-white/[0.08] border border-white/[0.12] text-white hover:bg-white/[0.14] transition-all duration-200 hover:-translate-y-1"
             style={{
               borderRadius: '50%',
               boxShadow: '0 0 0 0px rgba(250,103,255,0)',
