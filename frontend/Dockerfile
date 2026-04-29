@@ -4,6 +4,12 @@ COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 COPY . .
 
+# Build-time env vars injected via docker-compose or CI (VITE_ prefix required by Vite)
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 FROM nginx:alpine

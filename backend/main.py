@@ -2,16 +2,41 @@ from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-import os, joblib, pandas as pd, io, csv, re, json, asyncio, shutil, base64
+import os, joblib, pandas as pd, io, csv, re, json, asyncio, shutil, base64, logging
 import auth
 import threading
 import time as _time
 import uuid as uuid_lib
 import requests as http_requests
+from cryptography.fernet import Fernet
+import hashlib
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
 from database import supabase, SUPABASE_URL, SUPABASE_KEY, DATABASE_URL
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Fernet key derived from SECRET_KEY for encrypting temp registration passwords
+def _get_fernet() -> Fernet:
+    raw = (auth.SECRET_KEY or "").encode()
+    key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+    return Fernet(key)
+
+def _encrypt_temp_password(password: str) -> str:
+    return "enc:" + _get_fernet().encrypt(password.encode()).decode()
+
+def _decrypt_temp_password(stored: str) -> str:
+    if stored.startswith("enc:"):
+        return _get_fernet().decrypt(stored[4:].encode()).decode()
+    if stored.startswith("plain:"):
+        return base64.b64decode(stored[6:]).decode()
+    raise ValueError("Unknown password storage format")
+
 import psycopg2
 import ml_logic
 from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
@@ -19,6 +44,9 @@ import db_provision
 
 
 _training_progress: dict = {}
+
+def _done_entry(step: str, pct: int, error, result=None) -> dict:
+    return {"step": step, "pct": pct, "done": True, "error": error, "result": result, "_ts": _time.time()}
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
@@ -33,13 +61,21 @@ def load_models():
         if os.path.exists(MODEL_PATH) and os.path.exists(VECTOR_PATH):
             rf_model   = joblib.load(MODEL_PATH)
             vectorizer = joblib.load(VECTOR_PATH)
-            print("[ml] Models loaded.")
+            logger.info("[ml] Models loaded.")
         else:
-            print("[ml] Model files not found — training required.")
+            logger.info("[ml] Model files not found — training required.")
     except Exception as e:
-        print(f"[ml] Load error: {e}")
+        logger.info(f"[ml] Load error: {e}")
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import Request
+
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 load_models()
 
 _allowed_origins = [o.strip().rstrip("/") for o in FRONTEND_URL.split(",") if o.strip()]
@@ -47,9 +83,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
+
+@app.get("/health", tags=["ops"])
+def health_check():
+    return {"status": "ok"}
 
 
 def validate_company_name(name: str) -> str:
@@ -65,6 +105,8 @@ def validate_company_name(name: str) -> str:
     return name
 
 
+_SAFE_TABLE_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
 def get_company_table(company_id) -> str:
     if company_id is None:
         return "bugs"
@@ -73,9 +115,9 @@ def get_company_table(company_id) -> str:
                       .eq("id", company_id).single().execute()
         if res.data:
             dt = res.data.get("data_table")
-            if dt:
+            if dt and _SAFE_TABLE_RE.match(dt):
                 return dt
-            # data_table not set — derive from company name as fallback
+            # data_table not set or invalid — derive from company name as fallback
             name = (res.data.get("name") or "").strip().lower()
             if "firefox" in name or "mozilla" in name:
                 return "firefox_table"
@@ -163,8 +205,8 @@ def _admin_get_user(user_uuid: str, current_user: dict, fields: str = "*"):
 class BugPayload(BaseModel):
     summary:    str = Field(..., min_length=1, max_length=2000)
     component:  str = "General"
-    severity:   str = "S3"
-    status:     str = "NEW"
+    severity:   str = Field("S3", pattern=r"^S[1-4]$")
+    status:     str = Field("NEW", pattern=r"^(NEW|OPEN|IN_PROGRESS|RESOLVED|CLOSED|PROCESSED)$")
     company_id: int | None = None
 
 class CompanyCreate(BaseModel):
@@ -200,7 +242,8 @@ class ResolutionSearchRequest(BaseModel):
 
 
 @app.post("/api/register")
-def register(req: RegisterRequest):
+@limiter.limit("10/minute")
+def register(request: Request, req: RegisterRequest):
     role = req.role if req.role in ("user", "admin") else "user"
 
     def _check_existing(field, value):
@@ -256,18 +299,18 @@ def register(req: RegisterRequest):
             # Firefox/Mozilla companies share the existing firefox_table — never create a duplicate
             if db_provision.is_firefox_company(company_name):
                 supabase.table("companies").update({"data_table": "firefox_table"}).eq("id", company_id).execute()
-                print(f"[register] Firefox company — pointing to firefox_table (no new table created)")
+                logger.info(f"[register] Firefox company — pointing to firefox_table (no new table created)")
             else:
                 try:
                     table_name = db_provision.create_company_table(company_id, company_name)
-                    print(f"[register] Created company table: {table_name}")
+                    logger.info(f"[register] Created company table: {table_name}")
                     supabase.table("companies").update({"data_table": table_name}).eq("id", company_id).execute()
                 except Exception as tbl_err:
-                    print(f"[register] Warning: could not create company table: {tbl_err}")
+                    logger.info(f"[register] Warning: could not create company table: {tbl_err}")
 
         # Temporarily store the registration password so approval can set it on the
         # Supabase Auth account after invite_user_by_email creates it.
-        pw_store = "plain:" + base64.b64encode(req.password.encode()).decode() if req.password else ""
+        pw_store = _encrypt_temp_password(req.password) if req.password else ""
 
         user_res = supabase.table("users").insert({
             "uuid":                 db_uuid,
@@ -355,13 +398,13 @@ def complete_onboarding(req: OnboardingRequest, current_user: dict = Depends(aut
         # Firefox/Mozilla companies share the existing firefox_table — no new table needed
         if db_provision.is_firefox_company(req.company_name):
             supabase.table("companies").update({"data_table": "firefox_table"}).eq("id", company_id).execute()
-            print(f"[onboarding] Firefox company — pointing to firefox_table (no new table created)")
+            logger.info(f"[onboarding] Firefox company — pointing to firefox_table (no new table created)")
         else:
             try:
                 table_name = db_provision.create_company_table(company_id, req.company_name)
                 supabase.table("companies").update({"data_table": table_name}).eq("id", company_id).execute()
             except Exception as tbl_err:
-                print(f"[onboarding] Warning: could not create company table: {tbl_err}")
+                logger.info(f"[onboarding] Warning: could not create company table: {tbl_err}")
 
     supabase.table("users").update({
         "username":             req.username,
@@ -503,30 +546,31 @@ def sync_password_hash(req: SyncPasswordHashRequest, current_user: dict = Depend
 
 
 @app.post("/api/users/me/apply-registration-password")
-def apply_registration_password(current_user: dict = Depends(auth.get_current_user)):
+@limiter.limit("10/minute")
+def apply_registration_password(request: Request, current_user: dict = Depends(auth.get_current_user)):
     """Called once when an approved user clicks their invite link.
     Applies their stored registration password to Supabase Auth and replaces
     the plain: temp value with a bcrypt hash — no password input from the user needed."""
     uuid      = current_user.get("uuid")
     pw_store  = current_user.get("password_hash", "")
 
-    if not pw_store.startswith("plain:"):
+    if not (pw_store.startswith("enc:") or pw_store.startswith("plain:")):
         return {"ok": True, "skipped": True}  # already applied or no reg password
 
     try:
-        reg_password = base64.b64decode(pw_store[6:]).decode()
+        reg_password = _decrypt_temp_password(pw_store)
     except Exception:
-        return {"ok": False, "error": "Could not decode stored password"}
+        return {"ok": False, "error": "Could not decrypt stored password"}
 
     try:
         supabase.auth.admin.update_user_by_id(uuid, {"password": reg_password})
     except Exception as e:
-        print(f"[apply-reg-password] update_user_by_id failed: {e}")
+        logger.info(f"[apply-reg-password] update_user_by_id failed: {e}")
         return {"ok": False, "error": str(e)}
 
     pw_hash = auth.get_password_hash(reg_password)
     supabase.table("users").update({"password_hash": pw_hash}).eq("uuid", uuid).execute()
-    print(f"[apply-reg-password] Registration password applied for uuid={uuid}")
+    logger.info(f"[apply-reg-password] Registration password applied for uuid={uuid}")
     return {"ok": True}
 
 
@@ -634,7 +678,7 @@ def get_overview(current_user: dict = Depends(auth.get_current_user)):
         top_5 = [{"name": r[0], "value": r[1]} for r in _cur.fetchall()]
         _cur.close(); _conn.close()
     except Exception as _e:
-        print(f"[overview hotspots] {_e}")
+        logger.info(f"[overview hotspots] {_e}")
         top_5 = []
 
     if is_super:
@@ -850,29 +894,21 @@ async def create_bug(request: BugPayload, current_user: dict = Depends(auth.requ
 async def delete_bug(bug_id: int, current_user: dict = Depends(auth.require_active)):
     cid = current_user.get("company_id")
     table = get_company_table(cid)
-
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Prefer": "return=representation",
-    }
     true_role = current_user.get("role")
-    params = {"bug_id": f"eq.{bug_id}"}
-    if not is_shared_table(table) and true_role != "super_admin":
-        params["company_id"] = f"eq.{cid}"
 
-    resp = http_requests.delete(
-        f"{SUPABASE_URL}/rest/v1/{table}",
-        headers=headers,
-        params=params,
-    )
-    print(f"[delete] table={table} bug_id={bug_id} status={resp.status_code} body={resp.text[:200]}")
+    try:
+        query = supabase.table(table).delete().eq("bug_id", bug_id)
+        if not is_shared_table(table) and true_role != "super_admin":
+            query = query.eq("company_id", cid)
+        resp = query.execute()
+    except Exception as e:
+        logger.error("[delete] bug_id=%s table=%s error=%s", bug_id, table, e)
+        raise HTTPException(status_code=500, detail="Failed to delete bug")
 
-    if not resp.ok:
-        raise HTTPException(status_code=500, detail=f"DB error: {resp.text}")
-    if not resp.json():
+    if not resp.data:
         raise HTTPException(status_code=404, detail="Bug not found")
 
+    logger.info("[delete] bug_id=%s table=%s deleted", bug_id, table)
     return {"message": "Bug deleted"}
 
 
@@ -888,7 +924,7 @@ async def analyze_bug(
         target_cid = cid if model_source == "company" else None
         result = ml_logic.predict_severity(bug_text, company_id=target_cid)
     except Exception as e:
-        print(f"[analyze] error: {e}")
+        logger.info(f"[analyze] error: {e}")
         result = {"prediction": "S3", "confidence": 0.6, "diagnosis": "Standard Logic Defect",
                   "team": "🔧 General Maintenance", "keywords": [], "model_source": "global", "fallback": True}
 
@@ -984,7 +1020,7 @@ def get_ml_metrics(
             if co_res.data:
                 company_name = co_res.data[0].get("name", company_name)
     except Exception as e:
-        print(f"[ml_metrics] DB error: {e}")
+        logger.info(f"[ml_metrics] DB error: {e}")
 
     current_metrics = {
         "accuracy": 0.0, "f1_score": 0.0, "precision": 0.0, "recall": 0.0,
@@ -1144,15 +1180,31 @@ async def bulk_submit(
     if table == "firefox_table":
         table = "bugs"
 
+    MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+    ALLOWED_EXTENSIONS = {".csv", ".json"}
+    ALLOWED_CONTENT_TYPES = {"text/csv", "application/json", "application/octet-stream", "text/plain"}
+
+    _, ext = os.path.splitext(file.filename or "")
+    if ext.lower() not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Only .csv and .json files are allowed")
+    if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported content type: {file.content_type}")
+
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum upload size is 10 MB")
 
     try:
-        if file.filename.endswith(".csv"):
+        if ext.lower() == ".csv":
             df = pd.read_csv(io.BytesIO(content))
         else:
-            df = pd.DataFrame(json.loads(content.decode()))
+            parsed = json.loads(content.decode())
+            if not isinstance(parsed, (list, dict)):
+                raise ValueError("JSON must be an array or object")
+            df = pd.DataFrame(parsed if isinstance(parsed, list) else [parsed])
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
+        logger.warning("[upload] File parse error: %s", e)
+        raise HTTPException(status_code=400, detail="Could not parse file. Ensure it is a valid CSV or JSON.")
 
     pre_insert_ts = datetime.now(timezone.utc).isoformat()
 
@@ -1271,7 +1323,7 @@ def _delete_bulk_imported_bugs(cid, since_ts: str) -> int:
                       .execute()
         total += len(res.data or [])
     except Exception as e:
-        print(f"[delete_bulk_imported_bugs] bugs table: {e}")
+        logger.info(f"[delete_bulk_imported_bugs] bugs table: {e}")
 
     company_table = get_company_table(cid)
     if is_shared_table(company_table):
@@ -1281,7 +1333,7 @@ def _delete_bulk_imported_bugs(cid, since_ts: str) -> int:
                           .execute()
             total += len(res.data or [])
         except Exception as e:
-            print(f"[delete_bulk_imported_bugs] {company_table}: {e}")
+            logger.info(f"[delete_bulk_imported_bugs] {company_table}: {e}")
 
     return total
 
@@ -1370,19 +1422,19 @@ def reset_company_table(current_user: dict = Depends(auth.require_admin)):
         del_res = supabase.table("bugs").delete().eq("company_id", cid).execute()
         bugs_deleted = len(del_res.data or [])
     except Exception as e:
-        print(f"[table/reset] bugs-table delete error: {e}")
+        logger.info(f"[table/reset] bugs-table delete error: {e}")
 
     # If the company has a dedicated table, wipe and re-seed it too.
     if table not in ("bugs", "firefox_table"):
         try:
             supabase.table(table).delete().neq("bug_id", 0).execute()
         except Exception as e:
-            print(f"[table/reset] company-table delete error: {e}")
+            logger.info(f"[table/reset] company-table delete error: {e}")
 
         try:
             reseeded = db_provision.seed_company_table(cid, sample_size=5000)
         except Exception as e:
-            print(f"[table/reset] re-seed error: {e}")
+            logger.info(f"[table/reset] re-seed error: {e}")
 
     msg = f"Reset complete: removed {bugs_deleted} imported bugs, re-seeded {reseeded} sample bugs."
 
@@ -1407,21 +1459,20 @@ def _train_upload_in_background(key: str, cid, table: str):
             for r in raw if r.get("summary") and r.get("severity")
         ]
         if not records:
-            _training_progress[key] = {"step": "Error", "pct": 0, "done": True,
-                                        "error": "No labeled bugs found.", "result": None}
+            _training_progress[key] = _done_entry("Error", 0, "No labeled bugs found.")
             return
-        print(f"[upload_train/bg] Training on {len(records):,} company bugs (key={key})")
+        logger.info(f"[upload_train/bg] Training on {len(records):,} company bugs (key={key})")
         result = ml_logic.full_train_from_dataset(records, company_id=cid, progress_cb=cb)
-        
+
         if result and not result.get("success"):
-            _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": result.get("error", "Training failed."), "result": result}
+            _training_progress[key] = _done_entry("Error", 0, result.get("error", "Training failed."), result)
             return
 
         cb("Saving model", 95)
         _time.sleep(0.2)
-        _training_progress[key] = {"step": "Done", "pct": 100, "done": True, "error": None, "result": result}
+        _training_progress[key] = _done_entry("Done", 100, None, result)
     except Exception as e:
-        _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": str(e), "result": None}
+        _training_progress[key] = _done_entry("Error", 0, str(e))
 
 
 @app.post("/api/upload_and_train")
@@ -1520,7 +1571,7 @@ def get_component_counts(current_user: dict = Depends(auth.get_current_user)):
         cur.close()
         conn.close()
     except Exception as e:
-        print(f"[component_counts] psycopg2 error: {e}")
+        logger.info(f"[component_counts] psycopg2 error: {e}")
         # Fallback to Supabase API
         query = supabase.table(table).select("component").limit(5000)
         if not is_super and cid is not None:
@@ -1620,7 +1671,7 @@ def _save_model_artifact_log(result: dict, target_cid, records_used: int):
             "trained_at":   datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as log_err:
-        print(f"[model_log] Failed to save artifact log: {log_err}")
+        logger.info(f"[model_log] Failed to save artifact log: {log_err}")
 
 
 _FULL_TRAIN_SAMPLE = 250000
@@ -1650,7 +1701,7 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
                                 eq_filters=[("company_id", co_cid)],
                             ))
                 except Exception as agg_err:
-                    print(f"[train/thread] company aggregation warning: {agg_err}")
+                    logger.info(f"[train/thread] company aggregation warning: {agg_err}")
                 bug_records = raw_rows
             else:
                 # Company-specific: fetch full dataset
@@ -1665,8 +1716,7 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
                 if r.get("summary") and r.get("severity")
             ]
             if not bug_records:
-                _training_progress[key] = {"step": "Error", "pct": 0, "done": True,
-                                            "error": "No labeled bugs found.", "result": None}
+                _training_progress[key] = _done_entry("Error", 0, "No labeled bugs found.")
                 return
 
         records_used = len(bug_records) if bug_records else 0
@@ -1685,16 +1735,16 @@ def _train_with_progress(key: str, feedback_list: list, target_cid, bug_records:
             records_used = len(feedback_list)
 
         if result and not result.get("success"):
-            _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": result.get("error", "Training failed."), "result": result}
+            _training_progress[key] = _done_entry("Error", 0, result.get("error", "Training failed."), result)
             return
 
         cb("Saving model", 95)
         # Persist training metadata to Supabase
         _save_model_artifact_log(result, target_cid, records_used)
         _time.sleep(0.1)
-        _training_progress[key] = {"step": "Done", "pct": 100, "done": True, "error": None, "result": result}
+        _training_progress[key] = _done_entry("Done", 100, None, result)
     except Exception as e:
-        _training_progress[key] = {"step": "Error", "pct": 0, "done": True, "error": str(e), "result": None}
+        _training_progress[key] = _done_entry("Error", 0, str(e))
 
 
 def _fetch_paginated(table: str, columns: str, eq_filters: list = None, max_rows: int = _FULL_TRAIN_SAMPLE) -> list:
@@ -1800,6 +1850,14 @@ def train_model_status(
     """Polling endpoint: returns the current training progress for a given key.
     The frontend polls this every second instead of holding an SSE connection."""
     state = _training_progress.get(stream_key, {"step": "Waiting", "pct": 0, "done": False})
+    # Clean up completed entries after they are read to prevent unbounded growth
+    if state.get("done") and stream_key in _training_progress:
+        _training_progress.pop(stream_key, None)
+    # Prune any stale entries older than 2 hours (done entries that were never polled)
+    cutoff = _time.time() - 7200
+    stale = [k for k, v in list(_training_progress.items()) if v.get("done") and v.get("_ts", _time.time()) < cutoff]
+    for k in stale:
+        _training_progress.pop(k, None)
     return state
 
 
@@ -2024,33 +2082,55 @@ def superadmin_get_companies(current_user: dict = Depends(auth.require_developer
         if uid is not None:
             user_counts[uid] = user_counts.get(uid, 0) + 1
 
+    # Batch all bug counts via raw SQL to avoid N+1 queries
+    shared_counts: dict = {}   # company_id -> {total, critical, resolved}
+    isolated_counts: dict = {} # table_name -> {total, critical, resolved}
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur  = conn.cursor()
+        # Shared bugs table: aggregate all companies at once
+        cur.execute("""
+            SELECT company_id,
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE severity = 'S1') AS critical,
+                   COUNT(*) FILTER (WHERE UPPER(status) IN ('RESOLVED','VERIFIED','FIXED','PROCESSED')) AS resolved
+            FROM bugs
+            GROUP BY company_id
+        """)
+        for row in cur.fetchall():
+            cid_r, t, c, r = row
+            shared_counts[cid_r] = {"total": t or 0, "critical": c or 0, "resolved": r or 0}
+        # Isolated tables: one query per distinct table (not per company)
+        distinct_tables = {(co.get("data_table") or "bugs") for co in companies if (co.get("data_table") or "bugs") != "bugs"}
+        for tbl in distinct_tables:
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', tbl):
+                continue
+            cur.execute(f"""
+                SELECT COUNT(*) AS total,
+                       COUNT(*) FILTER (WHERE severity = 'S1') AS critical,
+                       COUNT(*) FILTER (WHERE UPPER(status) IN ('RESOLVED','VERIFIED','FIXED','PROCESSED')) AS resolved
+                FROM {tbl}
+            """)
+            row = cur.fetchone()
+            isolated_counts[tbl] = {"total": row[0] or 0, "critical": row[1] or 0, "resolved": row[2] or 0} if row else {}
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.warning("[superadmin companies] batch count error: %s", e)
+
     result = []
     for co in companies:
         cid        = co.get("id")
         data_table = co.get("data_table") or "bugs"
-        resolved_statuses = co.get("resolved_statuses") or ["RESOLVED", "VERIFIED", "FIXED", "PROCESSED"]
 
-        total    = 0
-        critical = 0
-        resolved = 0
+        if data_table == "bugs":
+            counts = shared_counts.get(cid, {})
+        else:
+            counts = isolated_counts.get(data_table, {})
 
-        try:
-            if data_table == "bugs":
-                # Company uses the shared bugs table — filter by company_id
-                total    = supabase.table("bugs").select("*", count="exact").eq("company_id", cid).limit(1).execute().count or 0
-                critical = supabase.table("bugs").select("*", count="exact").eq("company_id", cid).eq("severity", "S1").limit(1).execute().count or 0
-                resolved = 0
-                for st in resolved_statuses:
-                    resolved += supabase.table("bugs").select("*", count="exact").eq("company_id", cid).ilike("status", st).limit(1).execute().count or 0
-            else:
-                # Company has its own table (firefox_table, company_N_bugs, etc.)
-                total    = supabase.table(data_table).select("*", count="exact").limit(1).execute().count or 0
-                critical = supabase.table(data_table).select("*", count="exact").eq("severity", "S1").limit(1).execute().count or 0
-                resolved = 0
-                for st in resolved_statuses:
-                    resolved += supabase.table(data_table).select("*", count="exact").ilike("status", st).limit(1).execute().count or 0
-        except Exception as e:
-            print(f"[superadmin companies] cid={cid} table={data_table}: {e}")
+        total    = counts.get("total", 0)
+        critical = counts.get("critical", 0)
+        resolved = counts.get("resolved", 0)
 
         model_acc = 0.0
         if co.get("has_own_model", False):
@@ -2155,7 +2235,7 @@ def superadmin_approve_user(
 
     if old_status == "pending":
         pw_store = target.get("password_hash", "")
-        has_reg_password = pw_store.startswith("plain:")
+        has_reg_password = pw_store.startswith("enc:") or pw_store.startswith("plain:")
 
         # invite_user_by_email is the only admin method that sends an email.
         # We do NOT call update_user_by_id here — doing so invalidates the OTP in the
@@ -2174,11 +2254,11 @@ def superadmin_approve_user(
             email_sent = True
             if auth_res and auth_res.user:
                 supabase.table("users").update({"uuid": auth_res.user.id}).eq("uuid", user_uuid).execute()
-            print(f"[superadmin approve] Invite email sent to {email}")
+            logger.info("[superadmin approve] actor=%s approved+invited %s", current_user.get("email") or current_user.get("username"), email)
         except Exception as e:
-            print(f"[superadmin approve] Invite failed: {e}")
+            logger.info(f"[superadmin approve] Invite failed: {e}")
     else:
-        print(f"[superadmin approve] {email} already had auth, status set to active")
+        logger.info("[superadmin approve] actor=%s set %s to active (already had auth)", current_user.get("email") or current_user.get("username"), email)
 
     if email_sent:
         msg_suffix = " Invite email sent — they can sign in with their registration password."
@@ -2196,11 +2276,18 @@ def superadmin_reject_user(
     user_uuid: str,
     current_user: dict = Depends(auth.require_super_admin),
 ):
-    target_res = supabase.table("users").select("username").eq("uuid", user_uuid).execute()
+    target_res = supabase.table("users").select("username, email").eq("uuid", user_uuid).execute()
     if not target_res.data:
         raise HTTPException(status_code=404, detail="User not found")
 
+    target = target_res.data[0]
     supabase.table("users").update({"status": "inactive"}).eq("uuid", user_uuid).execute()
+    logger.info(
+        "[superadmin reject] actor=%s rejected user=%s (%s)",
+        current_user.get("email") or current_user.get("username"),
+        target.get("username"),
+        target.get("email"),
+    )
     return {"message": "User rejected."}
 
 
@@ -2260,7 +2347,7 @@ def superadmin_create_user(
         if auth_res and auth_res.user:
             supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
-        print(f"[superadmin create_user] Failed to send invite email to {req.email}: {e}")
+        logger.info(f"[superadmin create_user] Failed to send invite email to {req.email}: {e}")
 
     return {
         "message":    (
@@ -2312,7 +2399,7 @@ def superadmin_invite_system_user(
         if auth_res and auth_res.user:
             supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
-        print(f"[superadmin invite_system_user] Failed to send invite to {req.email}: {e}")
+        logger.info(f"[superadmin invite_system_user] Failed to send invite to {req.email}: {e}")
 
     role_label = "Super Admin" if req.role == "super_admin" else "Developer"
     return {
@@ -2379,7 +2466,8 @@ class InviteUserRequest(BaseModel):
     role:     str = "user"
 
 @app.get("/api/invite/companies")
-def public_companies_list():
+@limiter.limit("30/minute")
+def public_companies_list(request: Request):
     res = supabase.table("companies").select("id, name").order("name").execute()
     return [c for c in (res.data or []) if c.get("name") != "System"]
 
@@ -2393,7 +2481,8 @@ class InviteRequestCreate(BaseModel):
 
 
 @app.post("/api/invite/request")
-def submit_invite_request(req: InviteRequestCreate):
+@limiter.limit("5/minute")
+def submit_invite_request(request: Request, req: InviteRequestCreate):
     email_clean = req.email.strip().lower()
 
     existing = supabase.table("users").select("email, status").eq("email", email_clean).execute()
@@ -2480,11 +2569,11 @@ def approve_invite_request(
             email_sent = True
             if auth_res and auth_res.user:
                 supabase.table("users").update({"uuid": auth_res.user.id}).eq("id", request_id).execute()
-            print(f"[approve_invite] Invite email sent to {email}")
+            logger.info(f"[approve_invite] Invite email sent to {email}")
         else:
-            print(f"[approve_invite] Existing auth account preserved for {email}")
+            logger.info(f"[approve_invite] Existing auth account preserved for {email}")
     except Exception as e:
-        print(f"[approve_invite] Email send failed: {e}")
+        logger.info(f"[approve_invite] Email send failed: {e}")
 
     return {
         "message": (
@@ -2545,7 +2634,8 @@ def reject_invite_request(
 
 
 @app.get("/api/invite/validate")
-def validate_invite_code(code: str):
+@limiter.limit("20/minute")
+def validate_invite_code(request: Request, code: str):
     if not code or len(code.strip()) < 4:
         return {"valid": False, "company_name": ""}
 
@@ -2629,7 +2719,7 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
             supabase.table("users").update({"uuid": auth_res.user.id}).eq("email", req.email).execute()
     except Exception as e:
         email_error = str(e)
-        print(f"[invite] Failed to send invite email to {req.email}: {email_error}")
+        logger.info(f"[invite] Failed to send invite email to {req.email}: {email_error}")
         # Fetch invite code even on failure so admin can share it manually
         if not invite_code:
             try:
@@ -2731,9 +2821,9 @@ def _delete_auth_user(uuid: str, email: str = None):
         try:
             supabase.auth.admin.delete_user(uuid)
             deleted = True
-            print(f"[cascade] auth user deleted by UUID: {uuid}")
+            logger.info(f"[cascade] auth user deleted by UUID: {uuid}")
         except Exception as e:
-            print(f"[cascade] auth delete by UUID {uuid} failed (will try email fallback): {e}")
+            logger.info(f"[cascade] auth delete by UUID {uuid} failed (will try email fallback): {e}")
 
     # Email fallback — covers old registrations where the stored UUID was a
     # random placeholder that was never linked to a real Supabase Auth account.
@@ -2748,17 +2838,17 @@ def _delete_auth_user(uuid: str, email: str = None):
                 match = next((u for u in users if getattr(u, "email", "") == email), None)
                 if match:
                     supabase.auth.admin.delete_user(match.id)
-                    print(f"[cascade] auth user deleted by email fallback: {email}")
+                    logger.info(f"[cascade] auth user deleted by email fallback: {email}")
                     deleted = True
                     break
                 if len(users) < 1000:
                     break
                 page += 1
         except Exception as e2:
-            print(f"[cascade] auth delete by email {email} failed: {e2}")
+            logger.info(f"[cascade] auth delete by email {email} failed: {e2}")
 
     if not deleted:
-        print(f"[cascade] WARNING: could not delete auth account for uuid={uuid} email={email}")
+        logger.info(f"[cascade] WARNING: could not delete auth account for uuid={uuid} email={email}")
 
 
 def _cascade_delete_user_row(user_row: dict):
@@ -2781,7 +2871,7 @@ def _cascade_delete_company(company_id: int):
         try:
             supabase.table(tbl).delete().eq("company_id", company_id).execute()
         except Exception as e:
-            print(f"[cascade] clearing {tbl} for company {company_id}: {e}")
+            logger.info(f"[cascade] clearing {tbl} for company {company_id}: {e}")
 
     co_info = supabase.table("companies").select("data_table").eq("id", company_id).execute()
     co_table = (co_info.data or [{}])[0].get("data_table") if co_info.data else None
@@ -2791,14 +2881,14 @@ def _cascade_delete_company(company_id: int):
     if co_table and co_table not in ("bugs", "firefox_table"):
         try:
             db_provision.drop_company_table(co_table)
-            print(f"[cascade] dropped company table: {co_table}")
+            logger.info(f"[cascade] dropped company table: {co_table}")
         except Exception as drop_err:
-            print(f"[cascade] could not drop table {co_table}: {drop_err}")
+            logger.info(f"[cascade] could not drop table {co_table}: {drop_err}")
 
     models_dir = os.path.join(BASE_DIR, "models", f"company_{company_id}")
     if os.path.isdir(models_dir):
         shutil.rmtree(models_dir, ignore_errors=True)
-        print(f"[cascade] removed ML artifacts: {models_dir}")
+        logger.info(f"[cascade] removed ML artifacts: {models_dir}")
 
 
 @app.delete("/api/admin/users/{user_uuid}")
@@ -2904,7 +2994,7 @@ def _fetch_resolved_rows(
 
         return q.execute().data or []
     except Exception as e:
-        print(f"_fetch_resolved_rows error: {e}")
+        logger.info(f"_fetch_resolved_rows error: {e}")
         return []
 
 

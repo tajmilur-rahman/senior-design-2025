@@ -10,23 +10,37 @@ services:
     volumes:
       - ./ml_training:/app/ml_training
       - ./backend/models:/app/backend/models
-
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     command: >
       bash -c "
       if [ ! -f 'ml_training/rf_model.pkl' ]; then
-        echo '🚀 INITIALIZING FRESH ML MODELS FOR DEMO...';
+        echo 'Initializing ML models...';
         python ml_training/Train_Universal.py --fast;
       fi &&
-      echo '🟢 STARTING GUNICORN SERVER...' &&
-      gunicorn -k uvicorn.workers.UvicornWorker -t 600 -w 1 -b 0.0.0.0:8000 backend.main:app
+      echo 'Starting Gunicorn...' &&
+      gunicorn -k uvicorn.workers.UvicornWorker -t 30 -w 4 -b 0.0.0.0:8000 backend.main:app
       "
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: https://ofthvbabxgzsjercdjmo.supabase.co
+        VITE_SUPABASE_ANON_KEY: sb_publishable_NCH5Y02VVQmMRmllrstbYA_MAi5AelO
     restart: always
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

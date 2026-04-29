@@ -51,32 +51,31 @@ function CustomSelect({ value, onChange, options, placeholder, disabled = false,
   );
 }
 
+const SEVERITIES = ['S1', 'S2', 'S3', 'S4'];
+
 export default function MLPredictor({ user }) {
-  const [summary,      setSummary]      = useState("");
-  const [component,    setComponent]    = useState("Frontend");
-  const [platform,     setPlatform]     = useState("Windows");
-  const [res,          setRes]          = useState(null);
-  const [loading,      setLoading]      = useState(false);
-  const [saved,        setSaved]        = useState(false);
-  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [summary,            setSummary]            = useState("");
+  const [component,          setComponent]          = useState("Frontend");
+  const [platform,           setPlatform]           = useState("Windows");
+  const [res,                setRes]                = useState(null);
+  const [loading,            setLoading]            = useState(false);
+  const [saved,              setSaved]              = useState(false);
+  const [feedbackSent,       setFeedbackSent]       = useState(false);
+  const [error,              setError]              = useState(null);
+  const [showCorrectionPick, setShowCorrectionPick] = useState(false);
 
   const components = ["Frontend", "Backend", "Database", "Networking", "Security", "DevTools", "Core"];
   const platforms  = ["Windows", "MacOS", "Linux", "Android", "iOS"];
 
-  const getAuthHeader = () => {
-    const token = localStorage.getItem("token");
-    return { Authorization: `Bearer ${token}` };
-  };
-
   const predict = async () => {
     if (!summary) return;
-    setLoading(true); setRes(null); setSaved(false); setFeedbackSent(false);
+    setLoading(true); setRes(null); setSaved(false); setFeedbackSent(false); setError(null); setShowCorrectionPick(false);
     try {
-      const r = await axios.post('/api/predict', { summary, component, platform }, { headers: getAuthHeader() });
+      const r = await axios.post('/api/predict', { summary, component, platform });
       setRes(r.data);
     } catch (err) {
-      console.error("API Error:", err);
-      alert("Error: Prediction failed. Ensure backend is running and you are logged in.");
+      if (import.meta.env.DEV) console.error("Prediction error:", err);
+      setError("Prediction failed. Make sure you are logged in and the backend is reachable.");
     }
     setLoading(false);
   };
@@ -84,19 +83,23 @@ export default function MLPredictor({ user }) {
   const saveToDb = async () => {
     if (!res) return;
     try {
-      await axios.post('/api/bug', { bug: { summary, component, severity: res.prediction, status: "NEW", platform }, company_id: user.company_id }, { headers: getAuthHeader() });
+      await axios.post('/api/bug', { bug: { summary, component, severity: res.prediction, status: "NEW", platform }, company_id: user.company_id });
       setSaved(true);
+      setError(null);
     } catch (e) {
-      console.error("Save Error:", e);
-      alert("Error saving bug to database.");
+      if (import.meta.env.DEV) console.error("Save error:", e);
+      setError("Failed to save bug to database.");
     }
   };
 
   const sendFeedback = async (actual) => {
     try {
-      await axios.post('/api/feedback', { summary, predicted_severity: res.prediction, actual_severity: actual, company_id: user.company_id }, { headers: getAuthHeader() });
+      await axios.post('/api/feedback', { summary, predicted_severity: res.prediction, actual_severity: actual, company_id: user.company_id });
       setFeedbackSent(true);
-    } catch (e) { console.error("Feedback Error:", e); }
+      setShowCorrectionPick(false);
+    } catch (e) {
+      if (import.meta.env.DEV) console.error("Feedback error:", e);
+    }
   };
 
   return (
@@ -133,6 +136,11 @@ export default function MLPredictor({ user }) {
             </div>
           </div>
         </div>
+        {error && (
+          <div style={{marginTop:16, padding:'10px 14px', borderRadius:8, background:'#fef2f2', border:'1px solid #fecaca', color:'#dc2626', fontSize:13, fontWeight:600}}>
+            {error}
+          </div>
+        )}
         <Button className="w-full" onClick={predict} disabled={loading} style={{marginTop:24}}>
           {loading ? "PROCESSING..." : "PREDICT SEVERITY"}
         </Button>
@@ -153,11 +161,25 @@ export default function MLPredictor({ user }) {
                 </div>
              </div>
              {!feedbackSent && !saved && (
-               <div style={{display:'flex', gap:10, paddingTop:10, borderTop:'1px dashed #cbd5e1'}}>
-                 <button className="sys-btn outline" onClick={() => sendFeedback(res.prediction)} style={{flex:1, color:'#16a34a', borderColor:'#22c55e'}}>✓ Correct</button>
-                 <button className="sys-btn outline" onClick={() => {const c=prompt("Correct Severity?"); if(c) sendFeedback(c.toUpperCase())}} style={{flex:1, color:'#ef4444', borderColor:'#ef4444'}}>✕ Wrong</button>
+               <div style={{display:'flex', flexDirection:'column', gap:8, paddingTop:10, borderTop:'1px dashed #cbd5e1'}}>
+                 <div style={{display:'flex', gap:10}}>
+                   <button className="sys-btn outline" onClick={() => sendFeedback(res.prediction)} style={{flex:1, color:'#16a34a', borderColor:'#22c55e'}}>✓ Correct</button>
+                   <button className="sys-btn outline" onClick={() => setShowCorrectionPick(p => !p)} style={{flex:1, color:'#ef4444', borderColor:'#ef4444'}}>✕ Wrong</button>
+                 </div>
+                 {showCorrectionPick && (
+                   <div style={{display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap'}}>
+                     <span style={{fontSize:11, fontWeight:700, color:'#64748b', width:'100%', textAlign:'center', marginBottom:2}}>SELECT CORRECT SEVERITY</span>
+                     {SEVERITIES.map(sev => (
+                       <button key={sev} className="sys-btn outline" onClick={() => sendFeedback(sev)}
+                         style={{minWidth:52, fontWeight:800, color: sev === 'S1' ? '#ef4444' : sev === 'S2' ? '#f59e0b' : sev === 'S3' ? '#6366f1' : '#94a3b8'}}>
+                         {sev}
+                       </button>
+                     ))}
+                   </div>
+                 )}
                </div>
              )}
+             {feedbackSent && <div style={{paddingTop:10, borderTop:'1px dashed #cbd5e1', textAlign:'center', color:'#16a34a', fontWeight:700, fontSize:13}}>✓ Feedback recorded</div>}
              {!saved && (
                <Button className="w-full" onClick={saveToDb} style={{background:'#10b981', marginTop:15, color:'white'}}>
                   <CheckCircle size={16}/> SUBMIT TO DATABASE

@@ -259,7 +259,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
 
   const fetchBatches = useCallback(async () => {
     try { const res = await axios.get('/api/batches'); setBatches(res.data || []); }
-    catch (err) { console.error(err); }
+    catch (err) { if (import.meta.env.DEV) console.error(err); }
   }, []);
 
   const fetchBugs = useCallback(async (silent = false) => {
@@ -272,7 +272,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
         const merged = fetched.map(b => newBugIdsRef.current.has(String(b.id)) ? { ...b, _isNew: true } : b);
         return [...pending, ...merged];
       });
-    } catch (err) { console.error(err); } finally { if (!silent) setRefreshingBugs(false); }
+    } catch (err) { if (import.meta.env.DEV) console.error(err); } finally { if (!silent) setRefreshingBugs(false); }
   }, []);
 
   useEffect(() => { fetchBatches(); fetchBugs(); }, [fetchBatches, fetchBugs]);

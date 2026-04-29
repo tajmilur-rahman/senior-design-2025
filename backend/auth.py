@@ -1,12 +1,11 @@
-import os, re
-from jose import jwt
+import os, re, logging, time, urllib.request, json as _json
+from jose import jwt, jwk
+from jose.exceptions import JWTError
+
+logger = logging.getLogger(__name__)
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from database import get_db
-import models
-from pydantic import BaseModel
 from database import supabase
 
 from dotenv import load_dotenv
@@ -20,17 +19,80 @@ def _is_uuid(val: str) -> bool:
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY must be set in environment / .env")
-ALGORITHM  = os.getenv("ALGORITHM", "HS256")
+
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+# Legacy HS256 shared secret — only needed if your project still uses the old key.
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+
+# JWKS cache: { "keys": [...], "fetched_at": float }
+_jwks_cache: dict = {}
+_JWKS_TTL = 3600  # re-fetch every hour
+
+def _get_jwks() -> list:
+    now = time.time()
+    if _jwks_cache.get("keys") and now - _jwks_cache.get("fetched_at", 0) < _JWKS_TTL:
+        return _jwks_cache["keys"]
+    try:
+        url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            data = _json.loads(r.read())
+        _jwks_cache["keys"] = data.get("keys", [])
+        _jwks_cache["fetched_at"] = now
+        logger.info("[auth] JWKS refreshed (%d keys)", len(_jwks_cache["keys"]))
+        return _jwks_cache["keys"]
+    except Exception as e:
+        logger.warning("[auth] JWKS fetch failed: %s", e)
+        return _jwks_cache.get("keys", [])
+
+def _decode_token(token: str) -> dict:
+    """
+    Verification order:
+      1. ECC P-256 (ES256) via Supabase JWKS — current key type
+      2. Legacy HS256 shared secret (SUPABASE_JWT_SECRET) — previous key type
+      3. Internal SECRET_KEY HS256 — locally-issued tokens
+    """
+    # 1. Try JWKS (handles ES256 and any future asymmetric key)
+    try:
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
+        alg = header.get("alg", "ES256")
+        keys = _get_jwks()
+        for key_data in keys:
+            if kid and key_data.get("kid") != kid:
+                continue
+            try:
+                public_key = jwk.construct(key_data)
+                return jwt.decode(token, public_key, algorithms=[alg],
+                                  options={"verify_aud": False})
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # 2. Legacy HS256 Supabase shared secret
+    if SUPABASE_JWT_SECRET:
+        try:
+            return jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"],
+                              options={"verify_aud": False})
+        except Exception:
+            pass
+
+    # 3. Internal SECRET_KEY
+    return jwt.decode(token, SECRET_KEY, algorithms=["HS256"],
+                      options={"verify_aud": False})
+
 
 pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 
-class UserCreate(BaseModel):
+class UserCreate:
     username: str
     password: str
     company_id: int
-class LoginRequest(BaseModel):
+
+class LoginRequest:
     username: str
     password: str
 
@@ -42,21 +104,18 @@ def get_password_hash(password: str) -> str:
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
-        # 1. Bypass the alg error
-        payload = jwt.get_unverified_claims(token)
+        payload    = _decode_token(token)
         user_uuid  = payload.get("sub")
         user_email = payload.get("email")
 
         if not user_uuid:
             raise HTTPException(status_code=401, detail="Invalid token: missing sub")
 
-        # sub is a proper UUID — query by uuid column
         if _is_uuid(user_uuid):
             res = supabase.table("users").select("*").eq("uuid", user_uuid).execute()
             if res.data:
                 return res.data[0]
         else:
-            # sub is a plain username (legacy local-auth token e.g. sub="admin")
             res = supabase.table("users").select("*").eq("username", user_uuid).execute()
             if res.data:
                 return res.data[0]
@@ -70,14 +129,13 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
                     row["uuid"] = user_uuid
                 return row
 
-        print(f"[auth] Auto-provisioning user: {user_email}")
+        logger.info("[auth] Auto-provisioning user: %s", user_email)
         username = (user_email or "").split("@")[0] or f"user_{user_uuid[:8]}"
-
         existing = supabase.table("users").select("username").eq("username", username).execute()
         if existing.data:
             username = f"{username}_{user_uuid[:6]}"
 
-        new_user = {
+        insert_res = supabase.table("users").insert({
             "uuid":                 user_uuid,
             "email":                user_email,
             "username":             username,
@@ -87,13 +145,13 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             "company_id":           None,
             "onboarding_completed": False,
             "status":               "pending",
-        }
-        
-        insert_res = supabase.table("users").insert(new_user).execute()
+        }).execute()
         return insert_res.data[0]
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"[auth] get_current_user error: {e}")
+        logger.warning("[auth] get_current_user error: %s", e)
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
@@ -105,8 +163,6 @@ def require_active(current_user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="account_inactive")
     if status == "invite_requested":
         raise HTTPException(status_code=403, detail="account_pending")
-    # Auto-activate users who completed the Supabase invite flow.
-    # A valid JWT (already verified) proves the invite link was clicked and password set.
     if status == "pending_code":
         user_uuid = current_user.get("uuid")
         if user_uuid:

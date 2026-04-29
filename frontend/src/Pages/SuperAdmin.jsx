@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useDeferredValue, useRef } from 'reac
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useEscapeKey } from '../Components/Modal';
+import ConfirmDialog from '../Components/ConfirmDialog';
 import {
   Crown, Building2, Bug, AlertTriangle, Users, TrendingUp,
   RefreshCw, Globe, ShieldCheck, ChevronRight, Clock, CheckCircle, XCircle,
@@ -134,6 +135,7 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   const [toDelete,   setToDelete]   = useState(null);
   const [deleting,   setDeleting]   = useState(false);
   const [toast,      setToast]      = useState({ text: '', type: '' });
+  const [confirm,    setConfirm]    = useState({ open: false, title: '', message: '', onConfirm: null, danger: false });
 
   // ESC closes each modal. Destructive actions block while in-flight.
   useEscapeKey(() => { if (!deleting) setToDelete(null); }, !!toDelete);
@@ -189,14 +191,21 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
     } catch { setActionMsg('Approval failed. Try again.'); setTimeout(() => setActionMsg(''), 4000); }
   };
 
-  const handleReject = async (uuid, username) => {
-    if (!window.confirm(`Reject ${username}? They will be marked inactive.`)) return;
-    try {
-      await axios.patch(`/api/superadmin/users/${uuid}/reject`);
-      setActionMsg(`${username} rejected.`);
-      setPending(p => p.filter(u => u.uuid !== uuid));
-      setTimeout(() => setActionMsg(''), 4000);
-    } catch { setActionMsg('Rejection failed.'); }
+  const handleReject = (uuid, username) => {
+    setConfirm({
+      open: true, danger: true,
+      title: 'Reject user',
+      message: `Reject ${username}? They will be marked inactive.`,
+      confirmLabel: 'Reject',
+      onConfirm: async () => {
+        try {
+          await axios.patch(`/api/superadmin/users/${uuid}/reject`);
+          setActionMsg(`${username} rejected.`);
+          setPending(p => p.filter(u => u.uuid !== uuid));
+          setTimeout(() => setActionMsg(''), 4000);
+        } catch { setActionMsg('Rejection failed.'); }
+      },
+    });
   };
 
   const handleCreateUser = async (e) => {
@@ -235,31 +244,45 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
   };
 
   // --- User actions ---
-  const handlePromote = async (u) => {
+  const handlePromote = (u) => {
     const newRole = u.role === 'admin' ? 'user' : 'admin';
-    if (!window.confirm(`${newRole === 'admin' ? 'Promote' : 'Demote'} ${u.username}?`)) return;
-    setActioning(u.uuid);
-    try {
-      await axios.patch(`/api/admin/users/${u.uuid}`, { role: newRole });
-      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, role: newRole } : x));
-      showToast(`${u.username} is now ${newRole === 'admin' ? 'an Admin' : 'a User'}.`);
-    } catch (err) {
-      showToast(err.response?.data?.detail || 'Role update failed.', 'error');
-    } finally { setActioning(null); }
+    setConfirm({
+      open: true, danger: false,
+      title: `${newRole === 'admin' ? 'Promote' : 'Demote'} user`,
+      message: `${newRole === 'admin' ? 'Promote' : 'Demote'} ${u.username}?`,
+      confirmLabel: newRole === 'admin' ? 'Promote' : 'Demote',
+      onConfirm: async () => {
+        setActioning(u.uuid);
+        try {
+          await axios.patch(`/api/admin/users/${u.uuid}`, { role: newRole });
+          setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, role: newRole } : x));
+          showToast(`${u.username} is now ${newRole === 'admin' ? 'an Admin' : 'a User'}.`);
+        } catch (err) {
+          showToast(err.response?.data?.detail || 'Role update failed.', 'error');
+        } finally { setActioning(null); }
+      },
+    });
   };
 
-  const handleToggleStatus = async (u) => {
+  const handleToggleStatus = (u) => {
     const isActive = (u.status || 'active') === 'active';
     const action   = isActive ? 'deactivate' : 'reactivate';
-    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${u.username}?`)) return;
-    setActioning(u.uuid);
-    try {
-      await axios.patch(`/api/admin/users/${u.uuid}/${action}`);
-      setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: isActive ? 'inactive' : 'active' } : x));
-      showToast(`${u.username} ${isActive ? 'deactivated' : 'reactivated'}.`);
-    } catch (err) {
-      showToast(err.response?.data?.detail || 'Status update failed.', 'error');
-    } finally { setActioning(null); }
+    setConfirm({
+      open: true, danger: isActive,
+      title: `${action.charAt(0).toUpperCase() + action.slice(1)} user`,
+      message: `${action.charAt(0).toUpperCase() + action.slice(1)} ${u.username}?`,
+      confirmLabel: action.charAt(0).toUpperCase() + action.slice(1),
+      onConfirm: async () => {
+        setActioning(u.uuid);
+        try {
+          await axios.patch(`/api/admin/users/${u.uuid}/${action}`);
+          setUsers(prev => prev.map(x => x.uuid === u.uuid ? { ...x, status: isActive ? 'inactive' : 'active' } : x));
+          showToast(`${u.username} ${isActive ? 'deactivated' : 'reactivated'}.`);
+        } catch (err) {
+          showToast(err.response?.data?.detail || 'Status update failed.', 'error');
+        } finally { setActioning(null); }
+      },
+    });
   };
 
   const handleDeleteUser = async (deleteCompany = false) => {
@@ -308,6 +331,15 @@ export default function SuperAdmin({ user, canManage = true, canApprove = true, 
       className="w-full max-w-7xl mx-auto p-6 lg:px-8 lg:py-12 font-sans relative z-10"
     >
       <Toast msg={toast} onClose={() => setToast({ text: '', type: '' })} />
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        message={confirm.message}
+        confirmLabel={confirm.confirmLabel}
+        danger={confirm.danger}
+        onConfirm={confirm.onConfirm || (() => {})}
+        onClose={() => setConfirm(c => ({ ...c, open: false }))}
+      />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6 relative">

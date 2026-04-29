@@ -500,35 +500,35 @@ export default function ResolutionSupport() {
         setComponentTrends(trendRes.value.data.trends || []);
         setSource(trendRes.value.data.source || "company");
       } else {
-        console.error("component-trends failed:", trendRes.reason);
+        if (import.meta.env.DEV) console.error("component-trends failed:", trendRes.reason);
         setComponentTrends([]);
       }
 
       if (corrRes.status === "fulfilled") {
         setComponentCorrelations(corrRes.value.data.correlations || []);
       } else {
-        console.error("component-resolution-correlation failed:", corrRes.reason);
+        if (import.meta.env.DEV) console.error("component-resolution-correlation failed:", corrRes.reason);
         setComponentCorrelations([]);
       }
 
       if (summaryRes.status === "fulfilled") {
         setSummaryLengthPoints(summaryRes.value.data.points || []);
       } else {
-        console.error("summary-length-correlation failed:", summaryRes.reason);
+        if (import.meta.env.DEV) console.error("summary-length-correlation failed:", summaryRes.reason);
         setSummaryLengthPoints([]);
       }
 
       if (severityRes.status === "fulfilled") {
         setSeverityVsResolvedDaysPoints(severityRes.value.data.points || []);
       } else {
-        console.error("severity-vs-resolved-days-correlation failed:", severityRes.reason);
+        if (import.meta.env.DEV) console.error("severity-vs-resolved-days-correlation failed:", severityRes.reason);
         setSeverityVsResolvedDaysPoints([]);
       }
 
       if (componentSeverityRes.status === "fulfilled") {
         setComponentSeverityRows(componentSeverityRes.value.data.rows || []);
       } else {
-        console.error("component-severity-distribution failed:", componentSeverityRes.reason);
+        if (import.meta.env.DEV) console.error("component-severity-distribution failed:", componentSeverityRes.reason);
         setComponentSeverityRows([]);
       }
 
@@ -563,7 +563,7 @@ export default function ResolutionSupport() {
       setResults(res.data.results || []);
       if (res.data.source) setSource(res.data.source);
     } catch (err) {
-      console.error(err);
+      if (import.meta.env.DEV) console.error(err);
       setError("Could not reach the intelligence backend. Make sure the server is running.");
     } finally {
       setLoading(false);

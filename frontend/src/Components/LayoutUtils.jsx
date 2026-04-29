@@ -27,7 +27,7 @@ export function Background() {
   const videoRef = useRef(null);
   useEffect(() => {
     if (videoRef.current) {
-        videoRef.current.play().catch(error => { console.log("Autoplay prevented:", error); });
+        videoRef.current.play().catch(error => { if (import.meta.env.DEV) console.log("Autoplay prevented:", error); });
     }
   }, []);
   return (

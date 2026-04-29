@@ -25,7 +25,7 @@ export default function Directory({ onNavigate, user }) {
       });
       setCompanies(prev => prev.map(c => c.id === coId ? { ...c, has_own_model: false } : c));
     } catch (e) {
-      console.error('Reset failed:', e.response?.data || e.message);
+      if (import.meta.env.DEV) console.error('Reset failed:', e.response?.data || e.message);
     } finally {
       setResettingId(null);
     }
@@ -39,7 +39,7 @@ export default function Directory({ onNavigate, user }) {
       const token = localStorage.getItem('token');
       axios.get('/api/superadmin/companies', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setCompanies(res.data || []))
-        .catch(e => console.error('Could not load companies', e))
+        .catch(e => { if (import.meta.env.DEV) console.error('Could not load companies', e); })
         .finally(() => setLoadingCompanies(false));
     } else {
       const fetchCounts = async () => {
@@ -48,7 +48,7 @@ export default function Directory({ onNavigate, user }) {
           const normalised = {};
           Object.keys(res.data).forEach(k => { normalised[k.toLowerCase()] = res.data[k]; });
           setCounts(normalised);
-        } catch (e) { console.error('Could not load counts', e); }
+        } catch (e) { if (import.meta.env.DEV) console.error('Could not load counts', e); }
       };
       fetchCounts();
     }
