@@ -1,42 +1,58 @@
 import requests
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FRONTEND_TAXONOMY_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "src", "javascript", "taxonomy.js"))
+FRONTEND_TAXONOMY_PATH = os.path.abspath(
+    os.path.join(BASE_DIR, "..", "..", "frontend", "src", "javascript", "taxonomy.js")
+)
 
-# 🛡️ ENTERPRISE FAILOVER CACHE
-# If the Mozilla API goes down or blocks the request, the system falls back to this cache automatically.
+BUGZILLA_PRODUCTS = ["Firefox", "Core", "DevTools", "Toolkit", "NSS"]
+
 FALLBACK_TAXONOMY = {
-    "DevTools": {
-        "A-M": ["Console", "Debugger", "General", "Inspector", "JSON Viewer", "Marionette Client and Harness"],
-        "N-Z": ["Netmonitor", "Style Editor", "View Source", "geckodriver", "web-platform-tests"]
-    },
-    "Layout": {
-        "A-M": ["CSS Parsing and Computation", "CSS Transitions and Animations", "Layout", "Layout: Flexbox",
-                "Layout: Grid", "MathML"],
-        "N-Z": ["Print Preview", "Printing: Output", "Printing: Setup", "SVG"]
-    },
-    "Networking": {
-        "A-M": ["Cache", "Certificates", "Cookies", "DNS", "HTTP"],
-        "N-Z": ["TLS/SSL", "WebSockets"]
-    },
-    "Frontend": {
-        "A-M": ["Accessibility", "Address Bar", "Bookmarks", "Menus"],
-        "N-Z": ["Screen Readers", "Tabs", "Theme"]
+    "Firefox": {
+        "A-M": ["about:logins", "Address Bar", "Bookmarks & History", "Downloads Panel",
+                "File Handling", "Firefox Accounts", "General", "Installer", "Keyboard Navigation",
+                "Menus", "Messaging System", "Migration"],
+        "N-Z": ["New Tab Page", "PDF Viewer", "Performance", "Private Browsing",
+                "Screenshots", "Search", "Security", "Session Restore", "Settings UI",
+                "Sidebar", "Site Permissions", "Tabs", "Theme"]
     },
     "Core": {
-        "A-M": ["DOM Core", "DOM Events", "DOM Mutation", "Garbage Collection"],
-        "N-Z": ["SpiderMonkey", "WASM"]
+        "A-M": ["CSS Parsing and Computation", "CSS Transitions and Animations",
+                "DOM Core", "DOM Events", "Garbage Collection", "Graphics", "HTML Parser",
+                "JavaScript Engine", "Layout", "Layout: Flexbox", "Layout: Grid"],
+        "N-Z": ["Networking", "Networking: Cache", "Networking: Cookies", "Networking: DNS",
+                "Networking: HTTP", "Printing", "Security", "SpiderMonkey", "WASM",
+                "Web Audio", "Web Painting", "WebRTC"]
+    },
+    "DevTools": {
+        "A-M": ["Console", "Debugger", "General", "Inspector", "JSON Viewer",
+                "Marionette Client and Harness"],
+        "N-Z": ["Netmonitor", "Style Editor", "View Source", "geckodriver",
+                "web-platform-tests"]
+    },
+    "Toolkit": {
+        "A-M": ["Add-ons Manager", "Application Update", "Autocomplete", "Crash Reporting",
+                "Downloads API", "Form Autofill", "General", "mozapps"],
+        "N-Z": ["Notifications", "Password Manager", "Places", "Storage",
+                "Telemetry", "WebExtensions"]
+    },
+    "NSS": {
+        "A-M": ["Libraries"],
+        "N-Z": ["TLS/SSL", "Tools"]
     }
 }
 
 FALLBACK_DESCRIPTIONS = {
-    "DevTools": "Tools utilized by web developers to debug, inspect, and profile web applications.",
-    "Layout": "The engine responsible for parsing HTML/CSS and calculating the visual geometry of the page.",
-    "Networking": "Handles all HTTP, DNS, caching, and lower-level socket connections.",
-    "Frontend": "The user-facing Firefox interface, including tabs, the URL bar, and bookmarking systems.",
-    "Core": "The deep browser engine, including the SpiderMonkey JavaScript compiler and DOM manipulation."
+    "Firefox": "The user-facing Firefox browser interface, including tabs, URL bar, and settings.",
+    "Core": "The Gecko rendering engine — HTML/CSS parsing, JavaScript, layout, and networking.",
+    "DevTools": "Browser developer tools for debugging, inspecting, and profiling web applications.",
+    "Toolkit": "Cross-platform toolkit components used by Firefox and other Mozilla applications.",
+    "NSS": "Network Security Services — cryptographic libraries for TLS/SSL and PKI."
 }
 
 
@@ -45,72 +61,67 @@ def fetch_and_build_taxonomy():
 
     taxonomy_data = {}
     team_descriptions = {}
-    success = False
+    failed_products = []
 
-    try:
-        # Added User-Agent and specific include_fields to prevent Mozilla from blocking or truncating the javascript
-        url = "https://bugzilla.mozilla.org/rest/product?names=Firefox,Core,DevTools,Toolkit,NSS&include_fields=name,description,components.name,components.is_active"
-        headers = {'User-Agent': 'BugPriorityOS-SeniorDesignProject/1.0'}
+    headers = {"User-Agent": "BugPriorityOS-SeniorDesignProject/1.0"}
 
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        raw_data = response.json()
+    for product_name in BUGZILLA_PRODUCTS:
+        try:
+            url = (
+                f"https://bugzilla.mozilla.org/rest/product?names={product_name}"
+                f"&include_fields=name,description,components.name,components.is_active"
+            )
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            products = response.json().get("products", [])
 
-        products = raw_data.get("products", [])
-        if not products:
-            raise ValueError("Mozilla API returned an empty product list.")
+            if not products:
+                raise ValueError(f"Empty product list for {product_name}")
 
-        for product in products:
-            team_name = product.get("name")
-            description = product.get("description", "Core subsystem architecture.")
-            team_descriptions[team_name] = description
+            product = products[0]
+            team_name = product.get("name", product_name)
+            team_descriptions[team_name] = product.get("description") or FALLBACK_DESCRIPTIONS.get(product_name, "")
 
-            taxonomy_data[team_name] = {"A-M": [], "N-Z": []}
-
+            buckets = {"A-M": [], "N-Z": []}
             for comp in product.get("components", []):
-                comp_name = comp.get("name")
-                if not comp.get("is_active"):
+                comp_name = comp.get("name", "")
+                if not comp.get("is_active") or not comp_name:
                     continue
-                if comp_name[0].upper() < 'N':
-                    taxonomy_data[team_name]["A-M"].append(comp_name)
+                if comp_name[0].upper() < "N":
+                    buckets["A-M"].append(comp_name)
                 else:
-                    taxonomy_data[team_name]["N-Z"].append(comp_name)
+                    buckets["N-Z"].append(comp_name)
 
-        # Remove empty teams/categories
-        for team in list(taxonomy_data.keys()):
-            taxonomy_data[team] = {k: v for k, v in taxonomy_data[team].items() if v}
-            if not taxonomy_data[team]:
-                del taxonomy_data[team]
+            # Only keep non-empty buckets
+            taxonomy_data[team_name] = {k: v for k, v in buckets.items() if v}
+            print(f"  ✅ {team_name}: {sum(len(v) for v in taxonomy_data[team_name].values())} components")
 
-        if len(taxonomy_data) > 0:
-            success = True
-            print("✅ [ETL PIPELINE] Live Data Extracted & Transformed successfully!")
-        else:
-            raise ValueError("All components filtered out. Resulting javascript was empty.")
+        except Exception as e:
+            print(f"  ⚠️ {product_name}: {e} — using fallback")
+            failed_products.append(product_name)
+            taxonomy_data[product_name] = FALLBACK_TAXONOMY.get(product_name, {"A-M": ["General"], "N-Z": []})
+            team_descriptions[product_name] = FALLBACK_DESCRIPTIONS.get(product_name, "")
 
-    except Exception as e:
-        print(f"⚠️ [ETL PIPELINE] Live sync failed: {e}")
-        print("🔄 [ETL PIPELINE] Engaging Enterprise Fallback Cache (Failover Mode)...")
-        taxonomy_data = FALLBACK_TAXONOMY
-        team_descriptions = FALLBACK_DESCRIPTIONS
-        success = True
+    if failed_products:
+        print(f"🔄 [ETL PIPELINE] Used fallback for: {', '.join(failed_products)}")
+    else:
+        print("✅ [ETL PIPELINE] All products fetched live from Bugzilla!")
 
-    # 3. LOAD: Write it securely to the React frontend
-    if success:
-        print(f"💾 [ETL PIPELINE] Writing taxonomy to {FRONTEND_TAXONOMY_PATH}")
+    print(f"💾 [ETL PIPELINE] Writing taxonomy to {FRONTEND_TAXONOMY_PATH}")
 
-        js_content = f"""// AUTO-GENERATED BY BACKEND ETL PIPELINE
+    js_content = f"""// AUTO-GENERATED BY BACKEND ETL PIPELINE
 // Do not edit manually. Data synchronized directly from Bugzilla REST API.
 
 export const mozillaTaxonomy = {json.dumps(taxonomy_data, indent=2)};
 
 export const teamDescriptions = {json.dumps(team_descriptions, indent=2)};
 """
-        os.makedirs(os.path.dirname(FRONTEND_TAXONOMY_PATH), exist_ok=True)
-        with open(FRONTEND_TAXONOMY_PATH, "w", encoding="utf-8") as f:
-            f.write(js_content)
+    os.makedirs(os.path.dirname(FRONTEND_TAXONOMY_PATH), exist_ok=True)
+    with open(FRONTEND_TAXONOMY_PATH, "w", encoding="utf-8") as f:
+        f.write(js_content)
 
-        print("✅ [ETL PIPELINE] Frontend Sync Complete!")
+    print("✅ [ETL PIPELINE] Frontend Sync Complete!")
+    return taxonomy_data
 
 
 if __name__ == "__main__":

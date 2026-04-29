@@ -43,6 +43,7 @@ import psycopg2
 import ml_logic
 from config import META, FLAGS, ART_RF, get_artifact_paths, company_model_exists
 import db_provision
+import sys as _sys
 
 
 _training_progress: dict = {}
@@ -53,6 +54,14 @@ def _done_entry(step: str, pct: int, error, result=None) -> dict:
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "rf_model.pkl")
 VECTOR_PATH= os.path.join(BASE_DIR, "tfidf_vectorizer.pkl")
+
+# Make backend/scripts importable
+_scripts_dir = os.path.join(BASE_DIR, "scripts")
+if _scripts_dir not in _sys.path:
+    _sys.path.insert(0, _scripts_dir)
+
+import bugzilla_sync as _bugzilla_sync
+import sync_taxonomy as _sync_taxonomy
 
 rf_model   = None
 vectorizer = None
@@ -89,9 +98,46 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
+@app.on_event("startup")
+def on_startup():
+    """Run taxonomy ETL and an initial Bugzilla bug sync in the background on startup."""
+    def _run():
+        try:
+            logger.info("[startup] Running taxonomy ETL...")
+            _sync_taxonomy.fetch_and_build_taxonomy()
+            logger.info("[startup] Taxonomy sync complete.")
+        except Exception as e:
+            logger.warning(f"[startup] Taxonomy sync failed: {e}")
+        try:
+            logger.info("[startup] Running Bugzilla bug sync (last 48 h)...")
+            result = _bugzilla_sync.sync_latest_bugs(hours=48)
+            logger.info(f"[startup] Bugzilla sync: {result}")
+        except Exception as e:
+            logger.warning(f"[startup] Bugzilla sync failed: {e}")
+    threading.Thread(target=_run, daemon=True).start()
+
+
 @app.get("/health", tags=["ops"])
 def health_check():
     return {"status": "ok"}
+
+
+@app.post("/api/admin/sync-bugzilla", tags=["admin"])
+def admin_sync_bugzilla(
+    hours: int = 24,
+    current_user: dict = Depends(auth.require_admin),
+):
+    """Manually trigger a Bugzilla live sync. Fetches bugs updated in the last `hours` hours."""
+    try:
+        taxonomy_result = _sync_taxonomy.fetch_and_build_taxonomy()
+        bug_result = _bugzilla_sync.sync_latest_bugs(hours=hours)
+        return {
+            "taxonomy_teams": list(taxonomy_result.keys()),
+            "bugs": bug_result,
+        }
+    except Exception as e:
+        logger.error(f"[sync-bugzilla] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def validate_company_name(name: str) -> str:
