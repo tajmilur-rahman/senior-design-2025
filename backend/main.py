@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from database import supabase, SUPABASE_URL, SUPABASE_KEY, DATABASE_URL
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# Invite redirect needs a single URL, not the comma-separated CORS list
+_REDIRECT_URL = FRONTEND_URL.split(",")[0].strip().rstrip("/")
 
 # Fernet key derived from SECRET_KEY for encrypting temp registration passwords
 def _get_fernet() -> Fernet:
@@ -2249,7 +2251,7 @@ def superadmin_approve_user(
                     "company_name":     company_name,
                     "role":             role,
                     "password_prefilled": has_reg_password,
-                }, "redirect_to": FRONTEND_URL},
+                }, "redirect_to": _REDIRECT_URL},
             )
             email_sent = True
             if auth_res and auth_res.user:
@@ -2340,7 +2342,7 @@ def superadmin_create_user(
     try:
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "company_name": company_name, "role": role, "needs_password_setup": True}, "redirect_to": FRONTEND_URL},
+            options={"data": {"username": req.username, "company_name": company_name, "role": role, "needs_password_setup": True}, "redirect_to": _REDIRECT_URL},
         )
         email_sent = True
         # Link the newly created auth UUID back to the database
@@ -2393,7 +2395,7 @@ def superadmin_invite_system_user(
     try:
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "role": req.role, "needs_password_setup": True}, "redirect_to": FRONTEND_URL},
+            options={"data": {"username": req.username, "role": req.role, "needs_password_setup": True}, "redirect_to": _REDIRECT_URL},
         )
         email_sent = True
         if auth_res and auth_res.user:
@@ -2564,7 +2566,7 @@ def approve_invite_request(
                     "invite_code":  company_code,
                     "company_name": company_name,
                     "username":     name,
-                }, "redirect_to": FRONTEND_URL},
+                }, "redirect_to": _REDIRECT_URL},
             )
             email_sent = True
             if auth_res and auth_res.user:
@@ -2712,7 +2714,7 @@ def admin_invite_user(req: InviteUserRequest, current_user: dict = Depends(auth.
         invite_code  = co_res.data.get("invite_code", "") if co_res.data else ""
         auth_res = supabase.auth.admin.invite_user_by_email(
             req.email,
-            options={"data": {"username": req.username, "company_name": company_name, "role": req.role}, "redirect_to": FRONTEND_URL},
+            options={"data": {"username": req.username, "company_name": company_name, "role": req.role}, "redirect_to": _REDIRECT_URL},
         )
         email_sent = True
         if auth_res and auth_res.user:
