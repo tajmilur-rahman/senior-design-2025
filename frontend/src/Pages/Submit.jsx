@@ -525,7 +525,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                     <div className="flex flex-wrap gap-2 mb-3">
                       {[
                         'Crash in [@ nsFaviconService::GetFaviconForPage]',
-                        '"List all tabs" button fails to open from overflow menu with large numbers of tabs',
+                        'GSuite seems to have various broken pages and products when accessed on Firefox',
                         'Firefox incorrectly treats folder shortcuts as files when attaching them in webmail.',
                         '[wpt-sync] Sync PR 53160 - Fix Typo in Comments for gitignore and serve Tools',
                       ].map(s => (
