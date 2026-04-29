@@ -524,10 +524,10 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                     {/* Quick sample chips */}
                     <div className="flex flex-wrap gap-2 mb-3">
                       {[
-                        'Breakpoint positions are only fetched for some source actors in HTML files',
-                        'Background tabs still animate when dragging with prefers-reduced-motion',
-                        'The bookmark sidebar has a scrollbar that disappears sometimes',
-                        'Consider automatically blackboxing node_modules',
+                        'Crash in [@ nsFaviconService::GetFaviconForPage]',
+                        '"List all tabs" button fails to open from overflow menu with large numbers of tabs',
+                        'Firefox incorrectly treats folder shortcuts as files when attaching them in webmail.',
+                        '[wpt-sync] Sync PR 53160 - Fix Typo in Comments for gitignore and serve Tools',
                       ].map(s => (
                         <button
                           key={s}
