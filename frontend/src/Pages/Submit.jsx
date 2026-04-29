@@ -524,19 +524,18 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                     {/* Quick sample chips */}
                     <div className="flex flex-wrap gap-2 mb-3">
                       {[
-                        { label: 'S1 · Critical', text: 'Production database corrupted after failed migration — all user data inaccessible' },
-                        { label: 'S2 · High',     text: 'Authentication bypass lets unauthenticated users access admin dashboard' },
-                        { label: 'S3 · Medium',   text: 'Search pagination breaks when query string exceeds 100 characters' },
-                        { label: 'S4 · Low',      text: 'Tooltip text slightly misaligned on hover in the settings panel' },
-                      ].map(({ label, text }) => (
+                        'Breakpoint positions are only fetched for some source actors in HTML files',
+                        'Background tabs still animate when dragging with prefers-reduced-motion',
+                        'The bookmark sidebar has a scrollbar that disappears sometimes',
+                        'Consider automatically blackboxing node_modules',
+                      ].map(s => (
                         <button
-                          key={label}
+                          key={s}
                           type="button"
-                          onClick={() => setSummary(text)}
-                          className="flex items-center gap-2 text-xs px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 rounded-lg transition-all font-medium max-w-[340px]"
+                          onClick={() => setSummary(s)}
+                          className="text-xs px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/50 hover:text-white rounded-lg transition-all font-medium truncate max-w-[340px]"
                         >
-                          <span className="flex-shrink-0 font-bold text-white/60">{label}</span>
-                          <span className="text-white/40 truncate">{text}</span>
+                          {s}
                         </button>
                       ))}
                     </div>
