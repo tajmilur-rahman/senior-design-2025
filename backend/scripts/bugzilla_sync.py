@@ -10,15 +10,13 @@ BUGZILLA_PRODUCTS = ["Firefox", "Core", "DevTools", "Toolkit"]
 
 # Mozilla uses two severity schemes; map both to S1-S4
 _SEVERITY_MAP = {
-    # New-style (already S1-S4)
     "s1": "S1", "s2": "S2", "s3": "S3", "s4": "S4",
-    # Legacy word-based
-    "blocker":   "S1",
-    "critical":  "S1",
-    "major":     "S2",
-    "normal":    "S3",
-    "minor":     "S4",
-    "trivial":   "S4",
+    "blocker":     "S1",
+    "critical":    "S1",
+    "major":       "S2",
+    "normal":      "S3",
+    "minor":       "S4",
+    "trivial":     "S4",
     "enhancement": "S4",
 }
 
@@ -26,15 +24,32 @@ def _map_severity(raw: str) -> str:
     return _SEVERITY_MAP.get(str(raw).lower().strip(), "S3")
 
 
+def _get_firefox_company_id() -> int | None:
+    """Look up the company_id of whichever tenant uses firefox_table."""
+    try:
+        res = supabase.table("companies") \
+            .select("id") \
+            .eq("data_table", "firefox_table") \
+            .limit(1) \
+            .execute()
+        rows = res.data or []
+        return rows[0]["id"] if rows else None
+    except Exception as e:
+        logger.warning(f"[bugzilla-sync] Could not resolve Firefox company_id: {e}")
+        return None
+
+
 def sync_latest_bugs(hours: int = 24) -> dict:
     """
     Pull bugs updated in the last `hours` hours from Mozilla Bugzilla
-    and upsert them into the shared `bugs` table.
+    and upsert them into firefox_table (tenant-isolated to the Firefox company).
     Returns a summary dict with counts.
     """
     since = (datetime.datetime.utcnow() - datetime.timedelta(hours=hours)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
+
+    firefox_company_id = _get_firefox_company_id()
 
     headers = {"User-Agent": "BugPriorityOS-SeniorDesignProject/1.0"}
     fetched = []
@@ -73,25 +88,23 @@ def sync_latest_bugs(hours: int = 24) -> dict:
             comp = comp[0] if comp else "General"
 
         to_upsert.append({
-            "bug_id":   b.get("id"),
-            "summary":  summary,
-            "component": comp,
-            "severity": _map_severity(b.get("severity", "S3")),
-            "status":   (b.get("status") or "NEW").upper(),
-            "company_id": None,
+            "bug_id":     b.get("id"),
+            "summary":    summary,
+            "component":  comp,
+            "severity":   _map_severity(b.get("severity", "S3")),
+            "status":     (b.get("status") or "NEW").upper(),
+            "company_id": firefox_company_id,
         })
 
     if not to_upsert:
         return {"synced": 0, "skipped": skipped, "error": "All fetched bugs had empty summaries"}
 
     try:
-        result = (
-            supabase.table("bugs")
-            .upsert(to_upsert, on_conflict="bug_id")
+        supabase.table("firefox_table") \
+            .upsert(to_upsert, on_conflict="bug_id") \
             .execute()
-        )
         synced = len(to_upsert)
-        logger.info(f"[bugzilla-sync] Upserted {synced} bugs")
+        logger.info(f"[bugzilla-sync] Upserted {synced} bugs into firefox_table")
         return {"synced": synced, "skipped": skipped, "error": None}
     except Exception as e:
         logger.error(f"[bugzilla-sync] Upsert failed: {e}")
