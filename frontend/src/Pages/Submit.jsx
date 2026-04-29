@@ -293,7 +293,9 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
     setAnalyzing(true); setAnalyzeResult(null);
     try {
       const res = await axios.get('/api/analyze_bug', { params: { bug_text: summary, model_source: source } });
-      setAnalyzeResult({ ...res.data?.severity, _source: source });
+      const sev = res.data?.severity;
+      setAnalyzeResult({ ...sev, _source: source });
+      if (sev?.prediction) setSeverity(sev.prediction);
     } catch (err) {
       showMsg(err.response?.data?.detail || 'Analysis failed', 'error');
     } finally { setAnalyzing(false); }
@@ -522,18 +524,19 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                     {/* Quick sample chips */}
                     <div className="flex flex-wrap gap-2 mb-3">
                       {[
-                        'Database connection timeout causing complete system crash',
-                        'Severe memory leak in the login component causes UI to freeze',
-                        'API exception thrown when authentication fails',
-                        'Security vulnerability allows unauthorized database access',
-                      ].map(s => (
+                        { label: 'S1 · Critical', text: 'Production database corrupted after failed migration — all user data inaccessible' },
+                        { label: 'S2 · High',     text: 'Authentication bypass lets unauthenticated users access admin dashboard' },
+                        { label: 'S3 · Medium',   text: 'Search pagination breaks when query string exceeds 100 characters' },
+                        { label: 'S4 · Low',      text: 'Tooltip text slightly misaligned on hover in the settings panel' },
+                      ].map(({ label, text }) => (
                         <button
-                          key={s}
+                          key={label}
                           type="button"
-                          onClick={() => setSummary(s)}
-                          className="text-xs px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/50 hover:text-white rounded-lg transition-all font-medium truncate max-w-[280px]"
+                          onClick={() => setSummary(text)}
+                          className="flex items-center gap-2 text-xs px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 rounded-lg transition-all font-medium max-w-[340px]"
                         >
-                          {s}
+                          <span className="flex-shrink-0 font-bold text-white/60">{label}</span>
+                          <span className="text-white/40 truncate">{text}</span>
                         </button>
                       ))}
                     </div>
@@ -546,37 +549,6 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                       onFocus={e => { e.target.style.borderColor = 'var(--accent)40'; }}
                       onBlur={e => { e.target.style.borderColor = ''; }}
                     />
-                  </div>
-
-                  {/* Severity selection */}
-                  <div className="mb-6">
-                    <div className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">Severity Selection</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {SEVERITY_DEFS.map(def => {
-                        const isSelected = severity === def.code;
-                        const activeColors = {
-                          S1: 'border-red-500/50 bg-red-500/10 text-red-400',
-                          S2: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
-                          S3: 'border-blue-500/50 bg-indigo-500/10 text-indigo-400',
-                          S4: 'border-white/30 bg-white/10 text-white'
-                        }[def.code];
-                        return (
-                          <button
-                            key={def.code}
-                            onClick={() => setSeverity(def.code)}
-                            className={`p-4 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 ${isSelected ? activeColors : 'border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
-                          >
-                            <div className={`text-base font-bold font-mono ${isSelected ? '' : 'text-white/60'}`}>{def.code}</div>
-                            <div className="text-xs font-bold uppercase tracking-widest">{def.label}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {selectedSevDef && (
-                      <p className="text-sm text-white/70 mt-4 leading-relaxed p-4 bg-white/5 rounded-xl border-l-2 border-white/20">
-                        {selectedSevDef.desc}
-                      </p>
-                    )}
                   </div>
 
                   {/* Analyze button — green solid, full-width */}
@@ -643,6 +615,48 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* Severity confirmation — appears after analysis, also usable standalone */}
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="text-xs font-bold text-white/50 uppercase tracking-widest">
+                        {analyzeResult ? 'Confirm or Correct Severity' : 'Severity'}
+                      </div>
+                      {analyzeResult && (
+                        <span className="text-[11px] text-white/30 font-medium">Model predicted — accept or override before submitting</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {SEVERITY_DEFS.map(def => {
+                        const isSelected = severity === def.code;
+                        const isPredicted = analyzeResult?.prediction === def.code;
+                        const activeColors = {
+                          S1: 'border-red-500/50 bg-red-500/10 text-red-400',
+                          S2: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
+                          S3: 'border-blue-500/50 bg-indigo-500/10 text-indigo-400',
+                          S4: 'border-white/30 bg-white/10 text-white'
+                        }[def.code];
+                        return (
+                          <button
+                            key={def.code}
+                            onClick={() => setSeverity(def.code)}
+                            className={`p-4 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 relative ${isSelected ? activeColors : 'border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'}`}
+                          >
+                            {isPredicted && (
+                              <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 uppercase tracking-wider whitespace-nowrap">AI pick</span>
+                            )}
+                            <div className={`text-base font-bold font-mono ${isSelected ? '' : 'text-white/60'}`}>{def.code}</div>
+                            <div className="text-xs font-bold uppercase tracking-widest">{def.label}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedSevDef && (
+                      <p className="text-sm text-white/70 mt-4 leading-relaxed p-4 bg-white/5 rounded-xl border-l-2 border-white/20">
+                        {selectedSevDef.desc}
+                      </p>
+                    )}
+                  </div>
 
                   {/* Consent checkbox */}
                   <label className="flex items-start gap-3 mb-6 cursor-pointer group">
