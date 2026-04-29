@@ -655,7 +655,7 @@ export default function Explorer({ user, initialQuery = "", initialFilters = nul
                                             <>
                                                 <div><strong className="text-white">Origin</strong> — Submitted manually via Triage Entry</div>
                                                 <div><strong className="text-white">Status</strong> — Logged as NEW; updates through pipeline</div>
-                                                <div><strong className="text-white">AI triage</strong> — Classified as <strong className="text-indigo-400">{selectedBug.severity}</strong> dynamically</div>
+                                                <div><strong className="text-white">Severity</strong> — Set to <strong className="text-indigo-400">{selectedBug.severity}</strong> at submission</div>
                                             </>
                                         ) : origin.label === 'Bulk upload' ? (
                                             <>
