@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
 import { FolderTree, ExternalLink, ArrowRight, Layers, Building2, Users, Bug, BrainCircuit, CheckCircle, XCircle, Trash2, RefreshCw, Search, Globe, Activity } from 'lucide-react';
-import { mozillaTaxonomy, teamDescriptions } from '../javascript/taxonomy';
+import { mozillaTaxonomy, teamDescriptions, teamComponentCounts } from '../javascript/taxonomy';
 import { LiquidButton as Button } from '../liquid-glass-button';
 import { BentoCard } from '../bento-card';
 
@@ -327,7 +327,7 @@ export default function Directory({ onNavigate, user }) {
                 <div className="flex items-center justify-between gap-3 mb-4 relative z-10">
                   <div className="text-xl font-bold text-white capitalize truncate min-w-0 flex-1">{team}</div>
                   <div className="bg-white/5 border border-white/10 text-white/60 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest whitespace-nowrap flex-shrink-0">
-                    {tCount > 0 ? `${tCount.toLocaleString()} records` : `${Object.keys(mozillaTaxonomy[team]).length} categories`}
+                    {tCount > 0 ? `${tCount.toLocaleString()} records` : `${(teamComponentCounts?.[team] ?? 0)} components`}
                   </div>
                 </div>
 
