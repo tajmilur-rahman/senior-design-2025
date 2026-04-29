@@ -13,10 +13,14 @@ FRONTEND_TAXONOMY_PATH = os.path.abspath(
 
 BUGZILLA_PRODUCTS = ["Firefox", "Core", "DevTools", "Toolkit", "NSS"]
 
-def _strip_html(text: str) -> str:
-    """Remove HTML tags and collapse whitespace from Bugzilla description fields."""
+def _strip_html(text: str, max_len: int = 160) -> str:
+    """Remove HTML tags, clean up artifacts, and truncate Bugzilla descriptions."""
     text = _re.sub(r"<[^>]+>", "", text or "")
-    return " ".join(text.split())
+    text = _re.sub(r"\(more info\)", "", text, flags=_re.IGNORECASE).strip(" .")
+    text = " ".join(text.split())
+    if len(text) > max_len:
+        text = text[:max_len].rsplit(" ", 1)[0].rstrip(" ,;") + "."
+    return text
 
 FALLBACK_TAXONOMY = {
     "Firefox": {

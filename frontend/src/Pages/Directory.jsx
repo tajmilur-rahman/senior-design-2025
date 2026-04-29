@@ -331,7 +331,7 @@ export default function Directory({ onNavigate, user }) {
                   </div>
                 </div>
 
-                <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10">
+                <div className="text-sm text-white/40 mb-6 leading-relaxed relative z-10 line-clamp-3">
                   {teamDescriptions[team] || 'Core subsystem architecture and logic.'}
                 </div>
 

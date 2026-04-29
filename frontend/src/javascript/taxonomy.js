@@ -320,11 +320,11 @@ export const mozillaTaxonomy = {
 };
 
 export const teamDescriptions = {
-  "Firefox": "For bugs in Firefox Desktop, the Mozilla Foundation's web browser. For Firefox user interface issues in menus, bookmarks, location bar, and preferences. Many Firefox bugs will either be filed here or in the Core product. Bugs for developer tools (F12) should be filed in the DevTools product. (more info)",
-  "Core": "Shared components used by Firefox and other Mozilla software, including handling of Web content; Gecko, HTML, CSS, layout, DOM, scripts, images, networking, etc. Issues with web page layout probably go here, while Firefox user interface issues belong in the Firefox product. (More info)",
-  "DevTools": "For bugs in Firefox DevTools, the developer tools within the Firefox web browser. This includes issues about the user interface of the toolbox, special pages such as about:debugging and about:devtools, and developer-related APIs.",
-  "Toolkit": "The Mozilla Toolkit is a set of APIs, built on top of Gecko, which provide advanced services to XUL applications. These services include Profile Management, Chrome Registration, Browsing History, Extension and Theme Management, Application Update Service, and Safe Mode. (More info)",
-  "NSS": "Network Security Services - a cross-platform security library (more info)"
+  "Firefox": "For bugs in Firefox Desktop, the Mozilla Foundation's web browser. For Firefox user interface issues in menus, bookmarks, location bar, and preferences. Many.",
+  "Core": "Shared components used by Firefox and other Mozilla software, including handling of Web content; Gecko, HTML, CSS, layout, DOM, scripts, images, networking.",
+  "DevTools": "For bugs in Firefox DevTools, the developer tools within the Firefox web browser. This includes issues about the user interface of the toolbox, special pages.",
+  "Toolkit": "The Mozilla Toolkit is a set of APIs, built on top of Gecko, which provide advanced services to XUL applications. These services include Profile Management.",
+  "NSS": "Network Security Services - a cross-platform security library"
 };
 
 export const teamComponentCounts = {
