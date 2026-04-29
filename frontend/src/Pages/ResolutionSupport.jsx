@@ -616,7 +616,7 @@ export default function ResolutionSupport() {
           </div>
 
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3 text-white">
-            Resolution <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Support</span>
+            Resolution <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Analytics</span>
           </h1>
 
           <p className="text-white/50 text-sm md:text-base max-w-xl leading-relaxed">
