@@ -310,7 +310,7 @@ export default function SubmitTab({ user, prefill, onClearPrefill, onNavigate })
     const finalComponent = component || 'General';
     setBugs(prev => [{ id: tempId, summary, component: finalComponent, severity, status: 'NEW', _isNew: true }, ...prev].slice(0, 50));
     try {
-      const payload = { summary, component: finalComponent, severity, status: 'NEW' };
+      const payload = { summary, component: finalComponent, severity, status: 'NEW', consent_global_model: consentGlobal };
       if (isSuperAdmin && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
       const response = await axios.post('/api/bug', payload);
       const savedRow = response.data?.[0] || {};

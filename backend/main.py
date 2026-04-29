@@ -205,11 +205,12 @@ def _admin_get_user(user_uuid: str, current_user: dict, fields: str = "*"):
 
 
 class BugPayload(BaseModel):
-    summary:    str = Field(..., min_length=1, max_length=2000)
-    component:  str = "General"
-    severity:   str = Field("S3", pattern=r"^S[1-4]$")
-    status:     str = Field("NEW", pattern=r"^(NEW|OPEN|IN_PROGRESS|RESOLVED|CLOSED|PROCESSED)$")
-    company_id: int | None = None
+    summary:              str  = Field(..., min_length=1, max_length=2000)
+    component:            str  = "General"
+    severity:             str  = Field("S3", pattern=r"^S[1-4]$")
+    status:               str  = Field("NEW", pattern=r"^(NEW|OPEN|IN_PROGRESS|RESOLVED|CLOSED|PROCESSED)$")
+    company_id:           int | None = None
+    consent_global_model: bool = True
 
 class CompanyCreate(BaseModel):
     name: str
@@ -877,10 +878,11 @@ async def create_bug(request: BugPayload, current_user: dict = Depends(auth.requ
 
     table = get_company_table(cid)
     payload = {
-        "summary":   request.summary,
-        "component": component_value,
-        "severity":  request.severity,
-        "status":    "NEW",
+        "summary":              request.summary,
+        "component":            component_value,
+        "severity":             request.severity,
+        "status":               "NEW",
+        "consent_global_model": request.consent_global_model,
     }
     if not is_shared_table(table):
         payload["company_id"] = cid
@@ -1628,6 +1630,9 @@ def retrain(current_user: dict = Depends(auth.require_admin)):
     res = supabase.table("feedback").select("*").eq("is_correction", True)
     if target_cid is not None:
         res = res.eq("company_id", target_cid)
+    else:
+        # Universal model: only use feedback the user consented to share
+        res = res.eq("consent_global_model", True)
     feedback_list = res.execute().data or []
 
     if not feedback_list:
@@ -1781,6 +1786,9 @@ def train_model_start(current_user: dict = Depends(auth.require_admin)):
     feedback_res = supabase.table("feedback").select("*").eq("is_correction", True)
     if target_cid is not None:
         feedback_res = feedback_res.eq("company_id", target_cid)
+    else:
+        # Universal model: only use feedback the user consented to share
+        feedback_res = feedback_res.eq("consent_global_model", True)
     feedback_list = feedback_res.execute().data or []
 
     has_model = company_model_exists(target_cid)
